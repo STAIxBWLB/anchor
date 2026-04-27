@@ -5,6 +5,7 @@ import {
   buildNeighborhood,
   type NeighborhoodTarget,
 } from "../lib/neighborhood";
+import { buildEntryIndex } from "../lib/wikilinkSuggestions";
 import type { DocumentPayload, VaultEntry } from "../lib/types";
 
 interface NeighborhoodPaneProps {
@@ -23,9 +24,12 @@ export function NeighborhoodPane({
   onMissingTarget,
 }: NeighborhoodPaneProps) {
   const { t } = useTranslation();
+  // Index is stable across draftContent typing — only rebuilds when the
+  // vault scan changes. Avoids the per-keystroke O(n) walk over entries.
+  const entryIndex = useMemo(() => buildEntryIndex(entries), [entries]);
   const data = useMemo(
-    () => buildNeighborhood(document, draftContent, entries),
-    [document, draftContent, entries],
+    () => buildNeighborhood(document, draftContent, entries, entryIndex),
+    [document, draftContent, entries, entryIndex],
   );
 
   const isEmpty =

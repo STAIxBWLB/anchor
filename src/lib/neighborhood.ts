@@ -1,6 +1,10 @@
 import { frontmatterScalar } from "./document";
 import type { DocumentPayload, VaultEntry } from "./types";
-import { resolveWikilinkTarget } from "./wikilinkSuggestions";
+import {
+  buildEntryIndex,
+  resolveTargetIndexed,
+  type EntryIndex,
+} from "./wikilinkSuggestions";
 
 export interface NeighborhoodTarget {
   /** Display title — falls back to the raw target if unresolved. */
@@ -73,10 +77,11 @@ function dedupePreserveOrder<T>(items: T[], key: (item: T) => string): T[] {
 }
 
 function toNeighborhoodTarget(
+  index: EntryIndex,
   entries: VaultEntry[],
   target: string,
 ): NeighborhoodTarget {
-  const resolved = resolveWikilinkTarget(entries, target);
+  const resolved = resolveTargetIndexed(index, entries, target);
   return {
     title: resolved?.title ?? target,
     relPath: resolved?.relPath ?? "",
@@ -93,7 +98,11 @@ export function buildNeighborhood(
   document: DocumentPayload,
   draftContent: string,
   entries: VaultEntry[],
+  /** Pass a precomputed index when this is on a hot path (called per
+   *  keystroke). Falls back to building one inline when omitted. */
+  precomputedIndex?: EntryIndex,
 ): Neighborhood {
+  const index = precomputedIndex ?? buildEntryIndex(entries);
   const meta = (document.meta ?? {}) as Record<string, unknown>;
 
   const upward: UpwardField[] = [];
@@ -103,7 +112,7 @@ export function buildNeighborhood(
     const unique = [...new Set(targets)];
     upward.push({
       field,
-      targets: unique.map((t) => toNeighborhoodTarget(entries, t)),
+      targets: unique.map((t) => toNeighborhoodTarget(index, entries, t)),
     });
   }
 
@@ -118,7 +127,7 @@ export function buildNeighborhood(
     if (target) mentionTargets.push(target);
   }
   const mentions = dedupePreserveOrder(
-    mentionTargets.map((t) => toNeighborhoodTarget(entries, t)),
+    mentionTargets.map((t) => toNeighborhoodTarget(index, entries, t)),
     (item) => item.target,
   );
 
