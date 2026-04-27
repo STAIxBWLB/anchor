@@ -273,19 +273,21 @@ export default function App() {
 
   const selectEntry = useCallback(
     async (entry: VaultEntry) => {
-      if (!activeVaultPath) return false;
-      // Same entry re-clicked → no-op (avoid redundant fetch + cursor jump).
-      if (selectedEntry?.path === entry.path) return true;
+      if (!activeVaultPath) {
+        setError("No active vault. Open or create one first.");
+        return false;
+      }
 
-      // If the current draft has unsaved edits, stash them so the user can
-      // restore via the toast action. Replaces the prior window.confirm
-      // dialog which Tauri webview was silently suppressing.
-      if (document && draftContent !== document.content) {
+      // Stash unsaved edits before we navigate away, so the user can restore
+      // via the toast action. Replaces the prior window.confirm dialog which
+      // Tauri webview was silently suppressing.
+      const isSameEntry = selectedEntry?.path === entry.path;
+      if (!isSameEntry && document && draftContent !== document.content) {
         setDiscardedEdit({
-          entry: selectedEntry ?? { ...entry, path: document.path, relPath: document.relPath } as VaultEntry,
+          entry: selectedEntry ?? entry,
           draft: draftContent,
         });
-      } else {
+      } else if (!isSameEntry) {
         setDiscardedEdit(null);
       }
 
@@ -294,7 +296,7 @@ export default function App() {
       // Skip when navigateBack/Forward is the caller — they manage manually.
       const skipHistoryPush = skipNextHistoryPushRef.current;
       skipNextHistoryPushRef.current = false;
-      if (!skipHistoryPush && selectedEntry && selectedEntry.path !== entry.path) {
+      if (!skipHistoryPush && !isSameEntry && selectedEntry) {
         setNavHistory((h) => pushHistory(h, selectedEntry.path));
       }
       setError(null);
@@ -304,7 +306,11 @@ export default function App() {
         if (reqId !== selectRequestRef.current) return false;
         setSelectedEntry(entry);
         setDocument(payload);
-        setDraftContent(payload.content);
+        // Only reset the draft when switching docs — re-clicking the active
+        // doc shouldn't clobber an unsaved edit.
+        if (!isSameEntry) {
+          setDraftContent(payload.content);
+        }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(lastOpenKeyForVault(activeVaultPath), entry.relPath);
         }
