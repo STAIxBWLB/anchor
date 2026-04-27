@@ -2,24 +2,17 @@
 
 Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
-> Vault-First Personal AI OS — combines a markdown vault (lifted from
-> [tolaria](https://github.com/refactoringhq/tolaria)), an AI inbox model
-> (informed by tidy), and a gesture/voice document-edit mode (absorbed
-> from [anchor-editor](https://github.com/STAIxBWLB/anchor-editor)). See
-> the implementation plan at `~/.claude/plans/kind-doodling-quill.md`.
-
 ## Status — Phase 0 (Hardening)
 
 - ✅ git repo bootstrapped (origin remote pending — see Open Q8 in plan)
-- ✅ Frontmatter line-by-line editor (lifted from tolaria) — preserves YAML
+- ✅ Frontmatter line-by-line editor — preserves YAML
   key order and comments. Safe to point at existing Obsidian vaults.
 - ✅ Multi-vault registry at `<config>/com.anchor.app/vaults.json` with
   optional `external_writer: "mcp-obsidian"` flag for Obsidian-managed
   vaults (anchor reads, write delegation lands in Phase 2).
 - ✅ Filesystem walkdir with unlimited depth and `.anchorignore` support
   (gitignore-style segment matching).
-- ✅ Korean filename safety (NFC/NFD round-trip is OS-handled; portable
-  name validation lifted from tolaria).
+- ✅ Korean filename safety (NFC/NFD round-trip is OS-handled).
 - ✅ ko-KR and en-US as **equal** first-class locales — every UI string
   must exist in both dictionaries (`assertParityOrThrow` fails the build
   if they drift).
@@ -94,6 +87,4 @@ target
 
 ## License
 
-UNLICENSED — internal RISE/Anchor work. Contains code lifted from
-tolaria (refactoringhq) under tolaria's license; attribution preserved
-in source headers.
+UNLICENSED — internal RISE/Anchor work.

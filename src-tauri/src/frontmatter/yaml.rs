@@ -1,6 +1,3 @@
-// Lifted verbatim from tolaria/src-tauri/src/frontmatter/yaml.rs
-// Source: https://github.com/refactoringhq/tolaria
-//
 // Provides typed YAML value formatting that preserves anchor's frontmatter
 // invariants (key order + comments) when used together with ops.rs.
 

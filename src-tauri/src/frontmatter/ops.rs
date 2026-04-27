@@ -1,6 +1,3 @@
-// Lifted verbatim from tolaria/src-tauri/src/frontmatter/ops.rs
-// Source: https://github.com/refactoringhq/tolaria
-//
 // Line-by-line frontmatter editor that preserves YAML key order, comments,
 // and surrounding whitespace. This is the load-bearing invariant for
 // editing existing markdown vaults (Obsidian, work/, vault/) without

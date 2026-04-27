@@ -1,6 +1,3 @@
-// Adapted from tolaria/src-tauri/src/vault_list.rs
-// Source: https://github.com/refactoringhq/tolaria
-//
 // Multi-vault registry. anchor stores known vault roots in
 // `<config>/com.anchor.app/vaults.json`. The user's existing
 // ~/workspace/work and ~/workspace/vault can be registered as anchor

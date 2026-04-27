@@ -1,6 +1,3 @@
-// Lifted from tolaria/src-tauri/src/frontmatter/mod.rs (adapted: removed
-// gray_matter from non-test paths). Source: https://github.com/refactoringhq/tolaria
-//
 // Public API for editing frontmatter in markdown files while preserving
 // YAML key order, comments, and surrounding whitespace. The line-by-line
 // strategy in ops.rs is the load-bearing invariant — naive serde_yaml

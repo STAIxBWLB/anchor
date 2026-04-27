@@ -1,5 +1,3 @@
-// Lifted verbatim from tolaria/src-tauri/src/frontmatter/ops_update_tests.rs
-// Source: https://github.com/refactoringhq/tolaria
 
 use super::{update_frontmatter_content, FrontmatterValue};
 

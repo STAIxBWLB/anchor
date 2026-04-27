@@ -1,6 +1,3 @@
-// Lifted verbatim from tolaria/src-tauri/src/vault/filename_rules.rs
-// Source: https://github.com/refactoringhq/tolaria
-//
 // Cross-platform filename validation. Rejects Windows-reserved device
 // names, control characters, and trailing dots/spaces so a vault stays
 // portable between macOS/Linux/Windows. macOS NFC/NFD normalization is
