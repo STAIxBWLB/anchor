@@ -283,11 +283,16 @@ export default function App() {
     async (entry: VaultEntry) => {
       // Recover from state desync: if entries are loaded but the registry
       // lost track of the active vault (manual vaults.json edit, prior
-      // failed switch), fall back to the first registered vault and
-      // persist the recovery so subsequent clicks see consistent state.
+      // failed switch), pick the vault whose path actually contains this
+      // entry. Falling back blindly to vaults[0] is wrong when the entry
+      // came from a different registered vault — readDocument would then
+      // reject with "Document path escapes the selected vault".
       let vaultPath = activeVaultPath;
       if (!vaultPath && vaultList.vaults.length > 0) {
-        vaultPath = vaultList.vaults[0].path;
+        const owner = vaultList.vaults.find(
+          (v) => entry.path === v.path || entry.path.startsWith(`${v.path}/`),
+        );
+        vaultPath = owner?.path ?? vaultList.vaults[0].path;
         try {
           const updated = await setActiveVault(vaultPath);
           setVaultList(updated);

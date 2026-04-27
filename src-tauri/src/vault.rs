@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 
 /// VaultEntry — minimal representation of a vault note for listing.
@@ -120,33 +120,50 @@ pub fn resolve_inside_vault(vault_path: &str, document_path: &str) -> Result<Pat
         vault.join(raw)
     };
 
-    if candidate.exists() {
-        let canonical = candidate
-            .canonicalize()
-            .map_err(|err| format!("Cannot resolve document path: {err}"))?;
-        if !canonical.starts_with(&vault) {
-            return Err("Document path escapes the selected vault".to_string());
-        }
-        return Ok(canonical);
+    // Lexical containment: resolve `..`/`.` without following symlinks, then
+    // require the result to live under the canonicalized vault root. Using
+    // canonicalize() here was wrong — it follows symlinks, so a deliberate
+    // symlink inside the vault (e.g. work/inbox/downloads → ~/gdrive-workspace/…)
+    // would resolve outside the vault and falsely trigger an "escapes" error.
+    // Path traversal via `..` is still blocked by lexical_normalize.
+    let normalized = lexical_normalize(&candidate);
+    if normalized.starts_with(&vault) {
+        return Ok(normalized);
     }
 
-    let parent = candidate
-        .parent()
-        .ok_or_else(|| "Document path has no parent directory".to_string())?;
-    let parent = if parent.exists() {
-        parent
-            .canonicalize()
-            .map_err(|err| format!("Cannot resolve parent directory: {err}"))?
-    } else {
-        let fallback = nearest_existing_parent(parent)?;
-        fallback
-            .canonicalize()
-            .map_err(|err| format!("Cannot resolve parent directory: {err}"))?
-    };
-    if !parent.starts_with(&vault) {
-        return Err("Document path escapes the selected vault".to_string());
+    // Vault root itself might be a symlink (canonicalize earlier resolved it,
+    // but the caller may have passed entries scanned from the un-resolved
+    // form). Try canonicalizing the candidate as a fallback — if it lands
+    // inside the canonical vault, allow.
+    if let Ok(canon) = normalized.canonicalize() {
+        if canon.starts_with(&vault) {
+            return Ok(canon);
+        }
     }
-    Ok(candidate)
+
+    Err("Document path escapes the selected vault".to_string())
+}
+
+/// Resolve `..` and `.` lexically, leaving symlinks untouched. Equivalent to
+/// Go's `filepath.Clean` minus separator collapsing (which `PathBuf` already
+/// handles). Used for vault-containment checks where canonicalize() is wrong
+/// because it follows symlinks.
+pub fn lexical_normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::ParentDir => {
+                // Don't pop past the root or above an empty/relative prefix.
+                let popped = out.pop();
+                if !popped {
+                    out.push("..");
+                }
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 pub fn parse_frontmatter(content: &str) -> FrontmatterParts {
@@ -315,18 +332,6 @@ fn matches_anchorignore(rel_path: &Path, patterns: &[String]) -> bool {
     })
 }
 
-fn nearest_existing_parent(path: &Path) -> Result<PathBuf, String> {
-    let mut cur = path;
-    loop {
-        if cur.exists() {
-            return Ok(cur.to_path_buf());
-        }
-        cur = cur
-            .parent()
-            .ok_or_else(|| "Cannot find an existing parent directory".to_string())?;
-    }
-}
-
 fn clean_text(input: &str) -> String {
     let tags = Regex::new(r"(?is)<[^>]+>").expect("valid tag regex");
     let markup = Regex::new(r"(?m)^[-*#>\s]+").expect("valid markdown regex");
@@ -430,6 +435,81 @@ mod tests {
             Some("진행중"),
             "Korean values must round-trip through scan"
         );
+    }
+
+    #[test]
+    fn resolve_inside_vault_accepts_relative_path() {
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "note.md", "# X\n");
+        let resolved =
+            resolve_inside_vault(tmp.path().to_str().unwrap(), "note.md").unwrap();
+        assert!(resolved.ends_with("note.md"));
+    }
+
+    #[test]
+    fn resolve_inside_vault_accepts_absolute_path_inside_vault() {
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "sub/note.md", "# X\n");
+        let canonical_vault = tmp.path().canonicalize().unwrap();
+        let abs = canonical_vault.join("sub").join("note.md");
+        let resolved = resolve_inside_vault(
+            canonical_vault.to_str().unwrap(),
+            abs.to_str().unwrap(),
+        )
+        .unwrap();
+        assert!(resolved.ends_with("sub/note.md"));
+    }
+
+    #[test]
+    fn resolve_inside_vault_rejects_path_traversal() {
+        let tmp = TempDir::new().unwrap();
+        write_file(tmp.path(), "note.md", "# X\n");
+        // Try to climb out via `..`
+        let result = resolve_inside_vault(tmp.path().to_str().unwrap(), "../escaped.md");
+        assert!(result.is_err(), "`..` traversal must be rejected");
+    }
+
+    #[test]
+    fn resolve_inside_vault_rejects_absolute_outside_vault() {
+        let tmp = TempDir::new().unwrap();
+        let result = resolve_inside_vault(tmp.path().to_str().unwrap(), "/etc/passwd");
+        assert!(result.is_err());
+    }
+
+    /// The bug that caused this fix: with the old canonicalize-and-starts-with
+    /// approach, a symlink inside the vault that pointed outside (e.g.
+    /// `inbox/downloads → ~/gdrive-workspace/work/inbox/downloads`) would make
+    /// every file under the symlink falsely escape the vault. The lexical
+    /// containment approach must allow these paths since the user explicitly
+    /// set them up.
+    #[cfg(unix)]
+    #[test]
+    fn resolve_inside_vault_allows_symlink_inside_vault() {
+        use std::os::unix::fs::symlink;
+        let tmp = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        write_file(outside.path(), "linked.md", "# linked\n");
+        // Create a symlink INSIDE the vault that points OUTSIDE.
+        let link = tmp.path().join("downloads");
+        symlink(outside.path(), &link).unwrap();
+        // Lexical path is /vault/downloads/linked.md — inside vault. The old
+        // canonicalize() would resolve through the symlink to outside.tmp/linked.md
+        // and reject. The new lexical_normalize must accept.
+        let resolved =
+            resolve_inside_vault(tmp.path().to_str().unwrap(), "downloads/linked.md")
+                .unwrap();
+        assert!(
+            resolved.ends_with("downloads/linked.md"),
+            "symlink-traversed path inside vault must be allowed (got {resolved:?})"
+        );
+    }
+
+    #[test]
+    fn lexical_normalize_resolves_dot_dot() {
+        let p = lexical_normalize(Path::new("/a/b/c/../d"));
+        assert_eq!(p, PathBuf::from("/a/b/d"));
+        let q = lexical_normalize(Path::new("/a/./b"));
+        assert_eq!(q, PathBuf::from("/a/b"));
     }
 
     #[test]
