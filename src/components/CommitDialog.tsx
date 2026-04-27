@@ -1,10 +1,19 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { GitCommit, X } from "lucide-react";
+import type React from "react";
 import { useEffect, useState } from "react";
 import { gitChanges, gitCommit, gitDiff } from "../lib/api";
 import { useTranslation } from "../lib/i18n";
 import type { GitFileChange, GitStatus } from "../lib/types";
 import { Button } from "./ui/Button";
+
+function lineClass(line: string): string {
+  if (line.startsWith("@@")) return "diff-line hunk";
+  if (line.startsWith("+++") || line.startsWith("---")) return "diff-line meta";
+  if (line.startsWith("+")) return "diff-line add";
+  if (line.startsWith("-")) return "diff-line del";
+  return "diff-line ctx";
+}
 
 interface Props {
   open: boolean;
@@ -93,6 +102,19 @@ export function CommitDialog({ open, vaultPath, status, onClose, onCommitted }: 
     ? status.modified + status.staged + status.untracked
     : 0;
 
+  function renderDiff(text: string): React.ReactNode {
+    if (!text) return null;
+    return text.split("\n").map((line, idx) => {
+      const cls = lineClass(line);
+      return (
+        <span key={idx} className={cls}>
+          {line}
+          {"\n"}
+        </span>
+      );
+    });
+  }
+
   return (
     <Dialog.Root
       open={open}
@@ -158,7 +180,7 @@ export function CommitDialog({ open, vaultPath, status, onClose, onCommitted }: 
                     </button>
                     {isOpen ? (
                       <pre className="commit-file-diff">
-                        {diffLoading ? "…" : diff ?? ""}
+                        {diffLoading ? "…" : renderDiff(diff ?? "")}
                       </pre>
                     ) : null}
                   </li>

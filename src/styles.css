@@ -1591,14 +1591,35 @@ button.git-badge:hover {
   white-space: pre;
   overflow-x: auto;
   max-height: 220px;
-  color: var(--ink-2);
+  color: var(--ink);
 }
 
-/* Simple +/- coloring through ::first-letter-style — fallback to plain text
-   if the engine ignores per-line styling. The leading "+"/"-" carries the
-   diff sign, which is what the eye scans for first. */
-.commit-file-diff {
-  color: var(--ink);
+.diff-line {
+  display: inline;
+}
+
+.diff-line.add {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.diff-line.del {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.diff-line.hunk {
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+.diff-line.meta {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.diff-line.ctx {
+  color: var(--ink-2);
 }
 
 .commit-file.staged .commit-file-status {
