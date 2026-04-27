@@ -4,15 +4,15 @@ Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
 ## Status (2026-04-28)
 
-| Phase | 상태 | Outcome |
-|-------|------|---------|
+| Phase | State | Outcome |
+|-------|-------|---------|
 | 0 — Hardening | ✅ shipped | Open existing vaults safely. Frontmatter byte-identical round-trip. Multi-vault registry. ko/en parity. |
 | 0.5 — UI polish | ✅ shipped | Topbar, sidebar with type filters + recents, command palette (⌘K), Pretendard Korean typography, light/dark. |
 | 1A — Killer feature MVP | ✅ shipped | Doc-selection reliability, frontmatter inline edit (InspectorPane), wikilink autocomplete (Korean IME-aware) + click-to-navigate, typed neighborhood pane (project / mentions / peers), in-memory nav history (⌘[ / ⌘]). |
-| 1B — Rich editor / git | 🚧 부분 진행 | Git status badge + commit-from-app (file list + per-file diff + syntax color + auto-refresh on focus) ✅. `scan_vault` rayon 병렬화: 2.78s → 385ms on 7.1k files ✅. **BlockNote editor / multi-tab / vault cache / Playwright e2e — 미진행**. |
-| 2 — Inbox + AI | 📋 계획 | |
-| 3 — Built-in Skills | 📋 계획 | |
-| 4 — Document Edit Mode | 📋 계획 | |
+| 1B — Rich editor / git | 🚧 in progress | Git status badge + commit-from-app (file list + per-file diff + syntax color + auto-refresh on focus) ✅. `scan_vault` rayon parallelism: 2.78s → 385ms on 7.1k files ✅. Multi-tab editor state plumbing landed (per-vault tab persistence). **BlockNote rich editor / vault cache / Playwright e2e — pending**. |
+| 2 — Inbox + AI | 📋 planned | |
+| 3 — Built-in Skills | 📋 planned | |
+| 4 — Document Edit Mode | 📋 planned | |
 
 ## Architecture
 
@@ -26,7 +26,7 @@ Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 └──────────────────────────────┬──────────────────────────────┘
                                │ Tauri IPC
 ┌──────────────────────────────▼──────────────────────────────┐
-│  Rust Core (src-tauri/src/)                                  │
+│  Rust core (src-tauri/src/)                                  │
 │   vault.rs       — walkdir + .anchorignore + parallel scan   │
 │   frontmatter/   — line-by-line YAML edit (preserves order)  │
 │   document.rs    — read/save/create/version + field patch    │
@@ -44,117 +44,117 @@ Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 └───────────────┘ └────────────────────┘ └──────────────────┘
 ```
 
-**모듈 경계 결정 원칙**:
-- Rust core가 vault FS / cache / git / frontmatter / 인박스 스케줄러 / MCP 라이프사이클 / Claude CLI subprocess **소유**.
-- React는 BlockNote / 명령 팔레트 / neighborhood / gesture worker / AudioWorklet **만** 담당. 비즈니스 로직 X.
-- Node sidecar는 MCP 서버 + 마켓플레이스 (둘 다 Phase 2+).
-- Python sidecar는 Whisper 만 (Phase 4). HWPX는 사용자의 `hwpx` Claude Code 스킬에 위임 (재작성 X).
+**Module boundary rules**:
+- Rust core **owns** vault FS / cache / git / frontmatter / inbox scheduler / MCP lifecycle / Claude CLI subprocess.
+- React handles **only** BlockNote / command palette / neighborhood / gesture worker / AudioWorklet. No business logic.
+- Node sidecar holds the MCP server + marketplace (both Phase 2+).
+- Python sidecar holds Whisper only (Phase 4). HWPX is delegated to the user's `hwpx` Claude Code skill — not rewritten.
 
-## 향후 개발 계획
+## Roadmap
 
-각 Phase는 **사용자가 실제로 쓸 수 있는 outcome** 단위. 인프라만 늘리는 phase 없음. Phase 진입 게이트는 직전 phase의 verification 통과.
+Each phase is defined in **outcomes the user actually exercises**. No phase exists just to grow infrastructure. The entry gate for each phase is the verification of the previous one.
 
-### Phase 1B 잔여 (week 4–6)
+### Phase 1B remaining (week 4–6)
 
-**Outcome**: anchor가 한 프로젝트의 회의록을 일주일간 작성할 수 있는 first-class 편집 환경.
+**Outcome**: anchor is a first-class editor capable of carrying one project's meeting notes through a full week.
 
-- [ ] **BlockNote rich editor + raw markdown 토글** — `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx` lift. 한국어 inline + KaTeX + 코드블록 round-trip.
-- [ ] **단일 윈도우 multi-tab editor** — `tolaria/src/hooks/useEditorTabSwap.ts` (1,149 LOC) 단순화 lift. ⌘1/2/3 전환, 각 탭 dirty 독립.
-- [ ] **Vault cache** — `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC) lift. **트리거 임계치 상향**: 385ms 단발 scan은 견딜 만하므로, BlockNote 통합 후 cold scan 측정 결과로 우선순위 재평가.
-- [ ] **Monorepo 추출** — `crates/anchor-vault`, `crates/anchor-git`. Phase 2 진입 직전 정리.
-- [ ] **Playwright smoke + e2e** — `tolaria/playwright.smoke.config.ts` lift.
+- [ ] **BlockNote rich editor + raw-markdown toggle** — lift `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx`. Korean inline + KaTeX + code blocks must round-trip.
+- [~] **Single-window multi-tab editor** — state plumbing landed in `App.tsx` (per-vault `anchor:openTabs:v1` persistence, `EditorTab` discriminator, latest-wins selection). Remaining: tab strip UI, ⌘1/2/3 keybindings, per-tab dirty independence, close-with-confirm.
+- [ ] **Vault cache** — lift `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC). **Trigger threshold raised**: a one-shot 385ms warm scan is bearable; revisit only after BlockNote integration changes the latency budget.
+- [ ] **Monorepo extraction** — `crates/anchor-vault`, `crates/anchor-git`. Done at the seam between Phase 1B and Phase 2.
+- [ ] **Playwright smoke + e2e** — lift `tolaria/playwright.smoke.config.ts`.
 
-**Verification gate**: 멀티 탭으로 project + 회의 + people 동시 열어두고 일주일 작업, 매일 commit, frontmatter 보존.
+**Verification gate**: a full week of multi-tab work with project + meeting + people open simultaneously, daily commits, frontmatter preserved.
 
 ### Phase 2 — Inbox + AI (week 7–10)
 
-**Outcome**: "오늘의 인박스" 뷰가 Gmail + 파일 드롭(`inbox/downloads/`)을 인제스트, Claude가 분류 + 액션 제안. 사용자 `a` 한 키로 accept.
+**Outcome**: a "Today's inbox" view that ingests Gmail and dropped files (`inbox/downloads/`), Claude classifies and proposes actions, the user accepts with a single `a` keystroke.
 
-**소스 우선순위**:
-1. **Gmail (week 7–8)** — async-imap Rust 클라이언트. App password 인증, OS 권한 X.
-2. **파일시스템 watcher (week 8)** — `~/workspace/inbox/downloads/{kakao,telegram,gmail,sharepoint}/`. 사용자 기존 ingest-chain 파이프라인 piggyback.
-3. **KakaoTalk macOS 알림 watcher (week 10, optional)** — 풀 디스크 액세스 prompt 회피하려면 deferred.
+**Source priority**:
+1. **Gmail (week 7–8)** — async-imap Rust client. App-password auth, no OS permissions.
+2. **Filesystem watcher (week 8)** — `~/workspace/inbox/downloads/{kakao,telegram,gmail,sharepoint}/`. Piggybacks on the user's existing ingest-chain pipeline.
+3. **KakaoTalk macOS notification watcher (week 10, optional)** — deferred while the full-disk-access prompt is avoidable.
 
 **AI dispatch**:
-- Primary: Claude Code CLI subprocess (사용자 Max plan, marginal cost $0)
-- Fallback: Anthropic API (Haiku 분류, Sonnet 작성)
-- Streaming: tolaria `ai_agents.rs` SSE bridge
+- Primary: Claude Code CLI subprocess (user's Max plan, marginal cost $0).
+- Fallback: Anthropic API (Haiku for classification, Sonnet for drafting).
+- Streaming: tolaria `ai_agents.rs` SSE bridge.
 
-**Skip in Phase 2**: iMessage DB, Slack, Outlook (Phase 3에서 `ms-office` 스킬로 wrap).
+**Skip in Phase 2**: iMessage DB, Slack, Outlook (Phase 3 wraps Outlook via the `ms-office` skill).
 
-**Verification gate**: 본교 chu.ac.kr 행정 메일 수신 → anchor가 30초 내 분류 + task 추출 + 폴더 제안 → 사용자 `a` accept → 인박스 zero 한 세션 완주.
+**Verification gate**: a real chu.ac.kr admin email arrives → anchor classifies, extracts a task, and proposes a folder within 30 seconds → user presses `a` → inbox-zero in one session.
 
 ### Phase 3 — Built-in Skills (week 11–14)
 
-**Outcome**: 사용자의 일상 ops 5개를 명령 팔레트에서 실행 (터미널 컨텍스트 스위치 X).
+**Outcome**: five daily ops moved out of the terminal into the command palette.
 
-`runtime: claude-code` 가 v1 핵심 — 사용자의 `~/.claude/skills/*` 를 그대로 invoke. **재작성 0줄**.
+The `runtime: claude-code` lane is the v1 core — the user's `~/.claude/skills/*` are invoked as-is. **Zero lines rewritten**.
 
-5개 스킬:
-1. **inbox-processor** — 인박스 항목 → 팔레트 → 스킬 실행 → diff 표시 + stage
-2. **meeting-notes** — 팔레트 → `meetings/YYMMDD-*.md` 템플릿 생성 (Phase 4에서 voice 추가)
-3. **task-management** — `_inbox/` 분석 → TASKS.md sync
-4. **lint** — `/lint` 실행 → 인라인 리포트 (read-only, 자동 수정 X)
-5. **hwpx-fill** — 템플릿 선택 → 필드 입력 → `.hwpx` 생성
+Five skills:
+1. **inbox-processor** — pick an inbox item → palette → run skill → show diff → stage.
+2. **meeting-notes** — palette → emit `meetings/YYMMDD-*.md` template (Phase 4 adds voice).
+3. **task-management** — analyze `_inbox/` → sync `TASKS.md`.
+4. **lint** — run `/lint` → inline report (read-only; no auto-fix).
+5. **hwpx-fill** — pick template → fill fields → emit `.hwpx`.
 
-**Verification gate**: 하루 안에 5개 모두 end-to-end 실행 (터미널 X). CLI 직접 실행과 출력 동일. 사용자 30분 이상 절약 보고.
+**Verification gate**: in one day all five run end-to-end without the terminal, with output equivalent to direct CLI execution. The user reports saving 30+ minutes.
 
 ### Phase 4 — Document Edit Mode (week 15–18)
 
-**Outcome**: anchor 안의 dedicated 모드에서 음성 + 제스처로 RISE 사업계획서 편집. 기존 `dev/anchor-editor` 미사용.
+**Outcome**: a dedicated mode inside anchor where voice + gesture edit the RISE proposal. The standalone `dev/anchor-editor` falls out of the loop.
 
-**유지** (general-purpose 화):
-- Whisper sidecar (Korean large-v3) — anchor-editor lift
-- Intent fusion (음성 명령 → edit intent)
-- One-Euro filter + gesture worker (prev/next, scroll, accept/reject diff)
-- PostToolUse → SSE diff stream (chat 대신 surgical edit)
+**Keep** (generalized):
+- Whisper sidecar (Korean large-v3) — lifted from anchor-editor.
+- Intent fusion (voice command → edit intent).
+- One-Euro filter + gesture worker (prev/next, scroll, accept/reject diff).
+- PostToolUse → SSE diff stream (surgical edits, not chat).
 
-**일반화** (RISE-specific → vault-level):
-- 용어집 enforcement → `.anchor/glossary.yml` per-vault
-- 템플릿 → `.anchor/templates/` per-vault
+**Generalize** (RISE-specific → vault-level):
+- Glossary enforcement → `.anchor/glossary.yml` per vault.
+- Templates → `.anchor/templates/` per vault.
 
-**Drop**: HoloBackground / R3F HUD (cute demo, 일상 가치 X). 하드코딩 본부/사업 리스트. Next.js shell.
+**Drop**: HoloBackground / R3F HUD (cute demo, no daily value). Hard-coded division/program lists. Next.js shell.
 
-**Verification gate**: 30분 음성/제스처 편집 세션 + git commit clean + 용어 위반 flagged. anchor-editor 그 주 한 번도 launch 안 됨.
+**Verification gate**: a 30-minute voice + gesture editing session produces a clean git commit with glossary violations flagged, and the user did not launch anchor-editor at all that week.
 
 ### Phase 5+ (deferred)
 
-likelihood 순:
-- **Multi-window** — `tolaria/src-tauri/src/window_state.rs` lift
-- **Conflict resolver** — 첫 실제 merge conflict 발생 시
-- **Marketplace 공개 호스팅** — 사용자 >10명 요청 시
-- **Semantic search** — keyword + relationship + git-grep 부족 demonstrably 입증 시
-- **NotebookLM bridge** — 낮은 우선순위
-- **Auto-updater** — 배포 사용자 >2명일 때
+In likelihood order:
+- **Multi-window** — lift `tolaria/src-tauri/src/window_state.rs`.
+- **Conflict resolver** — when the first real merge conflict bites.
+- **Public marketplace hosting** — when external user count exceeds 10.
+- **Semantic search** — when keyword + relationships + git-grep are demonstrably insufficient.
+- **NotebookLM bridge** — low priority.
+- **Auto-updater** — once the deployed user count exceeds 2.
 
-## Open Decisions (사용자 결정 필요)
+## Open decisions (input needed)
 
-Phase 1B 이후 작업 진행 전 확정 필요한 항목:
+Items requiring the user's decision before further phases proceed:
 
-1. **Vault cache 트리거 임계치** — 현재 warm scan 385ms (rayon 병렬화 후). 사용자 체감 latency 보고 후 cache 우선순위 결정. Cold scan 측정도 함께 필요.
-2. **BlockNote ↔ raw 토글의 default** — 일반 노트는 rich, RISE 사업계획서 같은 정밀 편집은 raw. per-vault 설정 vs per-doc 설정 선택.
-3. **Multi-tab UX** — 탭 닫기 confirm dirty 처리 (현재 단일 doc은 dismissable toast). Obsidian 패턴 (자동 저장) vs VS Code 패턴 (확인) 결정.
-4. **Wikilink 미해결 처리** — Phase 1A는 soft notice. Phase 1B에서 (a) 빨간 underline + create-new dialog (b) 자동 stub 생성 후 편집 — 사용자 워크플로 확인 필요.
-5. **anchor MCP 포트** — 9710 (tolaria 동일) 시 환경 충돌 검토. 9712/9713 fallback으로 충분한지.
-6. **anchor-editor archive 시점** — Phase 4 verification gate 통과 후 즉시 archive vs 6개월 reference 보존?
-7. **AI fallback API 키 보관 위치** — Tauri stronghold plugin (macOS Keychain) 권장하나 사용자 운영 환경 확인 필요.
-8. **History 단축키 (확정)** — ⌘[ 뒤로 / ⌘] 앞으로 (브라우저 충돌 없음). Phase 1A에 적용됨. 변경 의사 없으면 lock.
+1. **Vault cache trigger threshold** — warm scan is now 385ms (after rayon parallelism). Need to confirm perceived latency before scheduling the cache lift. Cold-cache measurement also needed.
+2. **BlockNote ↔ raw default** — rich for general notes; raw for precision-sensitive editing such as the RISE proposal. Per-vault setting vs per-doc setting?
+3. **Multi-tab UX** — close-with-dirty confirmation: Obsidian pattern (autosave) vs VS Code pattern (confirm)?
+4. **Unresolved-wikilink behavior** — Phase 1A surfaces a soft notice. Phase 1B should pick: (a) red underline + create-new dialog, or (b) auto-stub note then open it.
+5. **anchor MCP port** — 9710 (matches tolaria) or fall back to 9712/9713?
+6. **anchor-editor archive timing** — archive immediately after the Phase 4 verification gate, or keep around for six months as reference?
+7. **AI fallback API key storage** — Tauri stronghold plugin (macOS Keychain) is the recommendation; confirm operational fit.
+8. **History shortcuts (lock-in)** — ⌘[ back / ⌘] forward (no browser conflict). Already shipped in Phase 1A; lock unless changing.
 
-## Hard "No" List (v1)
+## Hard "No" list (v1)
 
-명시적으로 v1에서 안 할 것:
+Out of scope for v1 by explicit decision:
 
-- Semantic/embedding 검색 (keyword + wikilink + git-grep으로 10k notes 충분)
-- Cloud sync, anchor account, 기본 telemetry (opt-in only)
-- Mobile (Tauri 2 mobile 불안정 — Obsidian이 mobile 담당)
-- 공개 마켓플레이스 서버 (moderation 정책 부재)
-- iMessage / Slack 인제스트 (권한 pain > value)
-- NotebookLM, podcast, slide export
-- Multi-user collab, CRDT, realtime (single user, single device, git for history)
-- PDF annotation, OCR (file-extract 텍스트로 충분)
-- Agent 자율 편집 (모든 Claude write는 accept/reject diff)
-- iCloud/Dropbox vault 인지 (사용자 책임)
-- Auto-updater (`pnpm tauri build` 로컬 빌드만)
+- Semantic / embedding search (keyword + wikilink + git-grep cover 10k notes).
+- Cloud sync, anchor account, default telemetry (opt-in only).
+- Mobile (Tauri 2 mobile is unstable; Obsidian owns mobile for now).
+- Public marketplace server (no moderation policy).
+- iMessage / Slack ingestion (permission pain > value).
+- NotebookLM, podcast, slide export.
+- Multi-user collab, CRDT, realtime (single user, single device, git for history).
+- PDF annotation, OCR (file-extracted text is enough).
+- Agent-autonomous edits (every Claude write goes through accept/reject diff).
+- iCloud / Dropbox vault awareness (user's responsibility).
+- Auto-updater (`pnpm tauri build` local builds only).
 
 ## Development
 
@@ -184,8 +184,7 @@ cd src-tauri && cargo test --release bench_scan_real_vault \
 
 ## Vault layout
 
-A vault is any folder containing `.md` (or `.markdown`, `.html`, `.htm`)
-files. anchor stores per-vault state at:
+A vault is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files. anchor stores per-vault state at:
 
 ```
 <vault>/
@@ -204,12 +203,12 @@ _sys/env
 target
 ```
 
-## Code Lift Map
+## Code lift map
 
-각 phase 별 주요 lift 출처. anchor는 처음부터 새로 쓰지 않고 검증된 코드를 빌려 옵니다.
+Major deliverables come from existing, validated codebases — anchor is integration, not greenfield.
 
-| Phase | 출처 | 대상 | 비고 |
-|-------|------|------|------|
+| Phase | Source | Destination | Type |
+|-------|--------|-------------|------|
 | 0 | `tolaria/src-tauri/src/frontmatter/{yaml,ops}.rs` | `src-tauri/src/frontmatter/` | line-edit, byte-identical |
 | 0 | `tolaria/src-tauri/src/vault_list.rs` | `src-tauri/src/vault_list.rs` | multi-vault registry |
 | 0 | `tolaria/src-tauri/src/vault/filename_rules.rs` | `src-tauri/src/filename_rules.rs` | NFC/NFD safety |
@@ -217,28 +216,28 @@ target
 | 1A | `tolaria/src/utils/wikilinkSuggestions.ts` | `src/lib/wikilinkSuggestions.ts` | adapted, +memo index |
 | 1A | `tolaria/src/utils/neighborhoodHistory.ts` | `src/lib/neighborhoodHistory.ts` | adapted, in-memory only |
 | 1A | `tolaria/src/components/InlineWikilinkSuggest.tsx` | `src/components/WikilinkAutocomplete.tsx` | IME-aware adapted |
-| 1B | `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC) | `crates/anchor-vault/src/cache.rs` (planned) | latency 임계 시 |
-| 1B | `tolaria/src-tauri/src/git/{status,commit}.rs` | `src-tauri/src/git.rs` (shell-out 채택) | git2 대신 가볍게 |
-| 1B | `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx` | `src/components/Editor*.tsx` | 1주 budget, fragile |
-| 1B | `tolaria/src/hooks/useEditorTabSwap.ts` (1,149 LOC) | `src/hooks/useEditorTabSwap.ts` | 단순화 가능 |
+| 1B | `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC) | `crates/anchor-vault/src/cache.rs` (planned) | wait until latency demands it |
+| 1B | `tolaria/src-tauri/src/git/{status,commit}.rs` | `src-tauri/src/git.rs` (shell-out) | lightweight alternative to git2 |
+| 1B | `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx` | `src/components/Editor*.tsx` | one-week budget, fragile |
+| 1B | `tolaria/src/hooks/useEditorTabSwap.ts` (1,149 LOC) | `src/hooks/useEditorTabSwap.ts` | simplifiable |
 | 1B | `tolaria/playwright.smoke.config.ts` | `e2e/` | smoke + flow tests |
-| 2 | `tidy/app/electron/core/scheduler.js` | `crates/anchor-inbox/src/scheduler.rs` | JS→Rust rewrite |
+| 2 | `tidy/app/electron/core/scheduler.js` | `crates/anchor-inbox/src/scheduler.rs` | JS → Rust rewrite |
 | 2 | `tidy/app/electron/core/{parser,imap}.js` | `crates/anchor-inbox/src/{extract,imap}.rs` | Rust crates: lopdf, async-imap |
-| 2 | `tidy/app/electron/ipc-handlers.js:20-109` | `crates/anchor-korean/src/date.rs` + `packages/korean-nl/` | 한국어 NL date split |
-| 2 | `tolaria/src-tauri/src/{ai_agents,claude_cli}.rs` | `src-tauri/src/ai_router.rs` | SSE bridge verbatim+adapt |
+| 2 | `tidy/app/electron/ipc-handlers.js:20-109` | `crates/anchor-korean/src/date.rs` + `packages/korean-nl/` | Korean NL date split |
+| 2 | `tolaria/src-tauri/src/{ai_agents,claude_cli}.rs` | `src-tauri/src/ai_router.rs` | SSE bridge, verbatim+adapt |
 | 4 | `anchor-editor/services/whisper/server.py` | `services/whisper/` | Korean large-v3 |
-| 4 | `anchor-editor/apps/web/lib/intent-fusion.ts` | `src/lib/intent-fusion.ts` | RISE-generic 화 |
+| 4 | `anchor-editor/apps/web/lib/intent-fusion.ts` | `src/lib/intent-fusion.ts` | RISE-generic generalization |
 | 4 | `anchor-editor/apps/web/workers/gesture.worker.ts` | `src/workers/gesture.worker.ts` | One-Euro filter |
 
-**원칙**: tolaria 검증된 PKM 코드 + tidy 검증된 인박스/AI 코드 + anchor-editor 검증된 음성·제스처 코드를 한 데스크톱 앱으로 통합. 사용자의 `~/.claude/skills/*` 는 read-only — anchor가 invoke 만, 수정 X.
+**Principle**: tolaria's PKM code + tidy's inbox/AI code + anchor-editor's voice/gesture code, fused into one desktop app. The user's `~/.claude/skills/*` is read-only — anchor only invokes; never rewrites.
 
 ## Critical invariants
 
-1. **Filesystem is authoritative.** 캐시(`<vault>/.anchor/cache.db`, Phase 1B+)는 disposable. React state는 derive.
-2. **Frontmatter key order + comments preserved.** 단일 필드 patch는 다른 키의 순서·주석 절대 건드리지 않음 (cargo test로 검증).
-3. **Crash-safe rename.** `.anchor-rename-txn/` staging dir + 다음 vault scan에서 복구 (Phase 1B).
-4. **Dynamic relationship detection.** frontmatter 어떤 필드든 `[[wikilink]]` 포함하면 relationship으로 인식. 하드코딩 필드명 X.
-5. **Symlinks inside vault are honored.** 사용자가 명시적으로 만든 vault 내 symlink (예: `~/workspace/work/inbox/downloads → ~/gdrive-workspace/...`)는 vault 안으로 간주. lexical containment 사용 (canonicalize 아님).
+1. **Filesystem is authoritative.** The cache (`<vault>/.anchor/cache.db`, Phase 1B+) is disposable. React state is derived.
+2. **Frontmatter key order + comments preserved.** A single-field patch must never disturb the order or comments of any other key (verified by cargo test).
+3. **Crash-safe rename.** `.anchor-rename-txn/` staging dir + recovery on the next vault scan (Phase 1B).
+4. **Dynamic relationship detection.** Any frontmatter field containing `[[wikilink]]` is treated as a relationship. No hard-coded field lists.
+5. **Symlinks inside the vault are honored.** Deliberate user-created symlinks (e.g. `~/workspace/work/inbox/downloads → ~/gdrive-workspace/...`) are considered part of the vault. anchor uses lexical containment, not `canonicalize()`.
 
 ## License
 
