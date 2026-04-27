@@ -4,6 +4,7 @@ import { AddVaultDialog } from "./components/AddVaultDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { DocumentList } from "./components/DocumentList";
 import { EditorPane, type EditorViewMode } from "./components/EditorPane";
+import { GitStatusBadge } from "./components/GitStatusBadge";
 import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
 import { Sidebar } from "./components/Sidebar";
@@ -95,6 +96,8 @@ export default function App() {
   // Set to true by navigateBack/Forward to suppress the auto history push
   // inside selectEntry — those paths manage history manually.
   const skipNextHistoryPushRef = useRef(false);
+  // Bump on save/snapshot/vault-switch/refresh so the GitStatusBadge re-polls.
+  const [gitRefreshTick, setGitRefreshTick] = useState(0);
 
   const activeVaultPath = vaultList.activeVault;
   const activeVault = useMemo(
@@ -388,6 +391,7 @@ export default function App() {
       setDraftContent(saved.content);
       const fresh = await scanVault(activeVaultPath);
       setEntries(fresh);
+      setGitRefreshTick((n) => n + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -553,6 +557,10 @@ export default function App() {
             onAddVault={() => setAddVaultOpen(true)}
             onRemoveVault={handleRemoveVault}
             onUseSample={useSampleVault}
+          />
+          <GitStatusBadge
+            vaultPath={activeVaultPath}
+            refreshTrigger={gitRefreshTick}
           />
 
           <div className="topbar-spacer" />

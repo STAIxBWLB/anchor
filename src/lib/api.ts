@@ -11,6 +11,7 @@ import {
 import type {
   CreatedDocument,
   DocumentPayload,
+  GitStatus,
   VaultEntry,
   VaultList,
   VersionSnapshot,
@@ -137,4 +138,13 @@ export async function removeVault(path: string): Promise<VaultList> {
 export async function setActiveVault(path: string): Promise<VaultList> {
   if (!isTauri()) return mockVaultList();
   return invoke<VaultList>("set_active_vault", { path });
+}
+
+// === Git ===
+
+export async function gitStatus(vaultPath: string): Promise<GitStatus> {
+  if (!isTauri()) {
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, clean: true, branch: null };
+  }
+  return invoke<GitStatus>("git_status", { vaultPath });
 }

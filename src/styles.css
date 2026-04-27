@@ -1414,6 +1414,48 @@ a {
   text-underline-offset: 3px;
 }
 
+.git-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  margin-left: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink-2);
+  user-select: none;
+}
+
+.git-badge svg {
+  color: var(--muted);
+}
+
+.git-badge.dirty {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.git-badge.dirty svg {
+  color: var(--warn);
+}
+
+.git-badge-branch {
+  font-weight: 500;
+}
+
+.git-badge-count {
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--warn);
+  color: var(--panel);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .preview-surface table {
   border-collapse: collapse;
   margin: 14px 0;

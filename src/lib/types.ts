@@ -54,3 +54,14 @@ export interface VaultList {
 export interface AppError {
   message: string;
 }
+
+/** Git working-tree status of the active vault. Returned by the Rust
+ *  `git_status` command via shelling out to the user's git binary. */
+export interface GitStatus {
+  isRepo: boolean;
+  modified: number;
+  staged: number;
+  untracked: number;
+  clean: boolean;
+  branch: string | null;
+}
