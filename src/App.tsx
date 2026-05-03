@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Clock3, RefreshCcw, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  Command,
+  FileText,
+  Inbox,
+  RefreshCcw,
+  Settings2,
+  X,
+} from "lucide-react";
 import { AddVaultDialog } from "./components/AddVaultDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { CommitDialog } from "./components/CommitDialog";
@@ -11,6 +20,7 @@ import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
 import { Sidebar } from "./components/Sidebar";
 import { SystemPane } from "./components/SystemPane";
+import { TerminalPanel } from "./components/TerminalPanel";
 import { VaultSwitcher } from "./components/VaultSwitcher";
 import {
   addVault,
@@ -30,7 +40,12 @@ import {
   stopInboxWatcher,
   updateFrontmatterField,
 } from "./lib/api";
-import { registerWorkspacePair, updateAnchorWorkspace } from "./lib/anchorDir";
+import {
+  readAnchorSettings,
+  registerWorkspacePair,
+  saveAnchorSettings,
+  updateAnchorWorkspace,
+} from "./lib/anchorDir";
 import { classifyInboxItem } from "./lib/aiInvoke";
 import { buildGmailMessageStates, type GmailMessageState } from "./lib/gmail";
 import { LocaleContext, assertParityOrThrow, useLocaleState } from "./lib/i18n";
@@ -49,6 +64,12 @@ import type {
   VaultEntry,
   VaultList,
 } from "./lib/types";
+import {
+  DEFAULT_ANCHOR_SETTINGS,
+  normalizeAnchorSettings,
+  type AnchorSettings,
+  type DocumentBrowserMode,
+} from "./lib/settings";
 import { resolveWikilinkTarget } from "./lib/wikilinkSuggestions";
 import { mergeFreshEntry, planVaultStartup } from "./lib/vaultStartup";
 import {
@@ -184,6 +205,9 @@ export default function App() {
   const [gmailDecisions, setGmailDecisions] = useState<Map<string, InboxDecision>>(
     () => new Map(),
   );
+  const [anchorSettings, setAnchorSettings] = useState<AnchorSettings>(() =>
+    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
+  );
 
   const activeVaultPath = vaultList.activeVault;
   const resolvedActiveTabId = activeTabId ?? tabs[0]?.id ?? null;
@@ -216,6 +240,15 @@ export default function App() {
     return null;
   }, [activeVault]);
   const systemEnabled = systemWorkPath != null;
+  const settingsWorkPath = useMemo(() => {
+    if (!activeVault) return null;
+    if (activeVault.role === "vault" && activeVault.workspaceRoot) {
+      return activeVault.workspaceRoot;
+    }
+    if (activeVault.externalWriter) return null;
+    return activeVault.path;
+  }, [activeVault]);
+  const settingsWritable = settingsWorkPath != null;
   const dirty = useMemo(
     () => Boolean(document && draftContent !== document.content),
     [document, draftContent],
@@ -278,6 +311,77 @@ export default function App() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(OUTLINE_OPEN_KEY, outlineOpen ? "1" : "0");
   }, [outlineOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!settingsWorkPath) {
+      setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+      return;
+    }
+    void readAnchorSettings(settingsWorkPath)
+      .then((settings) => {
+        if (!cancelled) setAnchorSettings(settings);
+      })
+      .catch(() => {
+        if (!cancelled) setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsWorkPath]);
+
+  const updateSettings = useCallback(
+    (updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings)) => {
+      setAnchorSettings((current) => {
+        const next = normalizeAnchorSettings(
+          typeof updater === "function" ? updater(current) : updater,
+        );
+        if (settingsWritable && settingsWorkPath) {
+          void saveAnchorSettings(settingsWorkPath, next).catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        }
+        return next;
+      });
+    },
+    [settingsWorkPath, settingsWritable],
+  );
+
+  const setDocumentBrowserMode = useCallback(
+    (mode: DocumentBrowserMode) => {
+      updateSettings((current) => ({
+        ...current,
+        ui: {
+          ...current.ui,
+          documentBrowserMode: mode,
+        },
+      }));
+    },
+    [updateSettings],
+  );
+
+  const setCollapsedTreeFolders = useCallback(
+    (paths: string[]) => {
+      updateSettings((current) => ({
+        ...current,
+        ui: {
+          ...current.ui,
+          collapsedTreeFolders: paths,
+        },
+      }));
+    },
+    [updateSettings],
+  );
+
+  const setTerminalSettings = useCallback(
+    (terminal: AnchorSettings["terminal"]) => {
+      updateSettings((current) => ({
+        ...current,
+        terminal,
+      }));
+    },
+    [updateSettings],
+  );
 
   // If the active vault loses its work-role (e.g. user switches to a
   // standalone vault while System mode was active), drop back to PKM.
@@ -1214,32 +1318,6 @@ export default function App() {
 
           <button
             type="button"
-            className={appMode === "pkm" ? "topbar-pill active" : "topbar-pill"}
-            onClick={() => setAppMode("pkm")}
-            title={t("mode.pkm")}
-          >
-            {t("mode.pkm")}
-          </button>
-          <button
-            type="button"
-            className={appMode === "inbox" ? "topbar-pill active" : "topbar-pill"}
-            onClick={() => setAppMode("inbox")}
-            title={t("mode.inbox")}
-          >
-            {t("mode.inbox")}
-          </button>
-          {systemEnabled ? (
-            <button
-              type="button"
-              className={appMode === "system" ? "topbar-pill active" : "topbar-pill"}
-              onClick={() => setAppMode("system")}
-              title={t("mode.system")}
-            >
-              {t("mode.system")}
-            </button>
-          ) : null}
-          <button
-            type="button"
             className="topbar-pill"
             onClick={() => setCommandPaletteOpen(true)}
             title={t("cmdk.openHint")}
@@ -1275,6 +1353,48 @@ export default function App() {
           </button>
         </header>
 
+        <nav className="activity-rail" aria-label={t("activity.label")}>
+          <button
+            type="button"
+            className={appMode === "pkm" ? "activity-button active" : "activity-button"}
+            onClick={() => setAppMode("pkm")}
+            title={t("mode.pkm")}
+            aria-label={t("mode.pkm")}
+          >
+            <FileText size={20} />
+          </button>
+          <button
+            type="button"
+            className={appMode === "inbox" ? "activity-button active" : "activity-button"}
+            onClick={() => setAppMode("inbox")}
+            title={t("mode.inbox")}
+            aria-label={t("mode.inbox")}
+          >
+            <Inbox size={20} />
+          </button>
+          <button
+            type="button"
+            className="activity-button"
+            onClick={() => setCommandPaletteOpen(true)}
+            title={t("sidebar.commandPalette")}
+            aria-label={t("sidebar.commandPalette")}
+          >
+            <Command size={19} />
+          </button>
+          <span className="activity-spacer" />
+          {systemEnabled ? (
+            <button
+              type="button"
+              className={appMode === "system" ? "activity-button active" : "activity-button"}
+              onClick={() => setAppMode("system")}
+              title={t("mode.system")}
+              aria-label={t("mode.system")}
+            >
+              <Settings2 size={20} />
+            </button>
+          ) : null}
+        </nav>
+
         <Sidebar
           entries={entries}
           recentEntries={recentEntries}
@@ -1287,7 +1407,11 @@ export default function App() {
         />
 
         {appMode === "system" ? (
-          <SystemPane workPath={systemWorkPath} />
+          <SystemPane
+            workPath={systemWorkPath}
+            settings={anchorSettings}
+            onSettingsChange={updateSettings}
+          />
         ) : appMode === "inbox" ? (
           <InboxPane
             items={inboxItems}
@@ -1311,7 +1435,11 @@ export default function App() {
               query={query}
               loading={loading && entries.length === 0}
               typeFilter={typeFilter}
+              browserMode={anchorSettings.ui.documentBrowserMode}
+              collapsedTreeFolders={anchorSettings.ui.collapsedTreeFolders}
               onQueryChange={setQuery}
+              onBrowserModeChange={setDocumentBrowserMode}
+              onCollapsedTreeFoldersChange={setCollapsedTreeFolders}
               onSelect={selectEntry}
               searchInputRef={searchInputRef}
             />
@@ -1358,6 +1486,12 @@ export default function App() {
             ) : null}
           </>
         )}
+
+        <TerminalPanel
+          cwd={activeVaultPath}
+          settings={anchorSettings.terminal}
+          onSettingsChange={setTerminalSettings}
+        />
 
         <div className="toast-stack">
           {error ? (

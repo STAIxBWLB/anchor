@@ -18,6 +18,12 @@ import type {
   WorkspaceDetect,
   WorkspaceSummary,
 } from "./types";
+import {
+  DEFAULT_ANCHOR_SETTINGS,
+  normalizeAnchorSettings,
+  serializeAnchorSettings,
+  type AnchorSettings,
+} from "./settings";
 
 declare global {
   interface Window {
@@ -27,6 +33,8 @@ declare global {
 
 const isTauri = () =>
   typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+
+const SETTINGS_FALLBACK_KEY = "anchor:settings:fallback:v1";
 
 // === Workspace detection / pairing ===
 
@@ -180,6 +188,37 @@ export async function saveAnchorProjects(workPath: string, value: unknown): Prom
 export async function readAnchorSkills(workPath: string): Promise<unknown> {
   if (!isTauri()) return null;
   return invoke<unknown>("read_anchor_skills", { workPath });
+}
+
+export async function readAnchorSettings(workPath: string): Promise<AnchorSettings> {
+  if (!isTauri()) {
+    try {
+      const raw = window.localStorage.getItem(`${SETTINGS_FALLBACK_KEY}:${workPath}`);
+      return normalizeAnchorSettings(raw ? JSON.parse(raw) : DEFAULT_ANCHOR_SETTINGS);
+    } catch {
+      return normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS);
+    }
+  }
+  const value = await invoke<unknown>("read_anchor_settings", { workPath });
+  return normalizeAnchorSettings(value);
+}
+
+export async function saveAnchorSettings(
+  workPath: string,
+  value: AnchorSettings,
+): Promise<void> {
+  const normalized = normalizeAnchorSettings(value);
+  if (!isTauri()) {
+    window.localStorage.setItem(
+      `${SETTINGS_FALLBACK_KEY}:${workPath}`,
+      JSON.stringify(normalized),
+    );
+    return;
+  }
+  await invoke("save_anchor_settings", {
+    workPath,
+    value: serializeAnchorSettings(normalized),
+  });
 }
 
 export async function readAnchorImports(workPath: string): Promise<unknown> {

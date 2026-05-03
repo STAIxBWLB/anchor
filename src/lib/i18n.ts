@@ -30,6 +30,7 @@ const ko: Record<string, string> = {
   "mode.pkm": "문서",
   "mode.inbox": "인박스",
   "mode.system": "시스템",
+  "activity.label": "앱 영역",
 
   "vault.current": "현재 볼트",
   "vault.add": "볼트 추가",
@@ -81,6 +82,9 @@ const ko: Record<string, string> = {
   "list.group.today": "오늘",
   "list.group.thisWeek": "이번 주",
   "list.group.earlier": "이전",
+  "list.viewMode": "문서 보기 방식",
+  "list.view.list": "목록",
+  "list.view.tree": "트리",
 
   "editor.empty.title": "문서를 선택하세요",
   "editor.empty.description":
@@ -213,6 +217,11 @@ const ko: Record<string, string> = {
   "system.empty": "이 vault 는 페어링된 work 가 아닙니다. 시스템 모드는 work 측 vault 에서만 사용할 수 있습니다.",
   "system.tab.rules": "Rules",
   "system.tab.templates": "Templates",
+  "system.tab.preferences": "Preferences",
+  "system.tab.ai": "AI",
+  "system.tab.terminal": "Terminal",
+  "system.tab.inboxChannels": "Inbox Channels",
+  "system.tab.connectors": "Connectors",
   "system.tab.mcp": "MCP",
   "system.tab.projects": "Projects",
   "system.tab.skills": "Skills",
@@ -234,6 +243,12 @@ const ko: Record<string, string> = {
   "system.skills.runtime": "런타임",
   "system.skills.source": "원본",
   "system.skills.category": "카테고리",
+  "system.preferences.documentBrowser": "문서 브라우저 기본 보기",
+  "system.preferences.terminalDefaultOpen": "터미널 패널 기본 열기",
+  "system.ai.title": "AI 설정",
+  "system.terminal.title": "터미널 런처 설정",
+  "system.inboxChannels.title": "인박스 채널 설정",
+  "system.connectors.title": "커넥터 설정",
   "system.import.title": "_sys/ 로부터 가져오기",
   "system.import.subtitle":
     "사용자의 _sys/ 디렉터리를 anchor 의 .anchor/ 로 복사합니다. 같은 항목을 다시 가져오면 sha256 비교로 변경 여부를 알려줍니다.",
@@ -256,6 +271,19 @@ const ko: Record<string, string> = {
   "sidebar.projects": "프로젝트",
   "sidebar.projects.empty": "프로젝트가 없습니다. Import 탭에서 project-registry.yaml 을 가져오세요.",
   "sidebar.projects.all": "전체",
+
+  // === Integrated terminal ===
+  "terminal.title": "터미널",
+  "terminal.launchers": "터미널 런처",
+  "terminal.launcher.claude": "Claude",
+  "terminal.launcher.codex": "Codex",
+  "terminal.launcher.shell": "Shell",
+  "terminal.tabs": "터미널 탭",
+  "terminal.tab.close": "{title} 탭 닫기",
+  "terminal.empty": "터미널 없음",
+  "terminal.empty.detail": "Claude, Codex, Shell 버튼으로 새 터미널을 시작하세요.",
+  "terminal.cwd.none": "실행 폴더 없음",
+  "terminal.tauriRequired": "통합 터미널은 Tauri 앱에서만 사용할 수 있습니다.",
 };
 
 const en: Record<string, string> = {
@@ -271,6 +299,7 @@ const en: Record<string, string> = {
   "mode.pkm": "Docs",
   "mode.inbox": "Inbox",
   "mode.system": "System",
+  "activity.label": "App areas",
 
   "vault.current": "Current vault",
   "vault.add": "Add vault",
@@ -322,6 +351,9 @@ const en: Record<string, string> = {
   "list.group.today": "Today",
   "list.group.thisWeek": "This week",
   "list.group.earlier": "Earlier",
+  "list.viewMode": "Document view mode",
+  "list.view.list": "List",
+  "list.view.tree": "Tree",
 
   "editor.empty.title": "Select a document",
   "editor.empty.description":
@@ -454,6 +486,11 @@ const en: Record<string, string> = {
   "system.empty": "This vault is not the work half of a workspace pair. System mode is only available from the work side.",
   "system.tab.rules": "Rules",
   "system.tab.templates": "Templates",
+  "system.tab.preferences": "Preferences",
+  "system.tab.ai": "AI",
+  "system.tab.terminal": "Terminal",
+  "system.tab.inboxChannels": "Inbox Channels",
+  "system.tab.connectors": "Connectors",
   "system.tab.mcp": "MCP",
   "system.tab.projects": "Projects",
   "system.tab.skills": "Skills",
@@ -478,6 +515,12 @@ const en: Record<string, string> = {
   "system.skills.runtime": "Runtime",
   "system.skills.source": "Source",
   "system.skills.category": "Category",
+  "system.preferences.documentBrowser": "Default document browser view",
+  "system.preferences.terminalDefaultOpen": "Open terminal panel by default",
+  "system.ai.title": "AI settings",
+  "system.terminal.title": "Terminal launcher settings",
+  "system.inboxChannels.title": "Inbox channel settings",
+  "system.connectors.title": "Connector settings",
   "system.import.title": "Import from _sys/",
   "system.import.subtitle":
     "Copy from your _sys/ tree into anchor's .anchor/. Re-importing compares sha256 to surface changes.",
@@ -501,6 +544,19 @@ const en: Record<string, string> = {
   "sidebar.projects.empty":
     "No projects. Import project-registry.yaml from the Import tab.",
   "sidebar.projects.all": "All",
+
+  // === Integrated terminal ===
+  "terminal.title": "Terminal",
+  "terminal.launchers": "Terminal launchers",
+  "terminal.launcher.claude": "Claude",
+  "terminal.launcher.codex": "Codex",
+  "terminal.launcher.shell": "Shell",
+  "terminal.tabs": "Terminal tabs",
+  "terminal.tab.close": "Close {title} tab",
+  "terminal.empty": "No terminals",
+  "terminal.empty.detail": "Start a terminal with the Claude, Codex, or Shell button.",
+  "terminal.cwd.none": "No working folder",
+  "terminal.tauriRequired": "Integrated terminal is only available in the Tauri app.",
 };
 
 const dictionaries: Record<Locale, Record<string, string>> = { ko, en };

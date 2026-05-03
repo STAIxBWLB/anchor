@@ -1,9 +1,15 @@
-import { Search } from "lucide-react";
+import { ChevronRight, FileText, Folder, List, Search } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { VaultEntry } from "../lib/types";
 import { filterEntries, formatRelativeDate, frontmatterScalar } from "../lib/document";
+import {
+  buildDocumentTreeRows,
+  nextCollapsedFolders,
+  type DocumentTreeRow,
+} from "../lib/documentTree";
 import { useTranslation } from "../lib/i18n";
+import type { DocumentBrowserMode } from "../lib/settings";
 
 const GROUP_ROW_HEIGHT = 28;
 const ENTRY_ROW_HEIGHT = 132;
@@ -19,7 +25,11 @@ interface DocumentListProps {
   query: string;
   loading: boolean;
   typeFilter: string | null;
+  browserMode: DocumentBrowserMode;
+  collapsedTreeFolders: string[];
   onQueryChange: (query: string) => void;
+  onBrowserModeChange: (mode: DocumentBrowserMode) => void;
+  onCollapsedTreeFoldersChange: (paths: string[]) => void;
   onSelect: (entry: VaultEntry) => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
@@ -30,7 +40,11 @@ export function DocumentList({
   query,
   loading,
   typeFilter,
+  browserMode,
+  collapsedTreeFolders,
   onQueryChange,
+  onBrowserModeChange,
+  onCollapsedTreeFoldersChange,
   onSelect,
   searchInputRef,
 }: DocumentListProps) {
@@ -108,6 +122,12 @@ export function DocumentList({
     );
   }, [virtualLayout.rows, viewport]);
 
+  const forceExpandTree = Boolean(query.trim() || typeFilter != null);
+  const treeRows = useMemo(
+    () => buildDocumentTreeRows(filtered, collapsedTreeFolders, forceExpandTree),
+    [filtered, collapsedTreeFolders, forceExpandTree],
+  );
+
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
@@ -141,6 +161,25 @@ export function DocumentList({
           <h2>{headerCaption}</h2>
         </div>
         <span className="meta">{t("list.meta.count", { count: filtered.length })}</span>
+      </div>
+
+      <div className="list-mode-toggle" role="group" aria-label={t("list.viewMode")}>
+        <button
+          type="button"
+          className={browserMode === "list" ? "active" : ""}
+          onClick={() => onBrowserModeChange("list")}
+        >
+          <List size={13} />
+          <span>{t("list.view.list")}</span>
+        </button>
+        <button
+          type="button"
+          className={browserMode === "tree" ? "active" : ""}
+          onClick={() => onBrowserModeChange("tree")}
+        >
+          <Folder size={13} />
+          <span>{t("list.view.tree")}</span>
+        </button>
       </div>
 
       <label className="search-box">
@@ -182,7 +221,19 @@ export function DocumentList({
           </div>
         ) : null}
 
-        {!loading && filtered.length > 0 ? (
+        {!loading && filtered.length > 0 && browserMode === "tree" ? (
+          <DocumentTree
+            rows={treeRows}
+            selectedPath={selectedPath}
+            collapsedTreeFolders={collapsedTreeFolders}
+            forceExpand={forceExpandTree}
+            onCollapsedTreeFoldersChange={onCollapsedTreeFoldersChange}
+            onSelect={onSelect}
+            t={t}
+          />
+        ) : null}
+
+        {!loading && filtered.length > 0 && browserMode === "list" ? (
           <div
             className="virtual-list-spacer"
             style={{ height: virtualLayout.totalHeight }}
@@ -262,6 +313,85 @@ export function DocumentList({
         ) : null}
       </div>
     </section>
+  );
+}
+
+interface DocumentTreeProps {
+  rows: DocumentTreeRow[];
+  selectedPath: string | null;
+  collapsedTreeFolders: string[];
+  forceExpand: boolean;
+  onCollapsedTreeFoldersChange: (paths: string[]) => void;
+  onSelect: (entry: VaultEntry) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}
+
+function DocumentTree({
+  rows,
+  selectedPath,
+  collapsedTreeFolders,
+  forceExpand,
+  onCollapsedTreeFoldersChange,
+  onSelect,
+  t,
+}: DocumentTreeProps) {
+  return (
+    <div className="tree-list" role="tree" aria-label={t("list.view.tree")}>
+      {rows.map((row) => {
+        const paddingLeft = 8 + row.depth * 16;
+        if (row.kind === "folder") {
+          return (
+            <button
+              key={row.id}
+              type="button"
+              className="tree-row folder"
+              style={{ paddingLeft }}
+              aria-expanded={!row.collapsed}
+              onClick={() =>
+                onCollapsedTreeFoldersChange(
+                  nextCollapsedFolders(
+                    collapsedTreeFolders,
+                    row.path,
+                    forceExpand ? true : !row.collapsed,
+                  ),
+                )
+              }
+              title={row.path}
+            >
+              <ChevronRight
+                size={13}
+                className={row.collapsed ? "tree-chevron" : "tree-chevron open"}
+              />
+              <Folder size={14} />
+              <span className="tree-row-title">{row.name}</span>
+              <span className="tree-count">{row.count}</span>
+            </button>
+          );
+        }
+        const fmType = frontmatterScalar(row.entry.frontmatter, "type");
+        return (
+          <button
+            key={row.id}
+            type="button"
+            className={selectedPath === row.entry.path ? "tree-row file selected" : "tree-row file"}
+            style={{ paddingLeft }}
+            onClick={() => onSelect(row.entry)}
+            title={row.entry.relPath}
+          >
+            <span className="tree-indent-slot" />
+            <FileText size={13} />
+            <span className="tree-row-title">{row.entry.title}</span>
+            {fmType ? (
+              <span className="tree-type" data-type={fmType.toLowerCase()}>
+                {fmType}
+              </span>
+            ) : (
+              <span className="tree-type">{row.entry.fileKind.toUpperCase()}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
