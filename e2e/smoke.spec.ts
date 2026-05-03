@@ -73,6 +73,24 @@ test("switches between public provider roots and gates read-only actions", async
   await expect(page.getByRole("button", { name: "새 문서" })).toBeDisabled();
 });
 
+test("restores direct write policy when leaving Obsidian provider", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Public 추가" }).click();
+  const dialog = page.locator(".dialog-content");
+  const directPolicy = dialog.locator("button.chip").filter({ hasText: /^Direct$/ });
+  const delegatedPolicy = dialog.locator("button.chip").filter({ hasText: /^Delegated$/ });
+  const readOnlyPolicy = dialog.locator("button.chip").filter({ hasText: /^Read-only$/ });
+
+  await dialog.getByRole("button", { name: "Obsidian", exact: true }).click();
+  await expect(delegatedPolicy).toHaveClass(/active/);
+  await expect(readOnlyPolicy).toBeDisabled();
+
+  await dialog.getByRole("button", { name: "Google Drive", exact: true }).click();
+  await expect(directPolicy).toHaveClass(/active/);
+  await expect(readOnlyPolicy).toBeEnabled();
+});
+
 test("restores a dense shell with tabbed explorer and collapsed terminal", async ({
   page,
 }) => {

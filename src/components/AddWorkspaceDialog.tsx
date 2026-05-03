@@ -72,6 +72,8 @@ export function AddWorkspaceDialog({
   const [saving, setSaving] = useState(false);
   const [detected, setDetected] = useState<WorkspaceDetect | null>(null);
   const detectSeqRef = useRef(0);
+  const previousProviderRef = useRef<WorkspaceProvider>("local");
+  const preObsidianWritePolicyRef = useRef<WorkspaceWritePolicy>("direct");
 
   useEffect(() => {
     if (open) setVisibility(defaultVisibility);
@@ -89,15 +91,26 @@ export function AddWorkspaceDialog({
       setError(null);
       setSaving(false);
       setDetected(null);
+      previousProviderRef.current = "local";
+      preObsidianWritePolicyRef.current = "direct";
     }
   }, [defaultVisibility, open]);
 
   useEffect(() => {
     if (!open) return;
+    const previousProvider = previousProviderRef.current;
     if (provider === "obsidian") {
-      setWritePolicy("delegated");
+      if (previousProvider !== "obsidian") {
+        preObsidianWritePolicyRef.current = writePolicy;
+      }
+      if (writePolicy !== "delegated") {
+        setWritePolicy("delegated");
+      }
+    } else if (previousProvider === "obsidian" && writePolicy === "delegated") {
+      setWritePolicy(preObsidianWritePolicyRef.current);
     }
-  }, [open, provider]);
+    previousProviderRef.current = provider;
+  }, [open, provider, writePolicy]);
 
   useEffect(() => {
     const trimmed = path.trim();
