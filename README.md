@@ -275,37 +275,6 @@ target
 .anchor/cache
 ```
 
-## Code lift map
-
-Major deliverables come from existing, validated codebases — anchor is integration, not greenfield.
-
-| Phase | Source | Destination | Type |
-|-------|--------|-------------|------|
-| 0 | `tolaria/src-tauri/src/frontmatter/{yaml,ops}.rs` | `src-tauri/src/frontmatter/` | line-edit, byte-identical |
-| 0 | `tolaria/src-tauri/src/vault_list.rs` | `src-tauri/src/vault_list.rs` | workspace registry |
-| 0 | Tolaria filename rules module | `src-tauri/src/filename_rules.rs` | NFC/NFD safety |
-| 1A | `tolaria/src/utils/wikilinks.ts` | `src/lib/wikilinks.ts` | 255 LOC, verbatim |
-| 1A | `tolaria/src/utils/wikilinkSuggestions.ts` | `src/lib/wikilinkSuggestions.ts` | adapted, +memo index |
-| 1A | `tolaria/src/utils/neighborhoodHistory.ts` | `src/lib/neighborhoodHistory.ts` | adapted, in-memory only |
-| 1A | `tolaria/src/components/InlineWikilinkSuggest.tsx` | `src/components/WikilinkAutocomplete.tsx` | IME-aware adapted |
-| 1B | Tolaria cache module (1,422 LOC) | `crates/anchor-workspace/src/cache.rs` (planned) | wait until latency demands it |
-| 1B | `tolaria/src-tauri/src/git/{status,commit}.rs` | `src-tauri/src/git.rs` (shell-out) | lightweight alternative to git2 |
-| 1B | `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx` | `src/components/Editor*.tsx` | one-week budget, fragile |
-| 1B | `tolaria/src/hooks/useEditorTabSwap.ts` (1,149 LOC) | `src/hooks/useEditorTabSwap.ts` | simplifiable |
-| 1B | `tolaria/playwright.smoke.config.ts` | `e2e/` | smoke + flow tests |
-| 2 | n/a | `src-tauri/src/inbox.rs` + `src-tauri/src/inbox_watcher.rs` | polling scan + notify watcher |
-| 2 | n/a (replaces tidy/imap.js) | `src-tauri/src/gmail_gws.rs` | shell out to user's `gws` CLI; no IMAP code |
-| 2 | `tidy/app/electron/ipc-handlers.js:20-109` | `src-tauri/src/korean_date.rs` | Korean NL date parser |
-| 2 | `tolaria/src-tauri/src/{ai_agents,claude_cli}.rs` | `src-tauri/src/ai_router.rs` | Claude inbox event stream bridge, adapted |
-| 2.5 | n/a | `src-tauri/src/terminal.rs` | portable-pty integrated terminal manager |
-| 2.5 | n/a | `src-tauri/src/file_manager.rs` | Reveal in Finder/file-manager bridge |
-| 2 | n/a | `src-tauri/src/inbox_classifier.rs` + `src/lib/aiInvoke.ts` | prompt/parser + frontend orchestration |
-| 4 | `anchor-editor/services/whisper/server.py` | `services/whisper/` | Korean large-v3 |
-| 4 | `anchor-editor/apps/web/lib/intent-fusion.ts` | `src/lib/intent-fusion.ts` | RISE-generic generalization |
-| 4 | `anchor-editor/apps/web/workers/gesture.worker.ts` | `src/workers/gesture.worker.ts` | One-Euro filter |
-
-**Principle**: tolaria's PKM code + tidy's inbox/AI code + anchor-editor's voice/gesture code, fused into one desktop app. The user's `~/.claude/skills/*` is read-only — anchor only invokes; never rewrites.
-
 ## Critical invariants
 
 1. **Filesystem is authoritative.** The cache (`<workspace>/.anchor/cache/workspace-index-v1.json`) is disposable. React state is derived.
