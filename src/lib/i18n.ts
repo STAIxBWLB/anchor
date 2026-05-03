@@ -19,7 +19,7 @@ const STORAGE_KEY = "anchor:locale:v1";
 
 const ko: Record<string, string> = {
   "app.title": "Anchor",
-  "app.subtitle.work": "Anchor Workspace",
+  "app.subtitle.work": "AI workspace",
   "app.subtitle.note": "파일 원천 · 깨지지 않는 frontmatter · 다중 workspace",
   "app.locale.ko": "KO",
   "app.locale.en": "EN",
@@ -56,7 +56,7 @@ const ko: Record<string, string> = {
   "workspace.error.noneActive": "활성 workspace가 없습니다. 먼저 workspace를 열거나 추가하세요.",
   "workspace.dialog.title": "Workspace 추가",
   "workspace.dialog.description":
-    "마크다운 파일이 포함된 폴더를 선택해 Anchor Workspace에서 열 수 있도록 등록합니다.",
+    "마크다운 파일이 포함된 폴더를 선택해 AI workspace에서 열 수 있도록 등록합니다.",
   "workspace.dialog.visibility": "범위",
   "workspace.dialog.label": "표시 이름",
   "workspace.dialog.path": "폴더 경로",
@@ -328,7 +328,7 @@ const ko: Record<string, string> = {
 
 const en: Record<string, string> = {
   "app.title": "Anchor",
-  "app.subtitle.work": "Anchor Workspace",
+  "app.subtitle.work": "AI workspace",
   "app.subtitle.note": "Files-as-truth · resilient frontmatter · multi-workspace",
   "app.locale.ko": "KO",
   "app.locale.en": "EN",
@@ -365,7 +365,7 @@ const en: Record<string, string> = {
   "workspace.error.noneActive": "No active workspace. Open or add one first.",
   "workspace.dialog.title": "Add workspace",
   "workspace.dialog.description":
-    "Register a folder containing markdown files so Anchor Workspace can open it.",
+    "Register a folder containing markdown files so AI workspace can open it.",
   "workspace.dialog.visibility": "Scope",
   "workspace.dialog.label": "Display name",
   "workspace.dialog.path": "Folder path",

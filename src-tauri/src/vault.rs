@@ -71,7 +71,7 @@ pub fn default_vault_path() -> Result<String, String> {
     let base = dirs::document_dir()
         .or_else(dirs::home_dir)
         .ok_or_else(|| "Cannot resolve a user documents directory".to_string())?;
-    Ok(base.join("Anchor Workspace").to_string_lossy().to_string())
+    Ok(base.join("AI workspace").to_string_lossy().to_string())
 }
 
 #[tauri::command]

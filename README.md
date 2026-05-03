@@ -1,6 +1,6 @@
-# Anchor Workspace
+# AI Workspace
 
-Anchor Workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
+AI workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
 ## Status (2026-05-03)
 
@@ -226,7 +226,7 @@ cd src-tauri && cargo test --release bench_scan_real_workspace \
 
 ## Workspace Layout
 
-An Anchor Workspace is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files.
+An AI workspace is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files.
 
 Private workspace is the required default. Public workspace is optional and means a provider-managed shared root, not internet publishing. V1 capability support is registry-only: Anchor stores non-secret provider metadata in `workspaces.json`, maps a manually entered provider role to coarse capabilities, intersects that with a filesystem writability probe, and gates direct writes in the UI and Rust commands. OAuth, Microsoft Graph, Google Drive, and Nextcloud live API checks are deferred.
 

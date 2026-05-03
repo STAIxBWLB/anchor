@@ -1,4 +1,4 @@
-# anchor — local-first Anchor Workspace desktop app
+# anchor — local-first AI workspace desktop app
 #
 # Tauri 2 + Rust + React 19 + TypeScript. This Makefile bundles the
 # common dev / build / test / verify workflows so you don't have to
