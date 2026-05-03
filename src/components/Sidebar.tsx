@@ -1,11 +1,11 @@
 import { Clock, FileText, Layers, Plus } from "lucide-react";
-import { useMemo } from "react";
-import { frontmatterScalar } from "../lib/document";
+import { memo } from "react";
 import { useTranslation } from "../lib/i18n";
 import type { VaultEntry } from "../lib/types";
 
 interface SidebarProps {
-  entries: VaultEntry[];
+  contentCount: number;
+  typeCounts: Array<[string, number]>;
   recentEntries: VaultEntry[];
   selectedPath: string | null;
   typeFilter: string | null;
@@ -15,8 +15,9 @@ interface SidebarProps {
   onOpenCommandPalette: () => void;
 }
 
-export function Sidebar({
-  entries,
+export const Sidebar = memo(function Sidebar({
+  contentCount,
+  typeCounts,
   recentEntries,
   selectedPath,
   typeFilter,
@@ -26,27 +27,6 @@ export function Sidebar({
   onOpenCommandPalette,
 }: SidebarProps) {
   const { t } = useTranslation();
-
-  // Type counts exclude `_sys/` and `.anchor/` entries: they're
-  // operational data, not user notes, and inflate the "untyped" bucket.
-  // Users browsing those areas go through the System mode (work-role
-  // vaults) or open the file directly from search.
-  const contentEntries = useMemo(
-    () =>
-      entries.filter(
-        (entry) =>
-          !entry.relPath.startsWith("_sys/") && !entry.relPath.startsWith(".anchor/"),
-      ),
-    [entries],
-  );
-  const typeCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const entry of contentEntries) {
-      const type = frontmatterScalar(entry.frontmatter, "type") ?? "_";
-      counts.set(type, (counts.get(type) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [contentEntries]);
 
   return (
     <aside className="sidebar">
@@ -83,7 +63,7 @@ export function Sidebar({
           >
             <span style={{ width: 6, height: 6, borderRadius: 3, background: "var(--faint)" }} />
             <span>{t("sidebar.types.all")}</span>
-            <span className="count">{contentEntries.length}</span>
+            <span className="count">{contentCount}</span>
           </button>
           {typeCounts.map(([type, count]) => {
             const isUntyped = type === "_";
@@ -149,7 +129,7 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});
 
 function colorForType(type: string): string {
   switch (type.toLowerCase()) {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   Clock3,
@@ -47,6 +47,12 @@ import {
   updateAnchorWorkspace,
 } from "./lib/anchorDir";
 import { classifyInboxItem } from "./lib/aiInvoke";
+import { createDebouncedSaver, type DebouncedSaver } from "./lib/debouncedSave";
+import {
+  buildDocumentIndex,
+  getRecentEntries,
+  type DocumentIndex,
+} from "./lib/documentIndex";
 import { buildGmailMessageStates, type GmailMessageState } from "./lib/gmail";
 import { LocaleContext, assertParityOrThrow, useLocaleState } from "./lib/i18n";
 import {
@@ -162,6 +168,7 @@ export default function App() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const settingsSaverRef = useRef<DebouncedSaver<AnchorSettings> | null>(null);
 
   // Monotonic counter so a slow readDocument from an earlier click cannot
   // overwrite the editor with stale content if the user clicked a later
@@ -208,8 +215,10 @@ export default function App() {
   const [anchorSettings, setAnchorSettings] = useState<AnchorSettings>(() =>
     normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
   );
+  const [, startExplorerTransition] = useTransition();
 
   const activeVaultPath = vaultList.activeVault;
+  const documentIndex = useMemo<DocumentIndex>(() => buildDocumentIndex(entries), [entries]);
   const resolvedActiveTabId = activeTabId ?? tabs[0]?.id ?? null;
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === resolvedActiveTabId) ?? null,
@@ -254,16 +263,20 @@ export default function App() {
     [document, draftContent],
   );
 
-  const recentEntries = useMemo(() => {
-    const byPath = new Map(entries.map((e) => [e.path, e] as const));
-    const out: VaultEntry[] = [];
-    for (const path of recentPaths) {
-      const entry = byPath.get(path);
-      if (entry) out.push(entry);
-      if (out.length >= 8) break;
-    }
-    return out;
-  }, [entries, recentPaths]);
+  const recentEntries = useMemo(
+    () => getRecentEntries(documentIndex, recentPaths, 8),
+    [documentIndex, recentPaths],
+  );
+  const editorTabSummaries = useMemo(
+    () =>
+      tabs.map((tab) => ({
+        id: tab.id,
+        title: tab.document.title,
+        relPath: tab.document.relPath,
+        dirty: tab.draftContent !== tab.document.content,
+      })),
+    [tabs],
+  );
 
   const lastOpenKeyForVault = useCallback((path: string) => `${LAST_OPEN_KEY}:${path}`, []);
   const openTabsKeyForVault = useCallback((path: string) => `${OPEN_TABS_KEY}:${path}`, []);
@@ -330,6 +343,27 @@ export default function App() {
     };
   }, [settingsWorkPath]);
 
+  useEffect(() => {
+    if (!settingsWritable || !settingsWorkPath) {
+      settingsSaverRef.current = null;
+      return;
+    }
+    const saver = createDebouncedSaver<AnchorSettings>(
+      (settings) => saveAnchorSettings(settingsWorkPath, settings),
+      250,
+      (err) => {
+        setError(err instanceof Error ? err.message : String(err));
+      },
+    );
+    settingsSaverRef.current = saver;
+    return () => {
+      if (settingsSaverRef.current === saver) {
+        settingsSaverRef.current = null;
+      }
+      void saver.flush();
+    };
+  }, [settingsWorkPath, settingsWritable]);
+
   const updateSettings = useCallback(
     (updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings)) => {
       setAnchorSettings((current) => {
@@ -337,9 +371,14 @@ export default function App() {
           typeof updater === "function" ? updater(current) : updater,
         );
         if (settingsWritable && settingsWorkPath) {
-          void saveAnchorSettings(settingsWorkPath, next).catch((err) => {
-            setError(err instanceof Error ? err.message : String(err));
-          });
+          const saver = settingsSaverRef.current;
+          if (saver) {
+            saver.schedule(next);
+          } else {
+            void saveAnchorSettings(settingsWorkPath, next).catch((err) => {
+              setError(err instanceof Error ? err.message : String(err));
+            });
+          }
         }
         return next;
       });
@@ -381,6 +420,20 @@ export default function App() {
       }));
     },
     [updateSettings],
+  );
+
+  const setExplorerQuery = useCallback(
+    (next: string) => {
+      startExplorerTransition(() => setQuery(next));
+    },
+    [startExplorerTransition],
+  );
+
+  const setExplorerTypeFilter = useCallback(
+    (next: string | null) => {
+      startExplorerTransition(() => setTypeFilter(next));
+    },
+    [startExplorerTransition],
   );
 
   // If the active vault loses its work-role (e.g. user switches to a
@@ -1114,6 +1167,31 @@ export default function App() {
     searchInputRef.current?.select();
   }, []);
 
+  const openCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(true);
+  }, []);
+
+  const closeCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(false);
+  }, []);
+
+  const openAddVaultDialog = useCallback(() => {
+    setAddVaultOpen(true);
+  }, []);
+
+  const toggleLocale = useCallback(() => {
+    setLocale(locale === "ko" ? "en" : "ko");
+  }, [locale, setLocale]);
+
+  const refreshActiveSurface = useCallback(() => {
+    if (appMode === "inbox") {
+      void refreshInbox();
+      void refreshGmail();
+    } else {
+      void refreshCurrent();
+    }
+  }, [appMode, refreshCurrent, refreshGmail, refreshInbox]);
+
   const selectTab = useCallback(
     (tabId: string) => {
       const tab = tabs.find((item) => item.id === tabId);
@@ -1199,15 +1277,10 @@ export default function App() {
           setOutlineOpen((v) => !v);
           break;
         case "toggle-locale":
-          setLocale(locale === "ko" ? "en" : "ko");
+          toggleLocale();
           break;
         case "refresh-vault":
-          if (appMode === "inbox") {
-            void refreshInbox();
-            void refreshGmail();
-          } else {
-            void refreshCurrent();
-          }
+          refreshActiveSurface();
           break;
         case "open-inbox":
           setAppMode("inbox");
@@ -1216,19 +1289,16 @@ export default function App() {
           setAppMode("pkm");
           break;
         case "add-vault":
-          setAddVaultOpen(true);
+          openAddVaultDialog();
           break;
       }
     },
     [
       saveCurrent,
       snapshotCurrent,
-      refreshCurrent,
-      refreshInbox,
-      refreshGmail,
-      appMode,
-      locale,
-      setLocale,
+      refreshActiveSurface,
+      toggleLocale,
+      openAddVaultDialog,
       openNewDocumentDialog,
     ],
   );
@@ -1242,15 +1312,8 @@ export default function App() {
       "mod+p": () => setEditorViewMode((mode) => (mode === "preview" ? "rich" : "preview")),
       "mod+\\": () => setOutlineOpen((v) => !v),
       "mod+f": focusSearch,
-      "mod+r": () => {
-        if (appMode === "inbox") {
-          void refreshInbox();
-          void refreshGmail();
-        } else {
-          void refreshCurrent();
-        }
-      },
-      "mod+shift+l": () => setLocale(locale === "ko" ? "en" : "ko"),
+      "mod+r": refreshActiveSurface,
+      "mod+shift+l": toggleLocale,
       "mod+[": navigateBack,
       "mod+]": navigateForward,
       "mod+1": () => selectTabByIndex(0),
@@ -1268,19 +1331,15 @@ export default function App() {
     [
       saveCurrent,
       snapshotCurrent,
-      refreshCurrent,
       focusSearch,
-      locale,
-      setLocale,
+      toggleLocale,
+      refreshActiveSurface,
       navigateBack,
       navigateForward,
       selectTabByIndex,
       openNewDocumentDialog,
       closeTab,
       resolvedActiveTabId,
-      appMode,
-      refreshInbox,
-      refreshGmail,
     ],
   );
 
@@ -1303,7 +1362,7 @@ export default function App() {
             vaultList={vaultList}
             activeVaultPath={activeVaultPath}
             onSelectVault={switchActiveVault}
-            onAddVault={() => setAddVaultOpen(true)}
+            onAddVault={openAddVaultDialog}
             onRemoveVault={handleRemoveVault}
             onUseSample={useSampleVault}
           />
@@ -1319,7 +1378,7 @@ export default function App() {
           <button
             type="button"
             className="topbar-pill"
-            onClick={() => setCommandPaletteOpen(true)}
+            onClick={openCommandPalette}
             title={t("cmdk.openHint")}
           >
             <span style={{ opacity: 0.55 }}>{t("sidebar.commandPalette")}</span>
@@ -1329,7 +1388,7 @@ export default function App() {
           <button
             type="button"
             className="topbar-pill"
-            onClick={() => setLocale(locale === "ko" ? "en" : "ko")}
+            onClick={toggleLocale}
             title={t("app.locale.label")}
             aria-label={t("app.locale.label")}
           >
@@ -1338,14 +1397,7 @@ export default function App() {
           <button
             type="button"
             className={vaultRefreshing ? "icon-button refreshing" : "icon-button"}
-            onClick={() => {
-              if (appMode === "inbox") {
-                void refreshInbox();
-                void refreshGmail();
-              } else {
-                void refreshCurrent();
-              }
-            }}
+            onClick={refreshActiveSurface}
             title={t("app.refresh")}
             aria-label={t("app.refresh")}
           >
@@ -1375,7 +1427,7 @@ export default function App() {
           <button
             type="button"
             className="activity-button"
-            onClick={() => setCommandPaletteOpen(true)}
+            onClick={openCommandPalette}
             title={t("sidebar.commandPalette")}
             aria-label={t("sidebar.commandPalette")}
           >
@@ -1396,14 +1448,15 @@ export default function App() {
         </nav>
 
         <Sidebar
-          entries={entries}
+          contentCount={documentIndex.contentCount}
+          typeCounts={documentIndex.typeCounts}
           recentEntries={recentEntries}
           selectedPath={selectedPath}
           typeFilter={typeFilter}
-          onTypeFilter={setTypeFilter}
+          onTypeFilter={setExplorerTypeFilter}
           onNewDocument={openNewDocumentDialog}
           onSelectRecent={selectEntry}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onOpenCommandPalette={openCommandPalette}
         />
 
         {appMode === "system" ? (
@@ -1430,14 +1483,14 @@ export default function App() {
         ) : (
           <>
             <DocumentList
-              entries={entries}
+              documentIndex={documentIndex}
               selectedPath={selectedPath}
               query={query}
               loading={loading && entries.length === 0}
               typeFilter={typeFilter}
               browserMode={anchorSettings.ui.documentBrowserMode}
               collapsedTreeFolders={anchorSettings.ui.collapsedTreeFolders}
-              onQueryChange={setQuery}
+              onQueryChange={setExplorerQuery}
               onBrowserModeChange={setDocumentBrowserMode}
               onCollapsedTreeFoldersChange={setCollapsedTreeFolders}
               onSelect={selectEntry}
@@ -1453,12 +1506,7 @@ export default function App() {
               outlineOpen={outlineOpen}
               activeVaultLabel={activeVault?.label ?? null}
               viewMode={editorViewMode}
-              tabs={tabs.map((tab) => ({
-                id: tab.id,
-                title: tab.document.title,
-                relPath: tab.document.relPath,
-                dirty: tab.draftContent !== tab.document.content,
-              }))}
+              tabs={editorTabSummaries}
               activeTabId={resolvedActiveTabId}
               entries={entries}
               onChange={setDraftContent}
@@ -1560,8 +1608,8 @@ export default function App() {
         />
         <CommandPalette
           open={commandPaletteOpen}
-          entries={entries}
-          onClose={() => setCommandPaletteOpen(false)}
+          documentIndex={documentIndex}
+          onClose={closeCommandPalette}
           onSelectEntry={selectEntry}
           onRunCommand={runCommand}
         />

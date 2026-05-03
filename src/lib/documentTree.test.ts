@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildDocumentTreeRows, nextCollapsedFolders } from "./documentTree";
+import {
+  buildDocumentTreeRows,
+  nextCollapsedFolders,
+  virtualizeDocumentTreeRows,
+} from "./documentTree";
 import type { VaultEntry } from "./types";
 
 function entry(relPath: string, title = relPath): VaultEntry {
@@ -61,5 +65,22 @@ describe("nextCollapsedFolders", () => {
   it("adds and removes folder paths deterministically", () => {
     expect(nextCollapsedFolders(["z"], "a", true)).toEqual(["a", "z"]);
     expect(nextCollapsedFolders(["a", "z"], "a", false)).toEqual(["z"]);
+  });
+});
+
+describe("virtualizeDocumentTreeRows", () => {
+  it("returns only rows in the visible window plus overscan", () => {
+    const rows = buildDocumentTreeRows(
+      Array.from({ length: 20 }, (_, index) => entry(`folder/doc-${index}.md`)),
+      [],
+    );
+    const layout = virtualizeDocumentTreeRows(rows, 120, 60, 30, 30);
+
+    expect(layout.totalHeight).toBe(rows.length * 30);
+    expect(layout.rows[0].top).toBe(90);
+    expect(layout.rows.at(-1)?.top).toBe(210);
+    expect(layout.rows.map(({ row }) => row.id)).toEqual(
+      rows.slice(3, 8).map((row) => row.id),
+    );
   });
 });

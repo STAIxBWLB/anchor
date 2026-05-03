@@ -17,6 +17,16 @@ export type DocumentTreeRow =
       depth: number;
     };
 
+export interface VirtualTreeRow {
+  row: DocumentTreeRow;
+  top: number;
+}
+
+export interface VirtualTreeLayout {
+  rows: VirtualTreeRow[];
+  totalHeight: number;
+}
+
 interface TreeNode {
   name: string;
   path: string;
@@ -79,6 +89,36 @@ export function nextCollapsedFolders(
   if (collapsed) next.add(folderPath);
   else next.delete(folderPath);
   return Array.from(next).sort((a, b) => a.localeCompare(b));
+}
+
+export function virtualizeDocumentTreeRows(
+  rows: DocumentTreeRow[],
+  scrollTop: number,
+  viewportHeight: number,
+  overscan: number,
+  rowHeight: number,
+): VirtualTreeLayout {
+  if (rowHeight <= 0) {
+    return { rows: [], totalHeight: 0 };
+  }
+  const safeHeight = Math.max(0, viewportHeight);
+  const safeScrollTop = Math.max(0, scrollTop);
+  const min = Math.max(0, safeScrollTop - overscan);
+  const max = safeScrollTop + safeHeight + overscan;
+  const first = Math.max(0, Math.floor(min / rowHeight));
+  const last = Math.min(rows.length - 1, Math.ceil(max / rowHeight));
+  const visible: VirtualTreeRow[] = [];
+
+  for (let index = first; index <= last; index += 1) {
+    const row = rows[index];
+    if (!row) continue;
+    visible.push({ row, top: index * rowHeight });
+  }
+
+  return {
+    rows: visible,
+    totalHeight: rows.length * rowHeight,
+  };
 }
 
 function flattenNode(

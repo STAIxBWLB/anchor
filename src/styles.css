@@ -786,6 +786,11 @@ a {
   align-items: flex-end;
 }
 
+.virtual-list-row.tree {
+  display: flex;
+  align-items: stretch;
+}
+
 .list-group-label {
   display: flex;
   align-items: center;
@@ -886,6 +891,11 @@ a {
   display: grid;
   gap: 1px;
   padding: 2px 0 12px;
+}
+
+.tree-virtual-spacer {
+  position: relative;
+  min-height: 100%;
 }
 
 .tree-row {

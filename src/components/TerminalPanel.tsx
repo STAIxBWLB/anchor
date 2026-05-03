@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   terminalAvailable,
   terminalKill,
@@ -52,7 +52,11 @@ interface TerminalHandle {
 const MIN_HEIGHT = 160;
 const MAX_HEIGHT = 520;
 
-export function TerminalPanel({ cwd, settings, onSettingsChange }: TerminalPanelProps) {
+export const TerminalPanel = memo(function TerminalPanel({
+  cwd,
+  settings,
+  onSettingsChange,
+}: TerminalPanelProps) {
   const { t } = useTranslation();
   const [state, dispatch] = useReducer(terminalTabsReducer, EMPTY_TERMINAL_STATE);
   const [open, setOpen] = useState(settings.defaultPanelOpen);
@@ -420,4 +424,4 @@ export function TerminalPanel({ cwd, settings, onSettingsChange }: TerminalPanel
       {open && error ? <div className="terminal-error">{error}</div> : null}
     </section>
   );
-}
+});
