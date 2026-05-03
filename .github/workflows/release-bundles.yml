@@ -77,5 +77,5 @@ jobs:
           releaseId: ${{ github.event.release.id }}
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
-          uploadUpdaterJson: false
-          releaseAssetNamePattern: Anchor_[version]_[platform]_[arch]_[bundle][ext]
+          includeUpdaterJson: false
+          assetNamePattern: Anchor_[version]_[platform]_[arch]_[bundle][ext]

@@ -1,6 +1,8 @@
 # === OS / Editor ===
 .DS_Store
 Icon?
+!src-tauri/icons/
+!src-tauri/icons/icon.png
 ~$*
 .vscode/
 .idea/
