@@ -34,7 +34,7 @@ interface EditorPaneProps {
   saving: boolean;
   dirty: boolean;
   outlineOpen: boolean;
-  activeVaultLabel: string | null;
+  activeWorkspaceLabel: string | null;
   viewMode: EditorViewMode;
   tabs: EditorTabSummary[];
   activeTabId: string | null;
@@ -58,7 +58,7 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
     saving,
     dirty,
     outlineOpen,
-    activeVaultLabel,
+    activeWorkspaceLabel,
     viewMode,
     tabs,
     activeTabId,
@@ -170,9 +170,9 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
       </div>
       <header className="editor-topbar">
         <div className="breadcrumb" title={document.relPath}>
-          {activeVaultLabel ? (
+          {activeWorkspaceLabel ? (
             <>
-              <span className="crumb">{activeVaultLabel}</span>
+              <span className="crumb">{activeWorkspaceLabel}</span>
               <ChevronRight size={12} className="sep" />
             </>
           ) : null}

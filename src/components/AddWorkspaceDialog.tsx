@@ -1,54 +1,61 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { FolderOpen, FolderPlus, Link2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "./ui/Button";
-import { Field, TextInput } from "./ui/Field";
-import { chooseVaultDirectory } from "../lib/api";
+import { chooseWorkspaceDirectory } from "../lib/api";
 import { detectWorkspace } from "../lib/anchorDir";
 import { useTranslation } from "../lib/i18n";
-import type { WorkspaceDetect } from "../lib/types";
+import type { WorkspaceDetect, WorkspaceVisibility } from "../lib/types";
+import { Button } from "./ui/Button";
+import { Field, TextInput } from "./ui/Field";
 
-interface AddVaultDialogProps {
+interface AddWorkspaceDialogProps {
   open: boolean;
+  defaultVisibility: WorkspaceVisibility;
   onOpenChange: (open: boolean) => void;
-  onAdd: (label: string, path: string, externalWriter: string | null) => Promise<void>;
-  /** Called when the user opts to register a paired workspace (the
-   *  picked folder contains `workspace.config.yaml`). The handler is
-   *  responsible for invoking `registerWorkspacePair` and refreshing
-   *  the active vault. */
+  onAdd: (
+    label: string,
+    path: string,
+    visibility: WorkspaceVisibility,
+    externalWriter: string | null,
+  ) => Promise<void>;
   onRegisterWorkspace: (workPath: string) => Promise<void>;
 }
 
 type WriterChoice = "none" | "obsidian";
 
-export function AddVaultDialog({
+export function AddWorkspaceDialog({
   open,
+  defaultVisibility,
   onOpenChange,
   onAdd,
   onRegisterWorkspace,
-}: AddVaultDialogProps) {
+}: AddWorkspaceDialogProps) {
   const { t } = useTranslation();
   const [label, setLabel] = useState("");
   const [path, setPath] = useState("");
+  const [visibility, setVisibility] = useState<WorkspaceVisibility>(defaultVisibility);
   const [writer, setWriter] = useState<WriterChoice>("none");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [detected, setDetected] = useState<WorkspaceDetect | null>(null);
   const detectSeqRef = useRef(0);
 
-  // Reset on close so a re-open starts clean.
+  useEffect(() => {
+    if (open) setVisibility(defaultVisibility);
+  }, [defaultVisibility, open]);
+
   useEffect(() => {
     if (!open) {
       setLabel("");
       setPath("");
+      setVisibility(defaultVisibility);
       setWriter("none");
       setError(null);
       setSaving(false);
       setDetected(null);
     }
-  }, [open]);
+  }, [defaultVisibility, open]);
 
-  // Detect workspace.config.yaml whenever the path changes (typed or picked).
   useEffect(() => {
     const trimmed = path.trim();
     if (!trimmed) {
@@ -59,13 +66,9 @@ export function AddVaultDialog({
     void (async () => {
       try {
         const result = await detectWorkspace(trimmed);
-        if (seq === detectSeqRef.current) {
-          setDetected(result);
-        }
+        if (seq === detectSeqRef.current) setDetected(result);
       } catch {
-        if (seq === detectSeqRef.current) {
-          setDetected(null);
-        }
+        if (seq === detectSeqRef.current) setDetected(null);
       }
     })();
   }, [path]);
@@ -73,12 +76,13 @@ export function AddVaultDialog({
   async function pickFolder() {
     setError(null);
     try {
-      const selected = await chooseVaultDirectory(t("vault.dialog.title"));
+      const selected = await chooseWorkspaceDirectory(t("workspace.dialog.title"));
       if (selected) {
         setPath(selected);
         if (!label.trim()) {
           const segments = selected.split(/[/\\]/);
-          const tail = segments[segments.length - 1] || segments[segments.length - 2] || "vault";
+          const tail =
+            segments[segments.length - 1] || segments[segments.length - 2] || "workspace";
           setLabel(tail);
         }
       }
@@ -90,17 +94,17 @@ export function AddVaultDialog({
   async function submit() {
     setError(null);
     if (!label.trim()) {
-      setError(t("vault.dialog.error.label"));
+      setError(t("workspace.dialog.error.label"));
       return;
     }
     if (!path.trim()) {
-      setError(t("vault.dialog.error.path"));
+      setError(t("workspace.dialog.error.path"));
       return;
     }
     setSaving(true);
     try {
       const ext = writer === "obsidian" ? "mcp-obsidian" : null;
-      await onAdd(label.trim(), path.trim(), ext);
+      await onAdd(label.trim(), path.trim(), visibility, ext);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -109,10 +113,10 @@ export function AddVaultDialog({
     }
   }
 
-  async function registerPair() {
+  async function registerWorkspaceConfig() {
     setError(null);
     if (!path.trim()) {
-      setError(t("vault.dialog.error.path"));
+      setError(t("workspace.dialog.error.path"));
       return;
     }
     setSaving(true);
@@ -127,7 +131,8 @@ export function AddVaultDialog({
   }
 
   const ownerName = detected?.config.owner?.name ?? null;
-  const vaultPath = detected?.resolvedVaultPath ?? null;
+  const privatePath = detected?.resolvedPrivatePath ?? null;
+  const publicPath = detected?.resolvedPublicPath ?? null;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -136,23 +141,23 @@ export function AddVaultDialog({
         <Dialog.Content className="dialog-content">
           <div className="dialog-header">
             <div>
-              <Dialog.Title>{t("vault.dialog.title")}</Dialog.Title>
-              <Dialog.Description>{t("vault.dialog.description")}</Dialog.Description>
+              <Dialog.Title>{t("workspace.dialog.title")}</Dialog.Title>
+              <Dialog.Description>{t("workspace.dialog.description")}</Dialog.Description>
             </div>
             <Dialog.Close className="icon-button" title={t("app.errorClose")}>
               <X size={16} />
             </Dialog.Close>
           </div>
 
-          <Field label={t("vault.dialog.path")} error={error ?? undefined}>
+          <Field label={t("workspace.dialog.path")} error={error ?? undefined}>
             <div className="select-row">
               <TextInput
                 value={path}
                 onChange={(event) => setPath(event.target.value)}
-                placeholder="/Users/.../vault"
+                placeholder="/Users/.../workspace"
               />
               <Button variant="secondary" onClick={pickFolder} icon={<FolderOpen size={14} />}>
-                {t("vault.dialog.pickPath")}
+                {t("workspace.dialog.pickPath")}
               </Button>
             </div>
           </Field>
@@ -171,23 +176,28 @@ export function AddVaultDialog({
                   </div>
                 ) : null}
                 <div>
-                  <span className="muted">{t("workspace.pair.work")}</span>
-                  <span>{detected.workPath}</span>
+                  <span className="muted">{t("workspace.visibility.private")}</span>
+                  <span>
+                    {privatePath}
+                    {!detected.resolvedPrivateExists ? (
+                      <em className="warn"> · {t("workspace.path.missing")}</em>
+                    ) : null}
+                  </span>
                 </div>
-                {vaultPath ? (
+                {publicPath ? (
                   <div>
-                    <span className="muted">{t("workspace.pair.vault")}</span>
+                    <span className="muted">{t("workspace.visibility.public")}</span>
                     <span>
-                      {vaultPath}
-                      {!detected.resolvedVaultExists ? (
-                        <em className="warn"> · {t("workspace.pair.vault.missing")}</em>
+                      {publicPath}
+                      {!detected.resolvedPublicExists ? (
+                        <em className="warn"> · {t("workspace.path.missing")}</em>
                       ) : null}
                     </span>
                   </div>
                 ) : (
                   <div>
-                    <span className="muted">{t("workspace.pair.vault")}</span>
-                    <em className="warn">{t("workspace.pair.vault.unset")}</em>
+                    <span className="muted">{t("workspace.visibility.public")}</span>
+                    <em>{t("workspace.public.optional")}</em>
                   </div>
                 )}
               </div>
@@ -198,7 +208,7 @@ export function AddVaultDialog({
                 </Button>
                 <Button
                   variant="primary"
-                  onClick={registerPair}
+                  onClick={registerWorkspaceConfig}
                   disabled={saving}
                   icon={<FolderPlus size={15} />}
                 >
@@ -208,17 +218,36 @@ export function AddVaultDialog({
             </div>
           ) : (
             <>
-              <Field label={t("vault.dialog.label")}>
+              <Field label={t("workspace.dialog.visibility")}>
+                <div className="select-row">
+                  <button
+                    type="button"
+                    className={visibility === "private" ? "chip active" : "chip"}
+                    onClick={() => setVisibility("private")}
+                  >
+                    {t("workspace.visibility.private")}
+                  </button>
+                  <button
+                    type="button"
+                    className={visibility === "public" ? "chip active" : "chip"}
+                    onClick={() => setVisibility("public")}
+                  >
+                    {t("workspace.visibility.public")}
+                  </button>
+                </div>
+              </Field>
+
+              <Field label={t("workspace.dialog.label")}>
                 <TextInput
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
-                  placeholder="e.g. Work, Knowledge Vault"
+                  placeholder="e.g. Work, Public Notes"
                 />
               </Field>
 
               <Field
-                label={t("vault.dialog.externalWriter")}
-                helper={t("vault.dialog.externalWriter.help")}
+                label={t("workspace.dialog.externalWriter")}
+                helper={t("workspace.dialog.externalWriter.help")}
               >
                 <div className="select-row">
                   <button
@@ -226,21 +255,21 @@ export function AddVaultDialog({
                     className={writer === "none" ? "chip active" : "chip"}
                     onClick={() => setWriter("none")}
                   >
-                    {t("vault.dialog.externalWriter.none")}
+                    {t("workspace.dialog.externalWriter.none")}
                   </button>
                   <button
                     type="button"
                     className={writer === "obsidian" ? "chip active" : "chip"}
                     onClick={() => setWriter("obsidian")}
                   >
-                    {t("vault.dialog.externalWriter.obsidian")}
+                    {t("workspace.dialog.externalWriter.obsidian")}
                   </button>
                 </div>
               </Field>
 
               <div className="dialog-actions">
                 <Dialog.Close asChild>
-                  <Button variant="ghost">{t("vault.dialog.cancel")}</Button>
+                  <Button variant="ghost">{t("workspace.dialog.cancel")}</Button>
                 </Dialog.Close>
                 <Button
                   variant="primary"
@@ -248,7 +277,7 @@ export function AddVaultDialog({
                   disabled={saving}
                   icon={<FolderPlus size={15} />}
                 >
-                  {t("vault.dialog.confirm")}
+                  {t("workspace.dialog.confirm")}
                 </Button>
               </div>
             </>

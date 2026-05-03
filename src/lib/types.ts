@@ -36,25 +36,20 @@ export interface CreatedDocument {
   title: string;
 }
 
-/** Anchor multi-vault registry. external_writer === "mcp-obsidian"
- *  signals that anchor reads but defers writes to an Obsidian instance
- *  (write delegation lands in Phase 2).
- *
- *  workspace_root + role identify the entry's place in a (work, vault)
- *  workspace pair: both halves carry the same workspace_root (the work
- *  path), with role "work" or "vault". role === undefined means a
- *  standalone single-folder vault. */
-export interface VaultRegistryEntry {
+export type WorkspaceVisibility = "private" | "public";
+export type WorkspaceWritePolicy = "direct" | "delegated";
+
+export interface WorkspaceRootEntry {
   label: string;
   path: string;
+  visibility: WorkspaceVisibility;
   externalWriter?: string | null;
-  workspaceRoot?: string | null;
-  role?: "work" | "vault" | null;
+  writePolicy: WorkspaceWritePolicy;
 }
 
-export interface VaultList {
-  vaults: VaultRegistryEntry[];
-  activeVault: string | null;
+export interface WorkspaceRegistry {
+  workspaces: WorkspaceRootEntry[];
+  activeByVisibility: Record<WorkspaceVisibility, string | null>;
   hiddenDefaults: string[];
 }
 
@@ -62,7 +57,7 @@ export interface AppError {
   message: string;
 }
 
-/** Git working-tree status of the active vault. Returned by the Rust
+/** Git working-tree status of the active workspace. Returned by the Rust
  *  `git_status` command via shelling out to the user's git binary. */
 export interface GitStatus {
   isRepo: boolean;
@@ -139,6 +134,8 @@ export interface WorkspacePaths {
   primary?: string | null;
   vault?: string | null;
   mirror?: string | null;
+  "private"?: string | string[] | null;
+  "public"?: string | string[] | null;
 }
 
 export interface WorkspaceConfig {
@@ -156,22 +153,24 @@ export interface WorkspaceDetect {
   workPath: string;
   configPath: string;
   config: WorkspaceConfig;
-  resolvedVaultPath: string | null;
-  resolvedVaultExists: boolean;
+  resolvedPrivatePath: string | null;
+  resolvedPrivateExists: boolean;
+  resolvedPublicPath: string | null;
+  resolvedPublicExists: boolean;
 }
 
 export interface WorkspaceSummary {
   root: string;
-  workLabel: string | null;
-  workPath: string | null;
-  vaultLabel: string | null;
-  vaultPath: string | null;
+  privateLabel: string | null;
+  privatePath: string | null;
+  publicLabel: string | null;
+  publicPath: string | null;
 }
 
 export interface RegisterWorkspaceOutcome {
-  vaultList: VaultList;
-  workPath: string;
-  pairedVaultPath: string | null;
+  workspaceRegistry: WorkspaceRegistry;
+  privateWorkspacePath: string;
+  publicWorkspacePath: string | null;
 }
 
 export interface AnchorWorkspaceMeta {

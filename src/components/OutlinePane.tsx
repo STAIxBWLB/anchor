@@ -63,7 +63,7 @@ export function OutlinePane({
     ? (fmTags as unknown[]).filter((tag): tag is string => typeof tag === "string")
     : [];
 
-  // Distinct types observed in this vault, used to seed type-input suggestions.
+  // Distinct types observed in this workspace, used to seed type-input suggestions.
   const observedTypes = useMemo(() => {
     const set = new Set<string>(STANDARD_TYPES);
     for (const entry of entries) {

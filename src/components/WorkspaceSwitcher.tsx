@@ -1,30 +1,33 @@
 import { Check, ChevronDown, FolderOpen, Plus, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "../lib/i18n";
-import type { VaultList } from "../lib/types";
+import type { WorkspaceRegistry, WorkspaceVisibility } from "../lib/types";
 
-interface VaultSwitcherProps {
-  vaultList: VaultList;
-  activeVaultPath: string | null;
-  onSelectVault: (path: string) => void;
-  onAddVault: () => void;
-  onRemoveVault: (path: string) => void;
+interface WorkspaceSwitcherProps {
+  registry: WorkspaceRegistry;
+  activePath: string | null;
+  visibility: WorkspaceVisibility;
+  onSelectWorkspace: (path: string, visibility: WorkspaceVisibility) => void;
+  onAddWorkspace: (visibility: WorkspaceVisibility) => void;
+  onRemoveWorkspace: (path: string) => void;
   onUseSample: () => void;
 }
 
-export function VaultSwitcher({
-  vaultList,
-  activeVaultPath,
-  onSelectVault,
-  onAddVault,
-  onRemoveVault,
+export function WorkspaceSwitcher({
+  registry,
+  activePath,
+  visibility,
+  onSelectWorkspace,
+  onAddWorkspace,
+  onRemoveWorkspace,
   onUseSample,
-}: VaultSwitcherProps) {
+}: WorkspaceSwitcherProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const active = vaultList.vaults.find((v) => v.path === activeVaultPath);
+  const workspaces = registry.workspaces.filter((workspace) => workspace.visibility === visibility);
+  const active = registry.workspaces.find((workspace) => workspace.path === activePath);
 
   useEffect(() => {
     if (!open) return;
@@ -46,55 +49,63 @@ export function VaultSwitcher({
     <div ref={containerRef} style={{ position: "relative" }}>
       <button
         type="button"
-        className="vault-switcher"
-        onClick={() => setOpen((v) => !v)}
+        className="workspace-switcher"
+        onClick={() => setOpen((value) => !value)}
         title={active?.path ?? ""}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="vs-dot" aria-hidden />
+        <span className={`ws-dot ${visibility}`} aria-hidden />
         {active ? (
-          <span className="vs-label">{active.label}</span>
+          <span className="ws-label">{active.label}</span>
         ) : (
-          <span className="vs-label vs-empty">{t("vault.switcher.empty")}</span>
+          <span className="ws-label ws-empty">{t("workspace.switcher.empty")}</span>
         )}
         <ChevronDown size={13} style={{ opacity: 0.55 }} />
       </button>
 
       {open ? (
-        <div className="vault-menu" role="menu">
-          {vaultList.vaults.length === 0 ? (
+        <div className="workspace-menu" role="menu">
+          {workspaces.length === 0 ? (
             <div style={{ padding: "12px 14px", color: "var(--faint)", fontSize: 12 }}>
-              {t("vault.switcher.none")}
+              {t(
+                visibility === "public"
+                  ? "workspace.switcher.publicNone"
+                  : "workspace.switcher.none",
+              )}
             </div>
           ) : (
-            vaultList.vaults.map((vault) => (
+            workspaces.map((workspace) => (
               <div
-                key={vault.path}
-                className={vault.path === activeVaultPath ? "vault-menu-item active" : "vault-menu-item"}
+                key={workspace.path}
+                className={
+                  workspace.path === activePath
+                    ? "workspace-menu-item active"
+                    : "workspace-menu-item"
+                }
                 onClick={() => {
-                  onSelectVault(vault.path);
+                  onSelectWorkspace(workspace.path, visibility);
                   setOpen(false);
                 }}
                 role="menuitem"
               >
-                {vault.path === activeVaultPath ? (
+                {workspace.path === activePath ? (
                   <Check size={14} />
                 ) : (
                   <FolderOpen size={14} style={{ opacity: 0.6 }} />
                 )}
                 <div style={{ minWidth: 0 }}>
-                  <strong>{vault.label}</strong>
-                  <span title={vault.path}>{vault.path}</span>
+                  <strong>{workspace.label}</strong>
+                  <span title={workspace.path}>{workspace.path}</span>
                 </div>
                 <button
                   type="button"
-                  className="vault-menu-remove"
-                  title={t("vault.remove")}
-                  aria-label={t("vault.remove.label", { label: vault.label })}
+                  className="workspace-menu-remove"
+                  title={t("workspace.remove")}
+                  aria-label={t("workspace.remove.label", { label: workspace.label })}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onRemoveVault(vault.path);
+                    onRemoveWorkspace(workspace.path);
                   }}
                 >
                   <Trash2 size={13} />
@@ -103,21 +114,23 @@ export function VaultSwitcher({
             ))
           )}
 
-          <div className="vault-menu-divider" />
+          <div className="workspace-menu-divider" />
 
           <div
-            className="vault-menu-action"
+            className="workspace-menu-action"
             onClick={() => {
-              onAddVault();
+              onAddWorkspace(visibility);
               setOpen(false);
             }}
             role="menuitem"
           >
             <Plus size={14} />
-            <span>{t("vault.add")}</span>
+            <span>
+              {t(visibility === "public" ? "workspace.addPublic" : "workspace.add")}
+            </span>
           </div>
           <div
-            className="vault-menu-action"
+            className="workspace-menu-action"
             onClick={() => {
               onUseSample();
               setOpen(false);
@@ -125,7 +138,7 @@ export function VaultSwitcher({
             role="menuitem"
           >
             <FolderOpen size={14} />
-            <span>{t("vault.useSample")}</span>
+            <span>{t("workspace.useSample")}</span>
           </div>
         </div>
       ) : null}

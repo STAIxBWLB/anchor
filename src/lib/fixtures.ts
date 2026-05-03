@@ -3,11 +3,13 @@ import type {
   DocumentPayload,
   InboxDropItem,
   VaultEntry,
-  VaultList,
+  WorkspaceRegistry,
   VersionSnapshot,
 } from "./types";
 
-export const MOCK_VAULT_PATH = "mock://anchor-sample-vault";
+export const MOCK_WORKSPACE_PATH = "mock://anchor-sample-workspace";
+export const MOCK_VAULT_PATH = MOCK_WORKSPACE_PATH;
+export const MOCK_PUBLIC_WORKSPACE_PATH = "mock://anchor-public-workspace";
 
 const now = "2026-04-27T09:00:00+09:00";
 
@@ -116,12 +118,34 @@ export function mockCreateVersion(title: string): VersionSnapshot {
   };
 }
 
-export function mockVaultList(): VaultList {
+export function mockWorkspaceRegistry(): WorkspaceRegistry {
+  const includePublic =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("mockPublic");
+  const workspaces: WorkspaceRegistry["workspaces"] = [
+    {
+      label: "Sample Workspace",
+      path: MOCK_WORKSPACE_PATH,
+      visibility: "private",
+      externalWriter: null,
+      writePolicy: "direct",
+    },
+  ];
+  if (includePublic) {
+    workspaces.push({
+      label: "Public Workspace",
+      path: MOCK_PUBLIC_WORKSPACE_PATH,
+      visibility: "public",
+      externalWriter: null,
+      writePolicy: "direct",
+    });
+  }
   return {
-    vaults: [
-      { label: "Sample Vault", path: MOCK_VAULT_PATH },
-    ],
-    activeVault: MOCK_VAULT_PATH,
+    workspaces,
+    activeByVisibility: {
+      private: MOCK_WORKSPACE_PATH,
+      public: includePublic ? MOCK_PUBLIC_WORKSPACE_PATH : null,
+    },
     hiddenDefaults: [],
   };
 }

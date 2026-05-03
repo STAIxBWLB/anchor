@@ -6,7 +6,7 @@ import {
   mockCreateVersion,
   mockEntries,
   mockInboxDropItems,
-  mockVaultList,
+  mockWorkspaceRegistry,
   readMockDocument,
 } from "./fixtures";
 import type {
@@ -18,7 +18,8 @@ import type {
   InboxClassification,
   InboxDropItem,
   VaultEntry,
-  VaultList,
+  WorkspaceRegistry,
+  WorkspaceVisibility,
   VersionSnapshot,
 } from "./types";
 import type { TerminalKind } from "./terminal";
@@ -44,6 +45,10 @@ export async function chooseVaultDirectory(title: string): Promise<string | null
     title,
   });
   return typeof selected === "string" ? selected : null;
+}
+
+export async function chooseWorkspaceDirectory(title: string): Promise<string | null> {
+  return chooseVaultDirectory(title);
 }
 
 export async function scanVault(vaultPath: string): Promise<VaultEntry[]> {
@@ -137,30 +142,39 @@ export async function createVersion(
   });
 }
 
-// === Multi-vault registry ===
+// === Workspace registry ===
 
-export async function listVaults(): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("list_vaults");
+export async function listWorkspaceRoots(): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("list_workspace_roots");
 }
 
-export async function addVault(
+export async function addWorkspaceRoot(
   label: string,
   path: string,
+  visibility: WorkspaceVisibility,
   externalWriter?: string | null,
-): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("add_vault", { label, path, externalWriter: externalWriter ?? null });
+): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("add_workspace_root", {
+    label,
+    path,
+    visibility,
+    externalWriter: externalWriter ?? null,
+  });
 }
 
-export async function removeVault(path: string): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("remove_vault", { path });
+export async function removeWorkspaceRoot(path: string): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("remove_workspace_root", { path });
 }
 
-export async function setActiveVault(path: string): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("set_active_vault", { path });
+export async function setActiveWorkspaceRoot(
+  path: string,
+  visibility: WorkspaceVisibility,
+): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("set_active_workspace_root", { path, visibility });
 }
 
 // === Git ===
