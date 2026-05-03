@@ -36,56 +36,18 @@ export interface CreatedDocument {
   title: string;
 }
 
-export type WorkspaceVisibility = "private" | "public";
-export type WorkspaceProvider =
-  | "local"
-  | "googleDrive"
-  | "oneDrive"
-  | "sharePoint"
-  | "nextcloud"
-  | "obsidian"
-  | "unknown";
-export type WorkspaceExternalWriter =
-  | "gdrive"
-  | "onedrive"
-  | "sharepoint"
-  | "nextcloud"
-  | "mcp-obsidian";
-export type WorkspaceWritePolicy = "direct" | "delegated" | "readOnly";
-export type ProviderPermissionSource = "manual" | "filesystem" | "api" | "unknown";
-
-export interface WorkspaceCapabilities {
-  canRead: boolean;
-  canCreate: boolean;
-  canModify: boolean;
-  canDelete: boolean;
-  canRenameMove: boolean;
-  canShare: boolean;
-  canManageMembers: boolean;
-}
-
-export interface ProviderPermissionSummary {
-  role: string | null;
-  source: ProviderPermissionSource;
-  checkedAt: string | null;
-  capabilities: WorkspaceCapabilities;
-  warning?: string | null;
-}
-
-export interface WorkspaceRootEntry {
+/** Anchor multi-vault registry. external_writer === "mcp-obsidian"
+ *  signals that anchor reads but defers writes to an Obsidian instance
+ *  (write delegation lands in Phase 2). */
+export interface VaultRegistryEntry {
   label: string;
   path: string;
-  visibility: WorkspaceVisibility;
-  provider: WorkspaceProvider;
-  providerId?: string | null;
-  externalWriter?: WorkspaceExternalWriter | null;
-  writePolicy: WorkspaceWritePolicy;
-  permissionSummary?: ProviderPermissionSummary | null;
+  externalWriter?: string | null;
 }
 
-export interface WorkspaceRegistry {
-  workspaces: WorkspaceRootEntry[];
-  activeByVisibility: Record<WorkspaceVisibility, string | null>;
+export interface VaultList {
+  vaults: VaultRegistryEntry[];
+  activeVault: string | null;
   hiddenDefaults: string[];
 }
 
@@ -93,15 +55,13 @@ export interface AppError {
   message: string;
 }
 
-/** Git working-tree status of the active workspace. Returned by the Rust
+/** Git working-tree status of the active vault. Returned by the Rust
  *  `git_status` command via shelling out to the user's git binary. */
 export interface GitStatus {
   isRepo: boolean;
   modified: number;
   staged: number;
   untracked: number;
-  /** False when badge polling intentionally skipped untracked enumeration. */
-  untrackedKnown: boolean;
   clean: boolean;
   branch: string | null;
 }
@@ -154,150 +114,4 @@ export interface GmailMessage {
   from: string;
   subject: string;
   date: string;
-}
-
-// === Workspace pairing + .anchor/ system mode ===
-
-export interface WorkspaceOwner {
-  name?: string | null;
-  affiliation?: string | null;
-  roles?: string[];
-  emails?: Record<string, string>;
-  github?: string | null;
-}
-
-export interface WorkspacePaths {
-  primary?: string | null;
-  vault?: string | null;
-  mirror?: string | null;
-  "private"?: string | string[] | null;
-  "public"?: string | string[] | WorkspacePublicPathSpec | WorkspacePublicPathSpec[] | null;
-}
-
-export interface WorkspacePublicPathSpec {
-  label?: string | null;
-  path: string;
-  provider?: WorkspaceProvider | null;
-  providerId?: string | null;
-  externalWriter?: WorkspaceExternalWriter | null;
-  writePolicy?: WorkspaceWritePolicy | null;
-  role?: string | null;
-}
-
-export interface WorkspaceConfig {
-  version: number;
-  owner?: WorkspaceOwner | null;
-  paths: WorkspacePaths;
-  ssot?: Record<string, string>;
-  skills?: Record<string, unknown>;
-  inbox?: Record<string, unknown>;
-  /** Unmodelled keys in workspace.config.yaml are surfaced here. */
-  [extra: string]: unknown;
-}
-
-export interface WorkspaceDetect {
-  workPath: string;
-  configPath: string;
-  config: WorkspaceConfig;
-  resolvedPrivatePath: string | null;
-  resolvedPrivateExists: boolean;
-  resolvedPublicPath: string | null;
-  resolvedPublicExists: boolean;
-  publicWorkspaces?: Array<{
-    label: string;
-    path: string;
-    exists: boolean;
-    provider: WorkspaceProvider;
-    providerId?: string | null;
-    externalWriter?: WorkspaceExternalWriter | null;
-    writePolicy: WorkspaceWritePolicy;
-    role?: string | null;
-  }>;
-}
-
-export interface WorkspaceSummary {
-  root: string;
-  privateLabel: string | null;
-  privatePath: string | null;
-  publicLabel: string | null;
-  publicPath: string | null;
-}
-
-export interface RegisterWorkspaceOutcome {
-  workspaceRegistry: WorkspaceRegistry;
-  privateWorkspacePath: string;
-  publicWorkspacePath: string | null;
-}
-
-export interface AnchorWorkspaceMeta {
-  version: number;
-  workPath: string;
-  pairedVaultPath: string | null;
-  ownerName: string | null;
-  locale: string | null;
-  /** "pkm" | "inbox" | "system" */
-  lastActiveMode: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AnchorWorkspaceMetaPatch {
-  /** v1 semantics: pass a string to set the field. Omitting (or
-   *  passing `null`/`undefined`) leaves the existing value unchanged.
-   *  Clearing a field is not yet supported through this patch. */
-  pairedVaultPath?: string | null;
-  ownerName?: string | null;
-  locale?: string | null;
-  lastActiveMode?: string | null;
-}
-
-export interface RuleEntry {
-  name: string;
-  title: string;
-  enabled: boolean;
-  scope: string | null;
-  origin: string | null;
-  updatedAt: string | null;
-}
-
-export interface RuleDocument {
-  name: string;
-  relPath: string;
-  content: string;
-  title: string;
-  enabled: boolean;
-}
-
-export interface TemplateEntry {
-  name: string;
-  title: string;
-  docType: string | null;
-  origin: string | null;
-  updatedAt: string | null;
-}
-
-export interface ImportItem {
-  category: "rule" | "template" | "mcp" | "projects" | "skills";
-  originAbs: string;
-  originRel: string;
-  targetRel: string;
-  /** "new" | "update" | "unchanged" */
-  status: string;
-  originSha256: string;
-  label: string;
-}
-
-export interface ImportPlan {
-  workPath: string;
-  sysPresent: boolean;
-  rules: ImportItem[];
-  templates: ImportItem[];
-  mcp: ImportItem | null;
-  projects: ImportItem | null;
-  skills: ImportItem | null;
-}
-
-export interface ImportReceipt {
-  applied: ImportItem[];
-  skipped: ImportItem[];
 }

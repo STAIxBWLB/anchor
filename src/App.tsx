@@ -1,18 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import type React from "react";
-import {
-  AlertTriangle,
-  Clock3,
-  Command,
-  FileText,
-  Inbox,
-  PanelLeftClose,
-  PanelLeftOpen,
-  RefreshCcw,
-  Settings2,
-  X,
-} from "lucide-react";
-import { AddWorkspaceDialog } from "./components/AddWorkspaceDialog";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Clock3, RefreshCcw, X } from "lucide-react";
+import { AddVaultDialog } from "./components/AddVaultDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { CommitDialog } from "./components/CommitDialog";
 import { DocumentList } from "./components/DocumentList";
@@ -22,43 +10,25 @@ import { InboxPane } from "./components/InboxPane";
 import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
 import { Sidebar } from "./components/Sidebar";
-import { SystemPane } from "./components/SystemPane";
-import { TerminalPanel } from "./components/TerminalPanel";
-import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
+import { VaultSwitcher } from "./components/VaultSwitcher";
 import {
-  addWorkspaceRoot,
+  addVault,
   createDocument,
   createVersion,
   fetchGmailUnread,
   getSampleVaultPath,
-  listWorkspaceRoots,
+  listVaults,
   readDocument,
-  revealInFileManager,
-  readVaultCache,
-  refreshWorkspaceCapabilities,
-  removeWorkspaceRoot,
+  removeVault,
   saveDocument,
   scanInboxDrop,
   scanVault,
-  setActiveWorkspaceRoot,
+  setActiveVault,
   startInboxWatcher,
   stopInboxWatcher,
   updateFrontmatterField,
 } from "./lib/api";
-import {
-  readAnchorSettings,
-  registerWorkspaceRoots,
-  saveAnchorSettings,
-  listenAnchorSettingsUpdated,
-  updateAnchorWorkspace,
-} from "./lib/anchorDir";
 import { classifyInboxItem } from "./lib/aiInvoke";
-import { createDebouncedSaver, type DebouncedSaver } from "./lib/debouncedSave";
-import {
-  buildDocumentIndex,
-  getRecentEntries,
-  type DocumentIndex,
-} from "./lib/documentIndex";
 import { buildGmailMessageStates, type GmailMessageState } from "./lib/gmail";
 import { LocaleContext, assertParityOrThrow, useLocaleState } from "./lib/i18n";
 import {
@@ -74,32 +44,9 @@ import type {
   InboxClassification,
   InboxDropItem,
   VaultEntry,
-  WorkspaceRegistry,
-  WorkspaceRootEntry,
-  WorkspaceVisibility,
+  VaultList,
 } from "./lib/types";
-import {
-  DEFAULT_ANCHOR_SETTINGS,
-  normalizeAnchorSettings,
-  type AnchorSettings,
-  type DocumentBrowserMode,
-} from "./lib/settings";
-import { applyThemePreference, applyThemeVars, buildThemeVars } from "./lib/theme";
-import {
-  openSettingsWindow,
-  restoreMainWindowLayout,
-  startWindowDrag,
-  subscribeMainWindowLayout,
-} from "./lib/windowLayout";
 import { resolveWikilinkTarget } from "./lib/wikilinkSuggestions";
-import { mergeFreshEntry, planVaultStartup } from "./lib/vaultStartup";
-import {
-  providerLabel,
-  workspaceCan,
-  workspaceCapabilities,
-  workspaceWriteReason,
-  workspaceWriteStatus,
-} from "./lib/workspaceCapabilities";
 import {
   emptyHistory,
   goBack,
@@ -111,13 +58,12 @@ import {
 const LAST_OPEN_KEY = "anchor:lastOpenedNote:v1";
 const OPEN_TABS_KEY = "anchor:openTabs:v1";
 const RECENT_KEY = "anchor:recent:v1";
+const OUTLINE_OPEN_KEY = "anchor:outlineOpen:v1";
 
 assertParityOrThrow();
 
 interface EditorTab {
   id: string;
-  workspacePath: string;
-  visibility: WorkspaceVisibility;
   entry: VaultEntry;
   document: DocumentPayload;
   draftContent: string;
@@ -127,20 +73,6 @@ interface StoredTabs {
   activeRelPath: string | null;
   relPaths: string[];
 }
-
-interface WorkspaceEntriesState {
-  entries: VaultEntry[];
-  loading: boolean;
-  refreshing: boolean;
-  startupIoReady: boolean;
-}
-
-const EMPTY_WORKSPACE_STATE: WorkspaceEntriesState = {
-  entries: [],
-  loading: false,
-  refreshing: false,
-  startupIoReady: false,
-};
 
 type AppMode = "pkm" | "inbox";
 
@@ -162,134 +94,20 @@ function titleFromWikilinkTarget(target: string): string {
 }
 
 export default function App() {
-  const params =
-    typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  if (params?.get("window") === "settings") {
-    return <SettingsWindowRoot workPath={params.get("workPath")} />;
-  }
-  return <MainApp />;
-}
-
-function SettingsWindowRoot({ workPath }: { workPath: string | null }) {
-  const localeValue = useLocaleState();
-  const { t } = localeValue;
-  const [settings, setSettings] = useState<AnchorSettings>(() =>
-    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const themeVars = useMemo(() => buildThemeVars(settings), [settings]);
-
-  useEffect(() => {
-    applyThemePreference(settings.ui.themeMode);
-    applyThemeVars(themeVars);
-  }, [settings.ui.themeMode, themeVars]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!workPath) {
-      setSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
-      return;
-    }
-    void readAnchorSettings(workPath)
-      .then((next) => {
-        if (!cancelled) setSettings(next);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workPath]);
-
-  useEffect(() => {
-    let dispose: (() => void) | null = null;
-    void listenAnchorSettingsUpdated((payload) => {
-      if (payload.workPath === workPath) {
-        setSettings(normalizeAnchorSettings(payload.settings));
-      }
-    }).then((off) => {
-      dispose = off;
-    });
-    return () => dispose?.();
-  }, [workPath]);
-
-  const updateSettings = useCallback(
-    (nextSettings: AnchorSettings) => {
-      const normalized = normalizeAnchorSettings(nextSettings);
-      setSettings(normalized);
-      if (!workPath) return;
-      void saveAnchorSettings(workPath, normalized).catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-    },
-    [workPath],
-  );
-
-  return (
-    <LocaleContext.Provider value={localeValue}>
-      <div className="settings-window-shell" style={themeVars}>
-        <SystemPane
-          workPath={workPath}
-          settings={settings}
-          onSettingsChange={updateSettings}
-        />
-        {error ? (
-          <div className="toast-stack">
-            <div className="toast">
-              <AlertTriangle size={15} />
-              <span>{error}</span>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => setError(null)}
-                aria-label={t("app.errorClose")}
-                title={t("app.errorClose")}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </LocaleContext.Provider>
-  );
-}
-
-function MainApp() {
   const localeValue = useLocaleState();
   const { t, locale, setLocale } = localeValue;
 
-  const [workspaceRegistry, setWorkspaceRegistry] = useState<WorkspaceRegistry>({
-    workspaces: [],
-    activeByVisibility: {
-      private: null,
-      public: null,
-    },
+  const [vaultList, setVaultList] = useState<VaultList>({
+    vaults: [],
+    activeVault: null,
     hiddenDefaults: [],
   });
-  const [workspaceStates, setWorkspaceStates] = useState<Record<string, WorkspaceEntriesState>>({});
-  const [explorerVisibility, setExplorerVisibility] =
-    useState<WorkspaceVisibility>("private");
+  const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [queryByVisibility, setQueryByVisibility] = useState<Record<WorkspaceVisibility, string>>({
-    private: "",
-    public: "",
-  });
-  const [typeFilterByVisibility, setTypeFilterByVisibility] = useState<
-    Record<WorkspaceVisibility, string | null>
-  >({
-    private: null,
-    public: null,
-  });
-  const [collapsedTreeFoldersByVisibility, setCollapsedTreeFoldersByVisibility] = useState<
-    Record<WorkspaceVisibility, string[]>
-  >({
-    private: [],
-    public: [],
-  });
-  const [booting, setBooting] = useState(true);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newDocumentOpen, setNewDocumentOpen] = useState(false);
@@ -297,12 +115,13 @@ function MainApp() {
     title: string;
     relPath: string | null;
   } | null>(null);
-  const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
-  const [addWorkspaceDefaultVisibility, setAddWorkspaceDefaultVisibility] =
-    useState<WorkspaceVisibility>("private");
+  const [addVaultOpen, setAddVaultOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>("source");
-  const [pendingSelectedPath, setPendingSelectedPath] = useState<string | null>(null);
+  const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>("rich");
+  const [outlineOpen, setOutlineOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(OUTLINE_OPEN_KEY) !== "0";
+  });
   const [recentPaths, setRecentPaths] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -315,24 +134,16 @@ function MainApp() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const settingsSaverRef = useRef<DebouncedSaver<AnchorSettings> | null>(null);
-  const collapsedTreeHydratedRef = useRef(false);
 
   // Monotonic counter so a slow readDocument from an earlier click cannot
   // overwrite the editor with stale content if the user clicked a later
   // entry in the meantime. Only the latest call wins.
   const selectRequestRef = useRef(0);
-  const loadWorkspaceRequestRef = useRef(0);
   // Holds the discarded draft + entry when the user switches away from a
   // dirty document. Surfaces a "Restore" toast button — non-blocking
   // alternative to window.confirm (which Tauri webview suppresses).
   const [discardedEdit, setDiscardedEdit] = useState<
-    {
-      workspacePath: string;
-      visibility: WorkspaceVisibility;
-      entry: VaultEntry;
-      draft: string;
-    } | null
+    { entry: VaultEntry; draft: string } | null
   >(null);
 
   // Wikilink navigation stack — ⌘[ back / ⌘] forward. In-memory only; tolaria
@@ -341,14 +152,11 @@ function MainApp() {
   // Set to true by navigateBack/Forward to suppress the auto history push
   // inside selectEntry — those paths manage history manually.
   const skipNextHistoryPushRef = useRef(false);
-  // Bump on save/snapshot/workspace-switch/refresh so the GitStatusBadge re-polls.
+  // Bump on save/snapshot/vault-switch/refresh so the GitStatusBadge re-polls.
   const [gitRefreshTick, setGitRefreshTick] = useState(0);
   // CommitDialog state — the badge passes the most recent GitStatus so the
   // dialog can show the file counts at the moment the user clicked.
-  const [commitDialog, setCommitDialog] = useState<{
-    path: string;
-    status: GitStatus;
-  } | null>(null);
+  const [commitDialog, setCommitDialog] = useState<GitStatus | null>(null);
 
   // Phase 2 inbox surface. Polling scan + notify watcher feed
   // `inboxItems`; per-item classifier output is carried alongside the
@@ -368,37 +176,8 @@ function MainApp() {
   const [gmailDecisions, setGmailDecisions] = useState<Map<string, InboxDecision>>(
     () => new Map(),
   );
-  const [anchorSettings, setAnchorSettings] = useState<AnchorSettings>(() =>
-    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
-  );
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [, startExplorerTransition] = useTransition();
 
-  const privateWorkspaces = useMemo(
-    () => workspaceRegistry.workspaces.filter((workspace) => workspace.visibility === "private"),
-    [workspaceRegistry.workspaces],
-  );
-  const publicWorkspaces = useMemo(
-    () => workspaceRegistry.workspaces.filter((workspace) => workspace.visibility === "public"),
-    [workspaceRegistry.workspaces],
-  );
-  const publicWorkspaceAvailable = publicWorkspaces.length > 0;
-  const explorerWorkspacePath = workspaceRegistry.activeByVisibility[explorerVisibility];
-  const explorerWorkspace = useMemo(
-    () =>
-      workspaceRegistry.workspaces.find(
-        (workspace) => workspace.path === explorerWorkspacePath,
-      ) ?? null,
-    [workspaceRegistry.workspaces, explorerWorkspacePath],
-  );
-  const explorerWorkspaceState =
-    (explorerWorkspacePath ? workspaceStates[explorerWorkspacePath] : null) ??
-    EMPTY_WORKSPACE_STATE;
-  const entries = explorerWorkspaceState.entries;
-  const query = queryByVisibility[explorerVisibility];
-  const typeFilter = typeFilterByVisibility[explorerVisibility];
-  const collapsedTreeFolders = collapsedTreeFoldersByVisibility[explorerVisibility];
-  const documentIndex = useMemo<DocumentIndex>(() => buildDocumentIndex(entries), [entries]);
+  const activeVaultPath = vaultList.activeVault;
   const resolvedActiveTabId = activeTabId ?? tabs[0]?.id ?? null;
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === resolvedActiveTabId) ?? null,
@@ -406,114 +185,37 @@ function MainApp() {
   );
   const selectedEntry = activeTab?.entry ?? null;
   const document = activeTab?.document ?? null;
-  const selectedPath = pendingSelectedPath ?? selectedEntry?.path ?? null;
-  const activeDocumentWorkspacePath = activeTab?.workspacePath ?? explorerWorkspacePath;
-  const activeDocumentWorkspace = useMemo(
-    () =>
-      activeDocumentWorkspacePath
-        ? workspaceRegistry.workspaces.find(
-            (workspace) => workspace.path === activeDocumentWorkspacePath,
-          ) ?? null
-        : null,
-    [workspaceRegistry.workspaces, activeDocumentWorkspacePath],
-  );
-  const activeDocumentWorkspaceState =
-    (activeDocumentWorkspacePath ? workspaceStates[activeDocumentWorkspacePath] : null) ??
-    EMPTY_WORKSPACE_STATE;
-  const primaryWorkspacePath =
-    workspaceRegistry.activeByVisibility.private ??
-    privateWorkspaces[0]?.path ??
-    workspaceRegistry.activeByVisibility.public ??
-    publicWorkspaces[0]?.path ??
-    null;
-  const inboxWorkspacePath = activeTab?.workspacePath ?? explorerWorkspacePath ?? primaryWorkspacePath;
-  const activeDocumentEntries =
-    (activeTab ? workspaceStates[activeTab.workspacePath]?.entries : entries) ?? entries;
-  const openingEntry =
-    pendingSelectedPath && pendingSelectedPath !== document?.path
-      ? activeDocumentEntries.find((entry) => entry.path === pendingSelectedPath) ?? null
-      : null;
   const draftContent = activeTab?.draftContent ?? "";
-  const activeWorkspaceCaps = useMemo(
-    () => workspaceCapabilities(activeDocumentWorkspace),
-    [activeDocumentWorkspace],
+  const activeVault = useMemo(
+    () => vaultList.vaults.find((v) => v.path === activeVaultPath) ?? null,
+    [vaultList, activeVaultPath],
   );
-  const activeWorkspaceCanCreate = activeWorkspaceCaps.canCreate;
-  const activeWorkspaceCanModify = activeWorkspaceCaps.canModify;
-  const activeWorkspaceWriteReason = useMemo(
-    () => workspaceWriteReason(activeDocumentWorkspace),
-    [activeDocumentWorkspace],
-  );
-  const explorerWorkspaceCaption = useMemo(() => {
-    if (!explorerWorkspace) return null;
-    const status = workspaceWriteStatus(explorerWorkspace);
-    return [
-      explorerWorkspace.label,
-      providerLabel(explorerWorkspace.provider),
-      t(`workspace.writeStatus.${status}`),
-    ].join(" · ");
-  }, [explorerWorkspace, t]);
-  const layoutSettings = anchorSettings.ui.layout;
-  const documentTypesPaneOpen = layoutSettings.documentTypesPaneOpen;
-  const documentsPaneOpen = layoutSettings.documentsPaneOpen;
-  const outlineOpen = layoutSettings.outlineOpen;
-
-  const systemWorkPath = useMemo(() => {
-    const activePrivate = workspaceRegistry.activeByVisibility.private;
-    return (
-      activePrivate ??
-      privateWorkspaces[0]?.path ??
-      (explorerWorkspace?.visibility === "private" ? explorerWorkspace.path : null)
-    );
-  }, [explorerWorkspace, privateWorkspaces, workspaceRegistry.activeByVisibility.private]);
-  const settingsWorkPath = useMemo(() => {
-    if (
-      explorerWorkspace?.visibility === "public" &&
-      explorerWorkspace.writePolicy === "direct" &&
-      workspaceCan(explorerWorkspace, "modify")
-    ) {
-      return explorerWorkspace.path;
-    }
-    return systemWorkPath;
-  }, [explorerWorkspace, systemWorkPath]);
-  const settingsWorkspace = useMemo(
-    () =>
-      settingsWorkPath
-        ? workspaceRegistry.workspaces.find((workspace) => workspace.path === settingsWorkPath) ?? null
-        : null,
-    [settingsWorkPath, workspaceRegistry.workspaces],
-  );
-  const settingsWritable =
-    settingsWorkPath != null &&
-    (settingsWorkspace?.visibility !== "public" || workspaceCan(settingsWorkspace, "modify"));
+  const activeVaultExternalWriter = activeVault?.externalWriter ?? null;
+  const activeVaultReadOnly = activeVaultExternalWriter != null;
   const dirty = useMemo(
     () => Boolean(document && draftContent !== document.content),
     [document, draftContent],
   );
 
-  const recentEntries = useMemo(
-    () => getRecentEntries(documentIndex, recentPaths, 8),
-    [documentIndex, recentPaths],
-  );
-  const editorTabSummaries = useMemo(
-    () =>
-      tabs.map((tab) => ({
-        id: tab.id,
-        title: tab.document.title,
-        relPath: tab.document.relPath,
-        dirty: tab.draftContent !== tab.document.content,
-      })),
-    [tabs],
-  );
+  const recentEntries = useMemo(() => {
+    const byPath = new Map(entries.map((e) => [e.path, e] as const));
+    const out: VaultEntry[] = [];
+    for (const path of recentPaths) {
+      const entry = byPath.get(path);
+      if (entry) out.push(entry);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }, [entries, recentPaths]);
 
-  const lastOpenKeyForWorkspace = useCallback((path: string) => `${LAST_OPEN_KEY}:${path}`, []);
-  const openTabsKeyForWorkspace = useCallback((path: string) => `${OPEN_TABS_KEY}:${path}`, []);
+  const lastOpenKeyForVault = useCallback((path: string) => `${LAST_OPEN_KEY}:${path}`, []);
+  const openTabsKeyForVault = useCallback((path: string) => `${OPEN_TABS_KEY}:${path}`, []);
 
-  const readStoredTabsForWorkspace = useCallback(
+  const readStoredTabsForVault = useCallback(
     (path: string): StoredTabs | null => {
       if (typeof window === "undefined") return null;
       try {
-        const raw = window.localStorage.getItem(openTabsKeyForWorkspace(path));
+        const raw = window.localStorage.getItem(openTabsKeyForVault(path));
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Partial<StoredTabs>;
         const relPaths = Array.isArray(parsed.relPaths)
@@ -528,20 +230,7 @@ function MainApp() {
         return null;
       }
     },
-    [openTabsKeyForWorkspace],
-  );
-
-  const updateWorkspaceState = useCallback(
-    (path: string, patch: Partial<WorkspaceEntriesState>) => {
-      setWorkspaceStates((current) => ({
-        ...current,
-        [path]: {
-          ...(current[path] ?? EMPTY_WORKSPACE_STATE),
-          ...patch,
-        },
-      }));
-    },
-    [],
+    [openTabsKeyForVault],
   );
 
   const updateActiveTab = useCallback(
@@ -562,238 +251,31 @@ function MainApp() {
   );
 
   useEffect(() => {
-    let cancelled = false;
-    setSettingsLoaded(false);
-    if (!settingsWorkPath) {
-      setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
-      setSettingsLoaded(true);
-      return;
-    }
-    void readAnchorSettings(settingsWorkPath)
-      .then((settings) => {
-        if (!cancelled) {
-          setAnchorSettings(settings);
-          setSettingsLoaded(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
-          setSettingsLoaded(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [settingsWorkPath]);
-
-  useEffect(() => {
-    let dispose: (() => void) | null = null;
-    void listenAnchorSettingsUpdated((payload) => {
-      if (payload.workPath === settingsWorkPath) {
-        setAnchorSettings(normalizeAnchorSettings(payload.settings));
-      }
-    }).then((off) => {
-      dispose = off;
-    });
-    return () => dispose?.();
-  }, [settingsWorkPath]);
-
-  useEffect(() => {
-    applyThemePreference(anchorSettings.ui.themeMode);
-    applyThemeVars(buildThemeVars(anchorSettings));
-  }, [anchorSettings]);
-
-  useEffect(() => {
-    if (!settingsWritable || !settingsWorkPath) {
-      settingsSaverRef.current = null;
-      return;
-    }
-    const saver = createDebouncedSaver<AnchorSettings>(
-      (settings) => saveAnchorSettings(settingsWorkPath, settings),
-      250,
-      (err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      },
-    );
-    settingsSaverRef.current = saver;
-    return () => {
-      if (settingsSaverRef.current === saver) {
-        settingsSaverRef.current = null;
-      }
-      void saver.flush();
-    };
-  }, [settingsWorkPath, settingsWritable]);
-
-  const updateSettings = useCallback(
-    (updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings)) => {
-      setAnchorSettings((current) => {
-        const next = normalizeAnchorSettings(
-          typeof updater === "function" ? updater(current) : updater,
-        );
-        if (settingsWritable && settingsWorkPath) {
-          const saver = settingsSaverRef.current;
-          if (saver) {
-            saver.schedule(next);
-          } else {
-            void saveAnchorSettings(settingsWorkPath, next).catch((err) => {
-              setError(err instanceof Error ? err.message : String(err));
-            });
-          }
-        }
-        return next;
-      });
-    },
-    [settingsWorkPath, settingsWritable],
-  );
-
-  const updateLayoutSettings = useCallback(
-    (patch: Partial<AnchorSettings["ui"]["layout"]>) => {
-      updateSettings((current) => {
-        const layout = {
-          ...current.ui.layout,
-          ...patch,
-        };
-        return {
-          ...current,
-          ui: {
-            ...current.ui,
-            layout,
-          },
-          terminal: {
-            ...current.terminal,
-            defaultPanelOpen: layout.terminalOpen,
-            lastHeight: layout.terminalHeight,
-          },
-        };
-      });
-    },
-    [updateSettings],
-  );
-
-  const restoredWindowKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!settingsLoaded || !settingsWorkPath) return;
-    const key = settingsWorkPath;
-    if (restoredWindowKeyRef.current === key) return;
-    restoredWindowKeyRef.current = key;
-    void restoreMainWindowLayout(anchorSettings.ui.layout).catch(() => {});
-  }, [anchorSettings.ui.layout, settingsLoaded, settingsWorkPath]);
-
-  useEffect(() => {
-    if (!settingsLoaded || !settingsWritable) return;
-    let disposed = false;
-    let cleanup: (() => void) | null = null;
-    void subscribeMainWindowLayout((patch) => {
-      if (!disposed) updateLayoutSettings(patch);
-    }).then((off) => {
-      if (disposed) off();
-      else cleanup = off;
-    });
-    return () => {
-      disposed = true;
-      cleanup?.();
-    };
-  }, [settingsLoaded, settingsWritable, updateLayoutSettings]);
-
-  useEffect(() => {
-    if (!settingsLoaded || collapsedTreeHydratedRef.current) return;
-    collapsedTreeHydratedRef.current = true;
-    setCollapsedTreeFoldersByVisibility((current) => ({
-      ...current,
-      private: anchorSettings.ui.collapsedTreeFolders,
-    }));
-  }, [anchorSettings.ui.collapsedTreeFolders, settingsLoaded]);
-
-  const setDocumentBrowserMode = useCallback(
-    (mode: DocumentBrowserMode) => {
-      updateSettings((current) => ({
-        ...current,
-        ui: {
-          ...current.ui,
-          documentBrowserMode: mode,
-        },
-      }));
-    },
-    [updateSettings],
-  );
-
-  const setCollapsedTreeFolders = useCallback(
-    (paths: string[]) => {
-      setCollapsedTreeFoldersByVisibility((current) => ({
-        ...current,
-        [explorerVisibility]: paths,
-      }));
-      if (explorerVisibility === "private") {
-        updateSettings((current) => ({
-          ...current,
-          ui: {
-            ...current.ui,
-            collapsedTreeFolders: paths,
-          },
-        }));
-      }
-    },
-    [explorerVisibility, updateSettings],
-  );
-
-  const setExplorerQuery = useCallback(
-    (next: string) => {
-      startExplorerTransition(() =>
-        setQueryByVisibility((current) => ({
-          ...current,
-          [explorerVisibility]: next,
-        })),
-      );
-    },
-    [explorerVisibility, startExplorerTransition],
-  );
-
-  const setExplorerTypeFilter = useCallback(
-    (next: string | null) => {
-      startExplorerTransition(() =>
-        setTypeFilterByVisibility((current) => ({
-          ...current,
-          [explorerVisibility]: next,
-        })),
-      );
-    },
-    [explorerVisibility, startExplorerTransition],
-  );
-
-  // Best-effort persistence of the chosen mode into .anchor/workspace.json.
-  // Failures are silent — this is a UX nicety, not a correctness concern.
-  useEffect(() => {
-    if (!systemWorkPath) return;
-    void updateAnchorWorkspace(systemWorkPath, { lastActiveMode: appMode }).catch(() => {});
-  }, [appMode, systemWorkPath]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
-    const byWorkspace = new Map<string, EditorTab[]>();
-    for (const tab of tabs) {
-      const bucket = byWorkspace.get(tab.workspacePath) ?? [];
-      bucket.push(tab);
-      byWorkspace.set(tab.workspacePath, bucket);
+    window.localStorage.setItem(OUTLINE_OPEN_KEY, outlineOpen ? "1" : "0");
+  }, [outlineOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeVaultPath) return;
+    const tabsBelongToActiveVault = tabs.every(
+      (tab) => tab.entry.path === activeVaultPath || tab.entry.path.startsWith(`${activeVaultPath}/`),
+    );
+    if (!tabsBelongToActiveVault) return;
+    if (tabs.length === 0) {
+      window.localStorage.removeItem(openTabsKeyForVault(activeVaultPath));
+      return;
     }
-    for (const [workspacePath, workspaceTabs] of byWorkspace) {
-      window.localStorage.setItem(
-        openTabsKeyForWorkspace(workspacePath),
-        JSON.stringify({
-          activeRelPath:
-            activeTab?.workspacePath === workspacePath ? activeTab.entry.relPath : null,
-          relPaths: workspaceTabs.map((tab) => tab.entry.relPath),
-        } satisfies StoredTabs),
-      );
-    }
+    window.localStorage.setItem(
+      openTabsKeyForVault(activeVaultPath),
+      JSON.stringify({
+        activeRelPath: activeTab?.entry.relPath ?? null,
+        relPaths: tabs.map((tab) => tab.entry.relPath),
+      } satisfies StoredTabs),
+    );
     if (activeTab) {
-      window.localStorage.setItem(
-        lastOpenKeyForWorkspace(activeTab.workspacePath),
-        activeTab.entry.relPath,
-      );
+      window.localStorage.setItem(lastOpenKeyForVault(activeVaultPath), activeTab.entry.relPath);
     }
-  }, [activeTab, tabs, lastOpenKeyForWorkspace, openTabsKeyForWorkspace]);
+  }, [activeVaultPath, activeTab, tabs, lastOpenKeyForVault, openTabsKeyForVault]);
 
   const pushRecent = useCallback((path: string) => {
     setRecentPaths((prev) => {
@@ -837,20 +319,20 @@ function MainApp() {
   }, []);
 
   const refreshInbox = useCallback(async () => {
-    if (!inboxWorkspacePath) {
+    if (!activeVaultPath) {
       setInboxDrops([]);
       return;
     }
     setInboxLoading(true);
     setError(null);
     try {
-      setInboxDrops(await scanInboxDrop(inboxWorkspacePath));
+      setInboxDrops(await scanInboxDrop(activeVaultPath));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setInboxLoading(false);
     }
-  }, [inboxWorkspacePath]);
+  }, [activeVaultPath]);
 
   const updateInboxCarry = useCallback(
     (id: string, patch: Partial<InboxCarry>) => {
@@ -904,17 +386,13 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appMode]);
 
-  // Inbox scan + watcher subscription, scoped to the active workspace and
-  // deferred until Inbox mode so startup document paint owns the I/O lane.
+  // Initial scan + watcher subscription, scoped to the active vault.
   // The watcher overlays the polling baseline: any file_event triggers
   // a re-scan rather than a delta apply, which keeps the UI source of
   // truth a single `scan_inbox_drop` snapshot.
   useEffect(() => {
-    if (!inboxWorkspacePath) {
+    if (!activeVaultPath) {
       setInboxDrops([]);
-      return;
-    }
-    if (appMode !== "inbox") {
       return;
     }
     let cancelled = false;
@@ -925,9 +403,9 @@ function MainApp() {
       void refreshInbox();
 
       try {
-        await startInboxWatcher(inboxWorkspacePath);
+        await startInboxWatcher(activeVaultPath);
       } catch (err) {
-        // Most likely cause: <workspace>/inbox/downloads doesn't exist yet.
+        // Most likely cause: <vault>/inbox/downloads doesn't exist yet.
         // Surface a soft notice but keep polling functional.
         if (!cancelled) {
           // eslint-disable-next-line no-console
@@ -960,220 +438,112 @@ function MainApp() {
         // best-effort
       });
     };
-  }, [inboxWorkspacePath, appMode, refreshInbox]);
+  }, [activeVaultPath, refreshInbox]);
 
-  const loadWorkspace = useCallback(
-    async (
-      path: string,
-      visibility: WorkspaceVisibility,
-      preferRelPath: string | null = null,
-    ) => {
-      const requestId = ++loadWorkspaceRequestRef.current;
-      updateWorkspaceState(path, {
-        loading: true,
-        refreshing: false,
-        startupIoReady: false,
-      });
+  const loadVault = useCallback(
+    async (path: string, preferRelPath: string | null = null) => {
+      setLoading(true);
       setError(null);
-      const storedTabs = readStoredTabsForWorkspace(path);
-
-      const restorePrimaryTab = async (nextEntries: VaultEntry[]) => {
-        if (requestId !== loadWorkspaceRequestRef.current) return false;
-        updateWorkspaceState(path, { entries: nextEntries });
-
-        const { candidate, tabEntries } = planVaultStartup(
-          nextEntries,
-          storedTabs,
-          preferRelPath,
-        );
-
-        if (!candidate) {
-          setTabs((prev) => prev.filter((tab) => tab.workspacePath !== path));
-          setActiveTabId((current) => {
-            const stillOpen = tabs.some(
-              (tab) => tab.id === current && tab.workspacePath !== path,
-            );
-            return stillOpen ? current : null;
-          });
-          setPendingSelectedPath(null);
-          updateWorkspaceState(path, { loading: false, startupIoReady: true });
-          return true;
-        }
-
-        const payload = await readDocument(path, candidate.path);
-        if (requestId !== loadWorkspaceRequestRef.current) return false;
-        const primaryTab: EditorTab = {
-          id: tabIdForEntry(candidate),
-          workspacePath: path,
-          visibility,
-          entry: candidate,
-          document: payload,
-          draftContent: payload.content,
-        };
-        setTabs((prev) => {
-          const otherWorkspaceTabs = prev.filter((tab) => tab.workspacePath !== path);
-          return [...otherWorkspaceTabs, primaryTab];
-        });
-        setActiveTabId(primaryTab.id);
-        setPendingSelectedPath(null);
-        updateWorkspaceState(path, { loading: false, startupIoReady: true });
-        pushRecent(candidate.path);
-
-        const rest = tabEntries.slice(1);
-        if (rest.length > 0) {
-          void (async () => {
-            const loaded = await Promise.allSettled(
-              rest.map(async (entry) => {
-                const payload = await readDocument(path, entry.path);
-                return {
-                  id: tabIdForEntry(entry),
-                  workspacePath: path,
-                  visibility,
-                  entry,
-                  document: payload,
-                  draftContent: payload.content,
-                } satisfies EditorTab;
-              }),
-            );
-            if (requestId !== loadWorkspaceRequestRef.current) return;
-            const nextTabs = loaded.flatMap((result) =>
-              result.status === "fulfilled" ? [result.value] : [],
-            );
-            if (nextTabs.length === 0) return;
-            setTabs((prev) => {
-              const seen = new Set(prev.map((tab) => tab.id));
-              return [
-                ...prev,
-                ...nextTabs.filter((tab) => {
-                  if (seen.has(tab.id)) return false;
-                  seen.add(tab.id);
-                  return true;
-                }),
-              ].slice(0, 8);
-            });
-          })();
-        }
-
-        return true;
-      };
-
-      const mergeFreshEntries = (fresh: VaultEntry[]) => {
-        updateWorkspaceState(path, { entries: fresh });
-        setTabs((prev) =>
-          prev.map((tab) =>
-            tab.workspacePath === path ? mergeFreshEntry(tab, fresh) : tab,
-          ),
-        );
-      };
-
-      const runAuthoritativeScan = async (paintAfterScan: boolean) => {
-        if (!paintAfterScan) updateWorkspaceState(path, { refreshing: true });
-        try {
-          const fresh = await scanVault(path);
-          if (requestId !== loadWorkspaceRequestRef.current) return;
-          if (paintAfterScan) {
-            await restorePrimaryTab(fresh);
-          } else {
-            mergeFreshEntries(fresh);
-          }
-        } catch (err) {
-          if (requestId !== loadWorkspaceRequestRef.current) return;
-          setError(err instanceof Error ? err.message : String(err));
-          if (paintAfterScan) {
-            updateWorkspaceState(path, { loading: false, startupIoReady: true });
-          }
-        } finally {
-          if (requestId === loadWorkspaceRequestRef.current) {
-            updateWorkspaceState(path, { refreshing: false });
-          }
-        }
-      };
-
       try {
-        const cached = await readVaultCache(path);
-        if (requestId !== loadWorkspaceRequestRef.current) return;
-        const paintedFromCache = cached ? await restorePrimaryTab(cached) : false;
-        if (paintedFromCache) {
-          void runAuthoritativeScan(false);
+        const nextEntries = await scanVault(path);
+        setEntries(nextEntries);
+
+        const storedTabs = readStoredTabsForVault(path);
+        const findEntry = (relOrPath: string | null | undefined) =>
+          relOrPath
+            ? nextEntries.find(
+                (entry) => entry.relPath === relOrPath || entry.path === relOrPath,
+              ) ?? null
+            : null;
+
+        const preferredEntry = findEntry(preferRelPath);
+        const storedActiveEntry = findEntry(storedTabs?.activeRelPath);
+        const storedEntries =
+          storedTabs?.relPaths
+            .map(findEntry)
+            .filter((entry): entry is VaultEntry => entry !== null) ?? [];
+        const candidate = preferredEntry ?? storedActiveEntry ?? storedEntries[0] ?? nextEntries[0] ?? null;
+
+        if (candidate) {
+          const tabEntries = [candidate, ...storedEntries].filter(
+            (entry, index, arr) => arr.findIndex((other) => other.path === entry.path) === index,
+          );
+          const openedTabs: EditorTab[] = [];
+          for (const entry of tabEntries.slice(0, 8)) {
+            const payload = await readDocument(path, entry.path);
+            openedTabs.push({
+              id: tabIdForEntry(entry),
+              entry,
+              document: payload,
+              draftContent: payload.content,
+            });
+          }
+          setTabs(openedTabs);
+          setActiveTabId(tabIdForEntry(candidate));
+          pushRecent(candidate.path);
         } else {
-          await runAuthoritativeScan(true);
+          setTabs([]);
+          setActiveTabId(null);
         }
-      } catch {
-        await runAuthoritativeScan(true);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
       }
     },
-    [pushRecent, readStoredTabsForWorkspace, tabs, updateWorkspaceState],
+    [pushRecent, readStoredTabsForVault],
   );
 
-  const switchActiveWorkspace = useCallback(
-    async (path: string, visibility: WorkspaceVisibility) => {
+  const switchActiveVault = useCallback(
+    async (path: string) => {
       try {
-        const registry = await setActiveWorkspaceRoot(path, visibility);
-        setWorkspaceRegistry(registry);
-        setExplorerVisibility(visibility);
+        const list = await setActiveVault(path);
+        setVaultList(list);
         const lastRel =
           typeof window !== "undefined"
-            ? window.localStorage.getItem(lastOpenKeyForWorkspace(path))
+            ? window.localStorage.getItem(lastOpenKeyForVault(path))
             : null;
-        await loadWorkspace(path, visibility, lastRel);
+        await loadVault(path, lastRel);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [lastOpenKeyForWorkspace, loadWorkspace],
+    [loadVault, lastOpenKeyForVault],
   );
 
-  // Boot: load registry, fall back to a private sample workspace if empty.
+  // Boot: load registry, fall back to sample vault if empty.
   useEffect(() => {
     async function boot() {
       try {
-        setBooting(true);
-        const registry = await listWorkspaceRoots();
-        if (registry.workspaces.length === 0) {
+        const list = await listVaults();
+        if (list.vaults.length === 0) {
           const samplePath = await getSampleVaultPath();
-          const seeded = await addWorkspaceRoot({
-            label: "Sample Workspace",
-            path: samplePath,
-            visibility: "private",
-            provider: "local",
-            providerId: null,
-            externalWriter: null,
-            writePolicy: "direct",
-            permissionSummary: null,
-          });
-          setWorkspaceRegistry(seeded);
-          if (seeded.activeByVisibility.private) {
-            setExplorerVisibility("private");
-            await loadWorkspace(seeded.activeByVisibility.private, "private");
-            setBooting(false);
+          const seeded = await addVault("Sample", samplePath, null);
+          setVaultList(seeded);
+          if (seeded.activeVault) {
+            await loadVault(seeded.activeVault);
           } else {
-            setBooting(false);
+            setLoading(false);
           }
           return;
         }
-        setWorkspaceRegistry(registry);
-        const initialVisibility: WorkspaceVisibility =
-          registry.activeByVisibility.private || registry.workspaces.some((w) => w.visibility === "private")
-            ? "private"
-            : "public";
-        setExplorerVisibility(initialVisibility);
-        const initialPath =
-          registry.activeByVisibility[initialVisibility] ??
-          registry.workspaces.find((workspace) => workspace.visibility === initialVisibility)?.path ??
-          null;
-        if (initialPath) {
+        setVaultList(list);
+        if (list.activeVault) {
           const lastRel =
             typeof window !== "undefined"
-              ? window.localStorage.getItem(lastOpenKeyForWorkspace(initialPath))
+              ? window.localStorage.getItem(lastOpenKeyForVault(list.activeVault))
               : null;
-          await loadWorkspace(initialPath, initialVisibility, lastRel);
-          setBooting(false);
+          await loadVault(list.activeVault, lastRel);
+        } else if (list.vaults[0]) {
+          // Vaults exist but none active — auto-pick the first to avoid the
+          // confusing "no vaults registered" empty-state in the topbar.
+          await switchActiveVault(list.vaults[0].path);
         } else {
-          setBooting(false);
+          setLoading(false);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
-        setBooting(false);
+        setLoading(false);
       }
     }
     void boot();
@@ -1181,135 +551,97 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAddWorkspace = useCallback(
-    async (entry: WorkspaceRootEntry) => {
-      const registry = await addWorkspaceRoot(entry);
-      setWorkspaceRegistry(registry);
-      setExplorerVisibility(entry.visibility);
-      await loadWorkspace(entry.path, entry.visibility);
+  const handleAddVault = useCallback(
+    async (label: string, path: string, externalWriter: string | null) => {
+      await addVault(label, path, externalWriter);
+      // The user just added this vault — they want to work in it. Always
+      // make it active and load its entries, regardless of whether Rust
+      // auto-promoted it (which only happens when there was no prior
+      // active vault).
+      await switchActiveVault(path);
     },
-    [loadWorkspace],
+    [switchActiveVault],
   );
 
-  const handleRegisterWorkspace = useCallback(
-    async (workPath: string) => {
-      const outcome = await registerWorkspaceRoots(workPath);
-      setWorkspaceRegistry(outcome.workspaceRegistry);
-      setExplorerVisibility("private");
-      await loadWorkspace(outcome.privateWorkspacePath, "private");
-    },
-    [loadWorkspace],
-  );
-
-  const handleRefreshWorkspaceCapabilities = useCallback(async (path: string) => {
-    try {
-      const registry = await refreshWorkspaceCapabilities(path);
-      setWorkspaceRegistry(registry);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }, []);
-
-  const handleRemoveWorkspace = useCallback(
+  const handleRemoveVault = useCallback(
     async (path: string) => {
-      const confirmation = window.confirm(`${path}\n\n${t("workspace.remove.confirm")}`);
+      const confirmation = window.confirm(`${path}\n\n${t("vault.remove.confirm")}`);
       if (!confirmation) return;
-      const registry = await removeWorkspaceRoot(path);
-      setWorkspaceRegistry(registry);
-      setWorkspaceStates((current) => {
-        const next = { ...current };
-        delete next[path];
-        return next;
-      });
-      setTabs((prev) => prev.filter((tab) => tab.workspacePath !== path));
-      const nextPath =
-        registry.activeByVisibility[explorerVisibility] ??
-        registry.activeByVisibility.private ??
-        registry.activeByVisibility.public;
-      if (nextPath) {
-        const nextVisibility =
-          registry.workspaces.find((workspace) => workspace.path === nextPath)?.visibility ??
-          explorerVisibility;
-        setExplorerVisibility(nextVisibility);
-        await loadWorkspace(nextPath, nextVisibility);
+      const list = await removeVault(path);
+      setVaultList(list);
+      if (list.activeVault) {
+        await loadVault(list.activeVault);
+      } else {
+        setEntries([]);
+        setTabs([]);
+        setActiveTabId(null);
       }
     },
-    [explorerVisibility, loadWorkspace, t],
+    [loadVault, t],
   );
 
-  const useSampleWorkspace = useCallback(async () => {
+  const useSampleVault = useCallback(async () => {
     try {
       const samplePath = await getSampleVaultPath();
-      const exists = workspaceRegistry.workspaces.find((workspace) => workspace.path === samplePath);
+      const exists = vaultList.vaults.find((v) => v.path === samplePath);
       if (!exists) {
-        await handleAddWorkspace({
-          label: "Sample Workspace",
-          path: samplePath,
-          visibility: "private",
-          provider: "local",
-          providerId: null,
-          externalWriter: null,
-          writePolicy: "direct",
-          permissionSummary: null,
-        });
+        await handleAddVault("Sample", samplePath, null);
       } else {
-        await switchActiveWorkspace(samplePath, exists.visibility);
+        await switchActiveVault(samplePath);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [workspaceRegistry.workspaces, handleAddWorkspace, switchActiveWorkspace]);
+  }, [vaultList.vaults, handleAddVault, switchActiveVault]);
 
   const openNewDocumentDialog = useCallback(() => {
-    if (!activeWorkspaceCanCreate) {
-      setError(
-        t("workspace.writeBlocked", {
-          reason:
-            workspaceWriteReason(activeDocumentWorkspace, "create") ??
-            "workspace capabilities",
-        }),
-      );
+    if (activeVaultReadOnly) {
+      setError(t("vault.writeDelegated", { writer: activeVaultExternalWriter ?? "external writer" }));
       return;
     }
     setNewDocumentSeed(null);
     setNewDocumentOpen(true);
-  }, [activeDocumentWorkspace, activeWorkspaceCanCreate, t]);
+  }, [activeVaultReadOnly, activeVaultExternalWriter, t]);
 
-  const blockWorkspaceWrite = useCallback(
-    (action: "create" | "modify" = "modify") => {
-      if (workspaceCan(activeDocumentWorkspace, action)) return false;
-      setError(
-        t("workspace.writeBlocked", {
-          reason:
-            workspaceWriteReason(activeDocumentWorkspace, action) ??
-            "workspace capabilities",
-        }),
-      );
-      return true;
-    },
-    [activeDocumentWorkspace, t],
-  );
+  const blockDelegatedWrite = useCallback(() => {
+    if (!activeVaultReadOnly) return false;
+    setError(t("vault.writeDelegated", { writer: activeVaultExternalWriter ?? "external writer" }));
+    return true;
+  }, [activeVaultReadOnly, activeVaultExternalWriter, t]);
 
   const selectEntry = useCallback(
     async (entry: VaultEntry) => {
-      const owner =
-        workspaceRegistry.workspaces
+      // Recover from state desync: if entries are loaded but the registry
+      // lost track of the active vault (manual vaults.json edit, prior
+      // failed switch), pick the vault whose path actually contains this
+      // entry. Falling back blindly to vaults[0] is wrong when the entry
+      // came from a different registered vault — readDocument would then
+      // reject with "Document path escapes the selected vault".
+      //
+      // Prefer the longest-matching vault root so that a sub-vault registered
+      // alongside its parent (e.g. sample-vault inside ~/workspace/work)
+      // wins for entries that live below it.
+      let vaultPath = activeVaultPath;
+      if (!vaultPath && vaultList.vaults.length > 0) {
+        const owner = vaultList.vaults
           .filter(
-            (workspace) =>
-              entry.path === workspace.path || entry.path.startsWith(`${workspace.path}/`),
+            (v) => entry.path === v.path || entry.path.startsWith(`${v.path}/`),
           )
-          .sort((a, b) => b.path.length - a.path.length)[0] ?? explorerWorkspace;
-      const workspacePath = owner?.path ?? null;
-      const visibility = owner?.visibility ?? explorerVisibility;
-      if (!workspacePath) {
-        setError(t("workspace.error.noneActive"));
+          .sort((a, b) => b.path.length - a.path.length)[0];
+        vaultPath = owner?.path ?? vaultList.vaults[0].path;
+        try {
+          const updated = await setActiveVault(vaultPath);
+          setVaultList(updated);
+        } catch {
+          // Best effort — proceed with the inferred path even if persist fails.
+        }
+      }
+      if (!vaultPath) {
+        setError("No active vault. Open or create one first.");
         return false;
       }
-      setPendingSelectedPath(entry.path);
 
-      const existingTab = tabs.find(
-        (tab) => tab.workspacePath === workspacePath && tab.entry.path === entry.path,
-      );
+      const existingTab = tabs.find((tab) => tab.entry.path === entry.path);
       const isSameEntry = selectedEntry?.path === entry.path;
       // Push the *previous* selection onto history before we replace it.
       // Skip when navigateBack/Forward is the caller — they manage manually.
@@ -1320,10 +652,8 @@ function MainApp() {
       }
       if (existingTab) {
         setActiveTabId(existingTab.id);
-        setExplorerVisibility(existingTab.visibility);
-        setPendingSelectedPath(null);
         if (typeof window !== "undefined") {
-          window.localStorage.setItem(lastOpenKeyForWorkspace(workspacePath), entry.relPath);
+          window.localStorage.setItem(lastOpenKeyForVault(vaultPath), entry.relPath);
         }
         pushRecent(entry.path);
         return true;
@@ -1332,77 +662,61 @@ function MainApp() {
       const reqId = ++selectRequestRef.current;
       setError(null);
       try {
-        const payload = await readDocument(workspacePath, entry.path);
+        const payload = await readDocument(vaultPath, entry.path);
         // Drop stale responses — a later click already superseded this one.
         if (reqId !== selectRequestRef.current) return false;
         const newTab: EditorTab = {
           id: tabIdForEntry(entry),
-          workspacePath,
-          visibility,
           entry,
           document: payload,
           draftContent: payload.content,
         };
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newTab.id);
-        setExplorerVisibility(visibility);
-        setPendingSelectedPath(null);
         if (typeof window !== "undefined") {
-          window.localStorage.setItem(lastOpenKeyForWorkspace(workspacePath), entry.relPath);
+          window.localStorage.setItem(lastOpenKeyForVault(vaultPath), entry.relPath);
         }
         pushRecent(entry.path);
         return true;
       } catch (err) {
         if (reqId !== selectRequestRef.current) return false;
-        setPendingSelectedPath(null);
         setError(err instanceof Error ? err.message : String(err));
         return false;
       }
     },
-    [
-      explorerVisibility,
-      explorerWorkspace,
-      lastOpenKeyForWorkspace,
-      pushRecent,
-      selectedEntry,
-      t,
-      tabs,
-      workspaceRegistry.workspaces,
-    ],
+    [activeVaultPath, vaultList.vaults, tabs, selectedEntry, lastOpenKeyForVault, pushRecent],
   );
 
   const navigateBack = useCallback(() => {
     if (!selectedEntry) return;
     const { history, target } = goBack(navHistory, selectedEntry.path);
     if (!target) return;
-    const entry = activeDocumentEntries.find((e) => e.path === target);
+    const entry = entries.find((e) => e.path === target);
     if (!entry) return;
     setNavHistory(history);
     skipNextHistoryPushRef.current = true;
     void selectEntry(entry);
-  }, [selectedEntry, navHistory, activeDocumentEntries, selectEntry]);
+  }, [selectedEntry, navHistory, entries, selectEntry]);
 
   const navigateForward = useCallback(() => {
     if (!selectedEntry) return;
     const { history, target } = goForward(navHistory, selectedEntry.path);
     if (!target) return;
-    const entry = activeDocumentEntries.find((e) => e.path === target);
+    const entry = entries.find((e) => e.path === target);
     if (!entry) return;
     setNavHistory(history);
     skipNextHistoryPushRef.current = true;
     void selectEntry(entry);
-  }, [selectedEntry, navHistory, activeDocumentEntries, selectEntry]);
+  }, [selectedEntry, navHistory, entries, selectEntry]);
 
   const restoreDiscardedEdit = useCallback(async () => {
-    if (!discardedEdit) return;
+    if (!discardedEdit || !activeVaultPath) return;
     const reqId = ++selectRequestRef.current;
     try {
-      const payload = await readDocument(discardedEdit.workspacePath, discardedEdit.entry.path);
+      const payload = await readDocument(activeVaultPath, discardedEdit.entry.path);
       if (reqId !== selectRequestRef.current) return;
       const restoredTab: EditorTab = {
         id: tabIdForEntry(discardedEdit.entry),
-        workspacePath: discardedEdit.workspacePath,
-        visibility: discardedEdit.visibility,
         entry: discardedEdit.entry,
         document: payload,
         draftContent: discardedEdit.draft,
@@ -1414,23 +728,21 @@ function MainApp() {
           : [...prev, restoredTab];
       });
       setActiveTabId(restoredTab.id);
-      setExplorerVisibility(restoredTab.visibility);
-      setPendingSelectedPath(null);
       setDiscardedEdit(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [discardedEdit]);
+  }, [discardedEdit, activeVaultPath]);
 
   const saveCurrent = useCallback(async () => {
-    if (!document || !dirty || !activeDocumentWorkspacePath) return;
-    if (blockWorkspaceWrite("modify")) return;
+    if (!document || !dirty || !activeVaultPath) return;
+    if (blockDelegatedWrite()) return;
     setSaving(true);
     setError(null);
     try {
-      const saved = await saveDocument(activeDocumentWorkspacePath, document.path, draftContent);
-      const fresh = await scanVault(activeDocumentWorkspacePath);
-      updateWorkspaceState(activeDocumentWorkspacePath, { entries: fresh });
+      const saved = await saveDocument(activeVaultPath, document.path, draftContent);
+      const fresh = await scanVault(activeVaultPath);
+      setEntries(fresh);
       updateActiveTab((tab) => {
         const freshEntry = fresh.find((entry) => entry.path === tab.entry.path) ?? tab.entry;
         return { ...tab, entry: freshEntry, document: saved, draftContent: saved.content };
@@ -1441,30 +753,22 @@ function MainApp() {
     } finally {
       setSaving(false);
     }
-  }, [
-    document,
-    dirty,
-    activeDocumentWorkspacePath,
-    draftContent,
-    updateActiveTab,
-    blockWorkspaceWrite,
-    updateWorkspaceState,
-  ]);
+  }, [document, dirty, activeVaultPath, draftContent, updateActiveTab, blockDelegatedWrite]);
 
   const snapshotCurrent = useCallback(async () => {
-    if (!document || !activeDocumentWorkspacePath) return;
-    if (blockWorkspaceWrite("create")) return;
+    if (!document || !activeVaultPath) return;
+    if (blockDelegatedWrite()) return;
     setError(null);
     try {
       const snapshot = await createVersion(
-        activeDocumentWorkspacePath,
+        activeVaultPath,
         document.path,
         document.title,
         draftContent,
         t("snapshot.summary"),
       );
-      const fresh = await scanVault(activeDocumentWorkspacePath);
-      updateWorkspaceState(activeDocumentWorkspacePath, { entries: fresh });
+      const fresh = await scanVault(activeVaultPath);
+      setEntries(fresh);
       updateActiveTab((tab) => {
         const freshEntry = fresh.find((entry) => entry.path === tab.entry.path) ?? tab.entry;
         return { ...tab, entry: freshEntry };
@@ -1473,29 +777,15 @@ function MainApp() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [
-    document,
-    activeDocumentWorkspacePath,
-    draftContent,
-    t,
-    updateActiveTab,
-    blockWorkspaceWrite,
-    updateWorkspaceState,
-  ]);
+  }, [document, activeVaultPath, draftContent, t, updateActiveTab, blockDelegatedWrite]);
 
   const createNew = useCallback(
     async (title: string, docType: string, body: string, targetRelPath: string | null) => {
-      if (!activeDocumentWorkspacePath) return;
-      if (blockWorkspaceWrite("create")) return;
-      const created = await createDocument(
-        activeDocumentWorkspacePath,
-        title,
-        docType,
-        body,
-        targetRelPath,
-      );
-      const fresh = await scanVault(activeDocumentWorkspacePath);
-      updateWorkspaceState(activeDocumentWorkspacePath, { entries: fresh });
+      if (!activeVaultPath) return;
+      if (blockDelegatedWrite()) return;
+      const created = await createDocument(activeVaultPath, title, docType, body, targetRelPath);
+      const fresh = await scanVault(activeVaultPath);
+      setEntries(fresh);
       const entry =
         fresh.find((item) => item.relPath === created.relPath || item.path === created.path) ??
         ({
@@ -1507,13 +797,11 @@ function MainApp() {
           wordCount: 0,
           snippet: "",
           fileKind: "md",
-            versionCount: 0,
+          versionCount: 0,
         } satisfies VaultEntry);
-      const payload = await readDocument(activeDocumentWorkspacePath, created.path);
+      const payload = await readDocument(activeVaultPath, created.path);
       const newTab: EditorTab = {
         id: tabIdForEntry(entry),
-        workspacePath: activeDocumentWorkspacePath,
-        visibility: activeDocumentWorkspace?.visibility ?? explorerVisibility,
         entry,
         document: payload,
         draftContent: payload.content,
@@ -1525,26 +813,18 @@ function MainApp() {
           : [...prev, newTab];
       });
       setActiveTabId(newTab.id);
-      setPendingSelectedPath(null);
       pushRecent(entry.path);
     },
-    [
-      activeDocumentWorkspace,
-      activeDocumentWorkspacePath,
-      explorerVisibility,
-      pushRecent,
-      blockWorkspaceWrite,
-      updateWorkspaceState,
-    ],
+    [activeVaultPath, pushRecent, blockDelegatedWrite],
   );
 
   const handleWikilinkClick = useCallback(
     (target: string) => {
-      const resolved = resolveWikilinkTarget(activeDocumentEntries, target);
+      const resolved = resolveWikilinkTarget(entries, target);
       if (resolved) {
         void selectEntry(resolved);
       } else {
-        if (blockWorkspaceWrite("create")) return;
+        if (blockDelegatedWrite()) return;
         setNewDocumentSeed({
           title: titleFromWikilinkTarget(target),
           relPath: target.trim(),
@@ -1553,24 +833,19 @@ function MainApp() {
         setError(null);
       }
     },
-    [activeDocumentEntries, selectEntry, blockWorkspaceWrite],
+    [entries, selectEntry, blockDelegatedWrite],
   );
 
   const updateField = useCallback(
     async (key: string, value: string | string[] | number | boolean | null) => {
-      if (!document || !activeDocumentWorkspacePath) return;
-      if (blockWorkspaceWrite("modify")) return;
+      if (!document || !activeVaultPath) return;
+      if (blockDelegatedWrite()) return;
       try {
-        const next = await updateFrontmatterField(
-          activeDocumentWorkspacePath,
-          document.path,
-          key,
-          value,
-        );
+        const next = await updateFrontmatterField(activeVaultPath, document.path, key, value);
         // Refresh draft only when there are no unsaved body edits — never
         // clobber the textarea with an inspector-driven write.
-        const fresh = await scanVault(activeDocumentWorkspacePath);
-        updateWorkspaceState(activeDocumentWorkspacePath, { entries: fresh });
+        const fresh = await scanVault(activeVaultPath);
+        setEntries(fresh);
         updateActiveTab((tab) => {
           const freshEntry = fresh.find((entry) => entry.path === tab.entry.path) ?? tab.entry;
           return {
@@ -1584,99 +859,28 @@ function MainApp() {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [
-      document,
-      activeDocumentWorkspacePath,
-      draftContent,
-      updateActiveTab,
-      blockWorkspaceWrite,
-      updateWorkspaceState,
-    ],
+    [document, activeVaultPath, draftContent, updateActiveTab, blockDelegatedWrite],
   );
 
   const refreshCurrent = useCallback(async () => {
-    if (!explorerWorkspacePath) return;
+    if (!activeVaultPath) return;
     const lastRel =
       typeof window !== "undefined"
-        ? window.localStorage.getItem(lastOpenKeyForWorkspace(explorerWorkspacePath))
+        ? window.localStorage.getItem(lastOpenKeyForVault(activeVaultPath))
         : null;
-    await loadWorkspace(explorerWorkspacePath, explorerVisibility, lastRel);
-  }, [
-    explorerVisibility,
-    explorerWorkspacePath,
-    lastOpenKeyForWorkspace,
-    loadWorkspace,
-  ]);
+    await loadVault(activeVaultPath, lastRel);
+  }, [activeVaultPath, lastOpenKeyForVault, loadVault]);
 
   const focusSearch = useCallback(() => {
-    if (!documentsPaneOpen) {
-      updateLayoutSettings({ documentsPaneOpen: true });
-      window.requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      });
-      return;
-    }
     searchInputRef.current?.focus();
     searchInputRef.current?.select();
-  }, [documentsPaneOpen, updateLayoutSettings]);
-
-  const openCommandPalette = useCallback(() => {
-    setCommandPaletteOpen(true);
   }, []);
-
-  const closeCommandPalette = useCallback(() => {
-    setCommandPaletteOpen(false);
-  }, []);
-
-  const openAddWorkspaceDialog = useCallback((visibility: WorkspaceVisibility = explorerVisibility) => {
-    setAddWorkspaceDefaultVisibility(visibility);
-    setAddWorkspaceOpen(true);
-  }, [explorerVisibility]);
-
-  const openPreferences = useCallback(() => {
-    void openSettingsWindow(settingsWorkPath).catch((err) => {
-      setError(err instanceof Error ? err.message : String(err));
-    });
-  }, [settingsWorkPath]);
-
-  const toggleLocale = useCallback(() => {
-    setLocale(locale === "ko" ? "en" : "ko");
-  }, [locale, setLocale]);
-
-  const refreshActiveSurface = useCallback(() => {
-    if (appMode === "inbox") {
-      void refreshInbox();
-      void refreshGmail();
-    } else {
-      void refreshCurrent();
-    }
-  }, [appMode, refreshCurrent, refreshGmail, refreshInbox]);
-
-  const revealTargetInFinder = useCallback(
-    (targetPath: string) => {
-      const workspacePath =
-        workspaceRegistry.workspaces
-          .filter(
-            (workspace) =>
-              targetPath === workspace.path || targetPath.startsWith(`${workspace.path}/`),
-          )
-          .sort((a, b) => b.path.length - a.path.length)[0]?.path ??
-        explorerWorkspacePath;
-      if (!workspacePath) return;
-      void revealInFileManager(workspacePath, targetPath).catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-    },
-    [explorerWorkspacePath, workspaceRegistry.workspaces],
-  );
 
   const selectTab = useCallback(
     (tabId: string) => {
       const tab = tabs.find((item) => item.id === tabId);
       if (!tab) return;
       setActiveTabId(tabId);
-      setExplorerVisibility(tab.visibility);
       pushRecent(tab.entry.path);
     },
     [tabs, pushRecent],
@@ -1686,12 +890,7 @@ function MainApp() {
     (tabId: string) => {
       const closing = tabs.find((tab) => tab.id === tabId);
       if (closing && closing.draftContent !== closing.document.content) {
-        setDiscardedEdit({
-          workspacePath: closing.workspacePath,
-          visibility: closing.visibility,
-          entry: closing.entry,
-          draft: closing.draftContent,
-        });
+        setDiscardedEdit({ entry: closing.entry, draft: closing.draftContent });
       }
       setTabs((prev) => {
         const closingIndex = prev.findIndex((tab) => tab.id === tabId);
@@ -1717,31 +916,23 @@ function MainApp() {
 
   const handleCommitClick = useCallback(
     (status: GitStatus) => {
-      if (blockWorkspaceWrite("modify")) return;
-      if (!activeDocumentWorkspacePath) return;
-      setCommitDialog({ path: activeDocumentWorkspacePath, status });
+      if (blockDelegatedWrite()) return;
+      setCommitDialog(status);
     },
-    [activeDocumentWorkspacePath, blockWorkspaceWrite],
+    [blockDelegatedWrite],
   );
 
   const jumpToOutlineLine = useCallback((line: number) => {
-    const jump = () => {
-      const ta = editorTextareaRef.current;
-      if (!ta) return false;
-      const lines = ta.value.split("\n");
-      let pos = 0;
-      for (let i = 0; i < line && i < lines.length; i++) pos += lines[i].length + 1;
-      ta.focus();
-      ta.setSelectionRange(pos, pos + (lines[line]?.length ?? 0));
-      const lineHeight = parseFloat(getComputedStyle(ta).lineHeight || "20");
-      ta.scrollTop = Math.max(0, line * lineHeight - ta.clientHeight / 3);
-      return true;
-    };
-    if (jump()) return;
-    setEditorViewMode("source");
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(jump);
-    });
+    const ta = editorTextareaRef.current;
+    if (!ta) return;
+    const lines = ta.value.split("\n");
+    let pos = 0;
+    for (let i = 0; i < line && i < lines.length; i++) pos += lines[i].length + 1;
+    ta.focus();
+    ta.setSelectionRange(pos, pos + (lines[line]?.length ?? 0));
+    // Scroll the line into view.
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight || "20");
+    ta.scrollTop = Math.max(0, line * lineHeight - ta.clientHeight / 3);
   }, []);
 
   const runCommand = useCallback(
@@ -1760,13 +951,18 @@ function MainApp() {
           setEditorViewMode((mode) => (mode === "preview" ? "rich" : "preview"));
           break;
         case "toggle-outline":
-          updateLayoutSettings({ outlineOpen: !outlineOpen });
+          setOutlineOpen((v) => !v);
           break;
         case "toggle-locale":
-          toggleLocale();
+          setLocale(locale === "ko" ? "en" : "ko");
           break;
-        case "refresh-workspace":
-          refreshActiveSurface();
+        case "refresh-vault":
+          if (appMode === "inbox") {
+            void refreshInbox();
+            void refreshGmail();
+          } else {
+            void refreshCurrent();
+          }
           break;
         case "open-inbox":
           setAppMode("inbox");
@@ -1774,24 +970,21 @@ function MainApp() {
         case "open-docs":
           setAppMode("pkm");
           break;
-        case "add-workspace":
-          openAddWorkspaceDialog();
-          break;
-        case "open-settings":
-          openPreferences();
+        case "add-vault":
+          setAddVaultOpen(true);
           break;
       }
     },
     [
       saveCurrent,
       snapshotCurrent,
-      refreshActiveSurface,
-      toggleLocale,
-      openAddWorkspaceDialog,
+      refreshCurrent,
+      refreshInbox,
+      refreshGmail,
+      appMode,
+      locale,
+      setLocale,
       openNewDocumentDialog,
-      openPreferences,
-      updateLayoutSettings,
-      outlineOpen,
     ],
   );
 
@@ -1802,11 +995,17 @@ function MainApp() {
       "mod+n": openNewDocumentDialog,
       "mod+k": () => setCommandPaletteOpen((v) => !v),
       "mod+p": () => setEditorViewMode((mode) => (mode === "preview" ? "rich" : "preview")),
-      "mod+\\": () => updateLayoutSettings({ outlineOpen: !outlineOpen }),
+      "mod+\\": () => setOutlineOpen((v) => !v),
       "mod+f": focusSearch,
-      "mod+r": refreshActiveSurface,
-      "mod+shift+l": toggleLocale,
-      "mod+,": openPreferences,
+      "mod+r": () => {
+        if (appMode === "inbox") {
+          void refreshInbox();
+          void refreshGmail();
+        } else {
+          void refreshCurrent();
+        }
+      },
+      "mod+shift+l": () => setLocale(locale === "ko" ? "en" : "ko"),
       "mod+[": navigateBack,
       "mod+]": navigateForward,
       "mod+1": () => selectTabByIndex(0),
@@ -1824,48 +1023,28 @@ function MainApp() {
     [
       saveCurrent,
       snapshotCurrent,
+      refreshCurrent,
       focusSearch,
-      toggleLocale,
-      refreshActiveSurface,
+      locale,
+      setLocale,
       navigateBack,
       navigateForward,
       selectTabByIndex,
       openNewDocumentDialog,
-      openPreferences,
       closeTab,
       resolvedActiveTabId,
-      updateLayoutSettings,
-      outlineOpen,
+      appMode,
+      refreshInbox,
+      refreshGmail,
     ],
   );
 
-  const modeClass = appMode === "inbox" ? " inbox-mode" : "";
-  const shellClass = `app-shell${modeClass}${outlineOpen ? "" : " outline-closed"}${
-    documentTypesPaneOpen ? "" : " types-closed"
-  }${documentsPaneOpen ? "" : " documents-closed"}`;
-  const themeVars = useMemo(() => buildThemeVars(anchorSettings), [anchorSettings]);
-
-  const handleTopbarPointerDown = useCallback((event: React.PointerEvent<HTMLElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement;
-    if (
-      target.closest(
-        "button,input,select,textarea,a,[role='button'],[data-no-drag='true']",
-      )
-    ) {
-      return;
-    }
-    void startWindowDrag().catch(() => {});
-  }, []);
+  const shellClass = `app-shell${appMode === "inbox" ? " inbox-mode" : ""}${outlineOpen ? "" : " outline-closed"}`;
 
   return (
     <LocaleContext.Provider value={localeValue}>
-      <div className={shellClass} style={themeVars}>
-        <header
-          className="topbar"
-          data-tauri-drag-region
-          onPointerDown={handleTopbarPointerDown}
-        >
+      <div className={shellClass}>
+        <header className="topbar">
           <div className="brand-mark" aria-hidden="true">
             A
           </div>
@@ -1873,32 +1052,42 @@ function MainApp() {
             {t("app.title")} <span>{t("app.subtitle.work")}</span>
           </div>
           <div style={{ width: 14 }} />
-          <WorkspaceSwitcher
-            registry={workspaceRegistry}
-            activePath={explorerWorkspacePath}
-            visibility={explorerVisibility}
-            onSelectWorkspace={switchActiveWorkspace}
-            onAddWorkspace={openAddWorkspaceDialog}
-            onRemoveWorkspace={handleRemoveWorkspace}
-            onRefreshCapabilities={handleRefreshWorkspaceCapabilities}
-            onUseSample={useSampleWorkspace}
+          <VaultSwitcher
+            vaultList={vaultList}
+            activeVaultPath={activeVaultPath}
+            onSelectVault={switchActiveVault}
+            onAddVault={() => setAddVaultOpen(true)}
+            onRemoveVault={handleRemoveVault}
+            onUseSample={useSampleVault}
           />
           <GitStatusBadge
-            vaultPath={activeDocumentWorkspacePath}
-            enabled={
-              Boolean(activeDocumentWorkspacePath) &&
-              activeDocumentWorkspaceState.startupIoReady
-            }
+            vaultPath={activeVaultPath}
             refreshTrigger={gitRefreshTick}
-            onCommitClick={activeWorkspaceCanModify ? handleCommitClick : undefined}
+            onCommitClick={handleCommitClick}
           />
 
           <div className="topbar-spacer" />
 
           <button
             type="button"
+            className={appMode === "pkm" ? "topbar-pill active" : "topbar-pill"}
+            onClick={() => setAppMode("pkm")}
+            title={t("mode.pkm")}
+          >
+            {t("mode.pkm")}
+          </button>
+          <button
+            type="button"
+            className={appMode === "inbox" ? "topbar-pill active" : "topbar-pill"}
+            onClick={() => setAppMode("inbox")}
+            title={t("mode.inbox")}
+          >
+            {t("mode.inbox")}
+          </button>
+          <button
+            type="button"
             className="topbar-pill"
-            onClick={openCommandPalette}
+            onClick={() => setCommandPaletteOpen(true)}
             title={t("cmdk.openHint")}
           >
             <span style={{ opacity: 0.55 }}>{t("sidebar.commandPalette")}</span>
@@ -1908,7 +1097,7 @@ function MainApp() {
           <button
             type="button"
             className="topbar-pill"
-            onClick={toggleLocale}
+            onClick={() => setLocale(locale === "ko" ? "en" : "ko")}
             title={t("app.locale.label")}
             aria-label={t("app.locale.label")}
           >
@@ -1916,8 +1105,15 @@ function MainApp() {
           </button>
           <button
             type="button"
-            className={explorerWorkspaceState.refreshing ? "icon-button refreshing" : "icon-button"}
-            onClick={refreshActiveSurface}
+            className="icon-button"
+            onClick={() => {
+              if (appMode === "inbox") {
+                void refreshInbox();
+                void refreshGmail();
+              } else {
+                void refreshCurrent();
+              }
+            }}
             title={t("app.refresh")}
             aria-label={t("app.refresh")}
           >
@@ -1925,93 +1121,16 @@ function MainApp() {
           </button>
         </header>
 
-        <nav className="activity-rail" aria-label={t("activity.label")}>
-          <button
-            type="button"
-            className={appMode === "pkm" ? "activity-button active" : "activity-button"}
-            onClick={() => setAppMode("pkm")}
-            title={t("mode.pkm")}
-            aria-label={t("mode.pkm")}
-          >
-            <FileText size={20} />
-          </button>
-          <button
-            type="button"
-            className={appMode === "inbox" ? "activity-button active" : "activity-button"}
-            onClick={() => setAppMode("inbox")}
-            title={t("mode.inbox")}
-            aria-label={t("mode.inbox")}
-          >
-            <Inbox size={20} />
-          </button>
-          <button
-            type="button"
-            className="activity-button"
-            onClick={openCommandPalette}
-            title={t("sidebar.commandPalette")}
-            aria-label={t("sidebar.commandPalette")}
-          >
-            <Command size={19} />
-          </button>
-          <button
-            type="button"
-            className={documentTypesPaneOpen ? "activity-button active" : "activity-button"}
-            onClick={() =>
-              updateLayoutSettings({ documentTypesPaneOpen: !documentTypesPaneOpen })
-            }
-            title={
-              documentTypesPaneOpen
-                ? t("layout.hideDocumentTypes")
-                : t("layout.showDocumentTypes")
-            }
-            aria-label={
-              documentTypesPaneOpen
-                ? t("layout.hideDocumentTypes")
-                : t("layout.showDocumentTypes")
-            }
-          >
-            {documentTypesPaneOpen ? <PanelLeftClose size={19} /> : <PanelLeftOpen size={19} />}
-          </button>
-          <button
-            type="button"
-            className={documentsPaneOpen ? "activity-button active" : "activity-button"}
-            onClick={() => updateLayoutSettings({ documentsPaneOpen: !documentsPaneOpen })}
-            title={documentsPaneOpen ? t("layout.hideDocuments") : t("layout.showDocuments")}
-            aria-label={
-              documentsPaneOpen ? t("layout.hideDocuments") : t("layout.showDocuments")
-            }
-          >
-            <FileText size={19} />
-          </button>
-          <span className="activity-spacer" />
-          {settingsWorkPath ? (
-            <button
-              type="button"
-              className="activity-button"
-              onClick={openPreferences}
-              title={t("mode.system")}
-              aria-label={t("mode.system")}
-            >
-              <Settings2 size={20} />
-            </button>
-          ) : null}
-        </nav>
-
-        {documentTypesPaneOpen ? (
-          <Sidebar
-            contentCount={documentIndex.contentCount}
-            typeCounts={documentIndex.typeCounts}
-            recentEntries={recentEntries}
-            selectedPath={selectedPath}
-            typeFilter={typeFilter}
-            onTypeFilter={setExplorerTypeFilter}
-            onNewDocument={openNewDocumentDialog}
-            canCreateDocument={activeWorkspaceCanCreate}
-            onSelectRecent={selectEntry}
-            onOpenCommandPalette={openCommandPalette}
-            onClose={() => updateLayoutSettings({ documentTypesPaneOpen: false })}
-          />
-        ) : null}
+        <Sidebar
+          entries={entries}
+          recentEntries={recentEntries}
+          selectedPath={selectedEntry?.path ?? null}
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
+          onNewDocument={openNewDocumentDialog}
+          onSelectRecent={selectEntry}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        />
 
         {appMode === "inbox" ? (
           <InboxPane
@@ -2030,58 +1149,39 @@ function MainApp() {
           />
         ) : (
           <>
-            {documentsPaneOpen ? (
-              <DocumentList
-                documentIndex={documentIndex}
-                selectedPath={selectedPath}
-                query={query}
-                loading={(booting || explorerWorkspaceState.loading) && entries.length === 0}
-                typeFilter={typeFilter}
-                workspaceVisibility={explorerVisibility}
-                publicWorkspaceAvailable={publicWorkspaceAvailable}
-                activeWorkspaceLabel={explorerWorkspaceCaption}
-                onWorkspaceVisibilityChange={(visibility) => {
-                  setExplorerVisibility(visibility);
-                  const nextPath = workspaceRegistry.activeByVisibility[visibility];
-                  if (nextPath && !workspaceStates[nextPath]?.entries.length) {
-                    void loadWorkspace(nextPath, visibility);
-                  }
-                }}
-                onAddPublicWorkspace={() => openAddWorkspaceDialog("public")}
-                browserMode={anchorSettings.ui.documentBrowserMode}
-                collapsedTreeFolders={collapsedTreeFolders}
-                onQueryChange={setExplorerQuery}
-                onBrowserModeChange={setDocumentBrowserMode}
-                onCollapsedTreeFoldersChange={setCollapsedTreeFolders}
-                onSelect={selectEntry}
-                onRevealInFinder={revealTargetInFinder}
-                onClose={() => updateLayoutSettings({ documentsPaneOpen: false })}
-                searchInputRef={searchInputRef}
-                vaultPath={explorerWorkspacePath}
-              />
-            ) : null}
+            <DocumentList
+              entries={entries}
+              selectedPath={selectedEntry?.path ?? null}
+              query={query}
+              loading={loading}
+              typeFilter={typeFilter}
+              onQueryChange={setQuery}
+              onSelect={selectEntry}
+              searchInputRef={searchInputRef}
+            />
 
             <EditorPane
               document={document}
-              openingEntry={openingEntry}
               draftContent={draftContent}
               saving={saving}
               dirty={dirty}
               outlineOpen={outlineOpen}
-              activeWorkspaceLabel={activeDocumentWorkspace?.label ?? null}
-              readOnly={!activeWorkspaceCanModify}
-              canSnapshot={activeWorkspaceCanCreate}
-              readOnlyReason={activeWorkspaceWriteReason}
+              activeVaultLabel={activeVault?.label ?? null}
               viewMode={editorViewMode}
-              tabs={editorTabSummaries}
+              tabs={tabs.map((tab) => ({
+                id: tab.id,
+                title: tab.document.title,
+                relPath: tab.document.relPath,
+                dirty: tab.draftContent !== tab.document.content,
+              }))}
               activeTabId={resolvedActiveTabId}
-              entries={activeDocumentEntries}
+              entries={entries}
               onChange={setDraftContent}
               onSelectTab={selectTab}
               onCloseTab={closeTab}
               onSave={saveCurrent}
               onSnapshot={snapshotCurrent}
-              onToggleOutline={() => updateLayoutSettings({ outlineOpen: !outlineOpen })}
+              onToggleOutline={() => setOutlineOpen((v) => !v)}
               onViewModeChange={setEditorViewMode}
               onWikilinkClick={handleWikilinkClick}
               textareaRef={editorTextareaRef}
@@ -2091,10 +1191,9 @@ function MainApp() {
               <OutlinePane
                 document={document}
                 draftContent={draftContent}
-                entries={activeDocumentEntries}
-                readOnly={!activeWorkspaceCanModify}
+                entries={entries}
                 onJumpToLine={jumpToOutlineLine}
-                onClose={() => updateLayoutSettings({ outlineOpen: false })}
+                onClose={() => setOutlineOpen(false)}
                 onUpdateField={updateField}
                 onSelectEntry={selectEntry}
                 onMissingWikilink={handleWikilinkClick}
@@ -2102,15 +1201,6 @@ function MainApp() {
             ) : null}
           </>
         )}
-
-        <TerminalPanel
-          cwd={activeDocumentWorkspacePath}
-          settings={anchorSettings}
-          open={anchorSettings.ui.layout.terminalOpen}
-          height={anchorSettings.ui.layout.terminalHeight}
-          onOpenChange={(terminalOpen) => updateLayoutSettings({ terminalOpen })}
-          onHeightChange={(terminalHeight) => updateLayoutSettings({ terminalHeight })}
-        />
 
         <div className="toast-stack">
           {error ? (
@@ -2171,24 +1261,22 @@ function MainApp() {
           }}
           onCreate={createNew}
         />
-        <AddWorkspaceDialog
-          open={addWorkspaceOpen}
-          defaultVisibility={addWorkspaceDefaultVisibility}
-          onOpenChange={setAddWorkspaceOpen}
-          onAdd={handleAddWorkspace}
-          onRegisterWorkspace={handleRegisterWorkspace}
+        <AddVaultDialog
+          open={addVaultOpen}
+          onOpenChange={setAddVaultOpen}
+          onAdd={handleAddVault}
         />
         <CommandPalette
           open={commandPaletteOpen}
-          documentIndex={documentIndex}
-          onClose={closeCommandPalette}
+          entries={entries}
+          onClose={() => setCommandPaletteOpen(false)}
           onSelectEntry={selectEntry}
           onRunCommand={runCommand}
         />
         <CommitDialog
           open={commitDialog !== null}
-          vaultPath={commitDialog?.path ?? null}
-          status={commitDialog?.status ?? null}
+          vaultPath={activeVaultPath}
+          status={commitDialog}
           onClose={() => setCommitDialog(null)}
           onCommitted={() => setGitRefreshTick((n) => n + 1)}
         />

@@ -9,9 +9,9 @@ export interface WikilinkSuggestion {
   /** Wikilink target, written as `[[target]]`. Currently the rel path without
    *  extension; this matches Obsidian's behavior for nested vaults. */
   target: string;
-  /** Workspace-absolute path (used as React key + selectEntry handle). */
+  /** Vault-absolute path (used as React key + selectEntry handle). */
   path: string;
-  /** Workspace-relative path for muted display. */
+  /** Vault-relative path for muted display. */
   relPath: string;
 }
 

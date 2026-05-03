@@ -1,121 +1,46 @@
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  ChevronRight,
-  FileText,
-  Folder,
-  List,
-  PanelLeftClose,
-  Search,
-} from "lucide-react";
-import type React from "react";
-import {
-  memo,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import type { VaultEntry, WorkspaceVisibility } from "../lib/types";
-import { formatRelativeDate, frontmatterScalar } from "../lib/document";
-import {
-  buildDocumentTreeRows,
-  collectDocumentTreeFolderPaths,
-  nextCollapsedFolders,
-  virtualizeDocumentTreeRows,
-  type DocumentTreeRow,
-  type VirtualTreeRow,
-} from "../lib/documentTree";
-import { filterDocumentIndex, type DocumentIndex } from "../lib/documentIndex";
+import { Search } from "lucide-react";
+import { useMemo } from "react";
+import type { VaultEntry } from "../lib/types";
+import { filterEntries, formatRelativeDate, frontmatterScalar } from "../lib/document";
 import { useTranslation } from "../lib/i18n";
-import type { DocumentBrowserMode } from "../lib/settings";
-
-const GROUP_ROW_HEIGHT = 28;
-const ENTRY_ROW_HEIGHT = 132;
-const TREE_ROW_HEIGHT = 30;
-const VIRTUAL_OVERSCAN = 520;
-
-type VirtualRow =
-  | { kind: "group"; key: string; label: string; count: number; height: number }
-  | { kind: "entry"; key: string; entry: VaultEntry; height: number };
 
 interface DocumentListProps {
-  documentIndex: DocumentIndex;
+  entries: VaultEntry[];
   selectedPath: string | null;
   query: string;
   loading: boolean;
   typeFilter: string | null;
-  workspaceVisibility: WorkspaceVisibility;
-  publicWorkspaceAvailable: boolean;
-  activeWorkspaceLabel: string | null;
-  onWorkspaceVisibilityChange: (visibility: WorkspaceVisibility) => void;
-  onAddPublicWorkspace: () => void;
-  browserMode: DocumentBrowserMode;
-  collapsedTreeFolders: string[];
   onQueryChange: (query: string) => void;
-  onBrowserModeChange: (mode: DocumentBrowserMode) => void;
-  onCollapsedTreeFoldersChange: (paths: string[]) => void;
   onSelect: (entry: VaultEntry) => void;
-  onRevealInFinder: (targetPath: string) => void;
-  onClose?: () => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
-  vaultPath?: string | null;
 }
 
-export const DocumentList = memo(function DocumentList({
-  documentIndex,
+export function DocumentList({
+  entries,
   selectedPath,
   query,
   loading,
   typeFilter,
-  workspaceVisibility,
-  publicWorkspaceAvailable,
-  activeWorkspaceLabel,
-  onWorkspaceVisibilityChange,
-  onAddPublicWorkspace,
-  browserMode,
-  collapsedTreeFolders,
   onQueryChange,
-  onBrowserModeChange,
-  onCollapsedTreeFoldersChange,
   onSelect,
-  onRevealInFinder,
-  onClose,
   searchInputRef,
-  vaultPath,
 }: DocumentListProps) {
   const { t, locale } = useTranslation();
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const lastSentQueryRef = useRef(query);
-  const [viewport, setViewport] = useState({ scrollTop: 0, height: 720 });
-  const [inputQuery, setInputQuery] = useState(query);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    targetPath: string;
-    title: string;
-  } | null>(null);
-  const [, startSearchTransition] = useTransition();
-  const deferredQuery = useDeferredValue(query);
-  const deferredTypeFilter = useDeferredValue(typeFilter);
 
-  useEffect(() => {
-    if (query === lastSentQueryRef.current) return;
-    lastSentQueryRef.current = query;
-    setInputQuery(query);
-  }, [query]);
-
-  const filtered = useMemo(
-    () => filterDocumentIndex(documentIndex, deferredQuery, deferredTypeFilter),
-    [documentIndex, deferredQuery, deferredTypeFilter],
-  );
+  const filtered = useMemo(() => {
+    let next = filterEntries(entries, query);
+    if (typeFilter != null) {
+      next = next.filter((entry) => {
+        const type = frontmatterScalar(entry.frontmatter, "type");
+        return typeFilter === "_" ? type == null : type === typeFilter;
+      });
+    }
+    return next;
+  }, [entries, query, typeFilter]);
 
   // Group by mtime bucket: Today / This week / Earlier
   const grouped = useMemo(() => {
-    if (browserMode !== "list") return [];
-    if (deferredQuery.trim() || deferredTypeFilter != null) {
+    if (query.trim() || typeFilter != null) {
       return [{ label: null, items: filtered }];
     }
     const now = Date.now();
@@ -133,103 +58,7 @@ export const DocumentList = memo(function DocumentList({
       else buckets[2].items.push(entry);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [browserMode, filtered, deferredQuery, deferredTypeFilter, t]);
-
-  const virtualRows = useMemo<VirtualRow[]>(() => {
-    if (browserMode !== "list") return [];
-    const rows: VirtualRow[] = [];
-    for (const [groupIdx, group] of grouped.entries()) {
-      if (group.label) {
-        rows.push({
-          kind: "group",
-          key: `g-${group.label}-${groupIdx}`,
-          label: group.label,
-          count: group.items.length,
-          height: GROUP_ROW_HEIGHT,
-        });
-      }
-      for (const entry of group.items) {
-        rows.push({ kind: "entry", key: entry.path, entry, height: ENTRY_ROW_HEIGHT });
-      }
-    }
-    return rows;
-  }, [browserMode, grouped]);
-
-  const virtualLayout = useMemo(() => {
-    let offset = 0;
-    const rows = virtualRows.map((row) => {
-      const top = offset;
-      offset += row.height;
-      return { row, top };
-    });
-    return { rows, totalHeight: offset };
-  }, [virtualRows]);
-
-  const visibleRows = useMemo(() => {
-    const min = Math.max(0, viewport.scrollTop - VIRTUAL_OVERSCAN);
-    const max = viewport.scrollTop + viewport.height + VIRTUAL_OVERSCAN;
-    return virtualLayout.rows.filter(
-      ({ row, top }) => top + row.height >= min && top <= max,
-    );
-  }, [virtualLayout.rows, viewport]);
-
-  const forceExpandTree = Boolean(deferredQuery.trim() || deferredTypeFilter != null);
-  const folderPaths = useMemo(
-    () => collectDocumentTreeFolderPaths(documentIndex.entries),
-    [documentIndex.entries],
-  );
-  const treeRows = useMemo(
-    () =>
-      browserMode === "tree"
-        ? buildDocumentTreeRows(filtered, collapsedTreeFolders, forceExpandTree)
-        : [],
-    [browserMode, filtered, collapsedTreeFolders, forceExpandTree],
-  );
-  const virtualTreeLayout = useMemo(
-    () =>
-      virtualizeDocumentTreeRows(
-        treeRows,
-        viewport.scrollTop,
-        viewport.height,
-        VIRTUAL_OVERSCAN,
-        TREE_ROW_HEIGHT,
-      ),
-    [treeRows, viewport],
-  );
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    const update = () => {
-      setViewport({ scrollTop: node.scrollTop, height: node.clientHeight || 720 });
-    };
-    update();
-    const observer =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
-    observer?.observe(node);
-    return () => observer?.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("pointerdown", close);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [contextMenu]);
-
-  useEffect(() => {
-    const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTop = 0;
-    setViewport({ scrollTop: 0, height: node.clientHeight || 720 });
-  }, [deferredQuery, deferredTypeFilter]);
+  }, [filtered, query, typeFilter, t]);
 
   const headerCaption = typeFilter
     ? typeFilter === "_"
@@ -239,121 +68,25 @@ export const DocumentList = memo(function DocumentList({
 
   return (
     <section className="document-list">
-      <div className="workspace-tabs" role="tablist" aria-label={t("workspace.tabs.label")}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={workspaceVisibility === "private"}
-          className={workspaceVisibility === "private" ? "active" : ""}
-          onClick={() => onWorkspaceVisibilityChange("private")}
-        >
-          {t("workspace.visibility.private")}
-        </button>
-        {publicWorkspaceAvailable ? (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={workspaceVisibility === "public"}
-            className={workspaceVisibility === "public" ? "active" : ""}
-            onClick={() => onWorkspaceVisibilityChange("public")}
-          >
-            {t("workspace.visibility.public")}
-          </button>
-        ) : (
-          <button type="button" className="add-public" onClick={onAddPublicWorkspace}>
-            {t("workspace.addPublic.short")}
-          </button>
-        )}
-      </div>
       <div className="list-header">
         <div>
           <h2>{headerCaption}</h2>
-          {activeWorkspaceLabel ? (
-            <span className="workspace-caption">{activeWorkspaceLabel}</span>
-          ) : null}
         </div>
         <span className="meta">{t("list.meta.count", { count: filtered.length })}</span>
-        {onClose ? (
-          <button
-            type="button"
-            className="icon-button"
-            onClick={onClose}
-            title={t("layout.hideDocuments")}
-            aria-label={t("layout.hideDocuments")}
-          >
-            <PanelLeftClose size={14} />
-          </button>
-        ) : null}
       </div>
-
-      <div className="list-mode-toggle" role="group" aria-label={t("list.viewMode")}>
-        <button
-          type="button"
-          className={browserMode === "list" ? "active" : ""}
-          onClick={() => onBrowserModeChange("list")}
-        >
-          <List size={13} />
-          <span>{t("list.view.list")}</span>
-        </button>
-        <button
-          type="button"
-          className={browserMode === "tree" ? "active" : ""}
-          onClick={() => onBrowserModeChange("tree")}
-        >
-          <Folder size={13} />
-          <span>{t("list.view.tree")}</span>
-        </button>
-      </div>
-
-      {browserMode === "tree" ? (
-        <div className="tree-bulk-actions" role="group" aria-label={t("list.tree.actions")}>
-          <button
-            type="button"
-            onClick={() => onCollapsedTreeFoldersChange(folderPaths)}
-            disabled={folderPaths.length === 0}
-            title={t("list.tree.collapseAll")}
-          >
-            <ChevronsDownUp size={13} />
-            <span>{t("list.tree.collapseAll")}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onCollapsedTreeFoldersChange([])}
-            disabled={folderPaths.length === 0}
-            title={t("list.tree.expandAll")}
-          >
-            <ChevronsUpDown size={13} />
-            <span>{t("list.tree.expandAll")}</span>
-          </button>
-        </div>
-      ) : null}
 
       <label className="search-box">
         <Search size={14} />
         <input
           ref={searchInputRef}
-          value={inputQuery}
-          onChange={(event) => {
-            const next = event.target.value;
-            lastSentQueryRef.current = next;
-            setInputQuery(next);
-            startSearchTransition(() => onQueryChange(next));
-          }}
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
           placeholder={t("list.searchPlaceholder")}
         />
         <span className="kbd">⌘F</span>
       </label>
 
-      <div
-        className="list-scroll"
-        ref={scrollRef}
-        onScroll={(event) =>
-          setViewport({
-            scrollTop: event.currentTarget.scrollTop,
-            height: event.currentTarget.clientHeight || 720,
-          })
-        }
-      >
+      <div className="list-scroll">
         {loading ? (
           <div className="skeleton-stack" aria-label={t("list.loading")}>
             <span />
@@ -372,318 +105,70 @@ export const DocumentList = memo(function DocumentList({
           </div>
         ) : null}
 
-        {!loading && filtered.length > 0 && browserMode === "tree" ? (
-          <DocumentTree
-            rows={virtualTreeLayout.rows}
-            totalHeight={virtualTreeLayout.totalHeight}
-            rowHeight={TREE_ROW_HEIGHT}
-            selectedPath={selectedPath}
-            collapsedTreeFolders={collapsedTreeFolders}
-            forceExpand={forceExpandTree}
-            onCollapsedTreeFoldersChange={onCollapsedTreeFoldersChange}
-            onSelect={onSelect}
-            onContextMenu={(event, targetPath, title) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setContextMenu({
-                x: event.clientX,
-                y: event.clientY,
-                targetPath,
-                title,
-              });
-            }}
-            vaultPath={vaultPath}
-            t={t}
-          />
-        ) : null}
-
-        {!loading && filtered.length > 0 && browserMode === "list" ? (
-          <div
-            className="virtual-list-spacer"
-            style={{ height: virtualLayout.totalHeight }}
-          >
-            {visibleRows.map(({ row, top }) => {
-              if (row.kind === "group") {
-                return (
-                  <div
-                    className="virtual-list-row group"
-                    key={row.key}
-                    style={{ height: row.height, transform: `translateY(${top}px)` }}
-                  >
-                    <div className="list-group-label">
-                      {row.label}
-                      <span className="count">{row.count}</span>
-                    </div>
-                  </div>
-                );
-              }
-              const { entry } = row;
+        {grouped.map((group, groupIdx) => (
+          <div className="list-group" key={group.label ?? `g-${groupIdx}`}>
+            {group.label ? (
+              <div className="list-group-label">
+                {group.label}
+                <span className="count">{group.items.length}</span>
+              </div>
+            ) : null}
+            {group.items.map((entry) => {
               const fmType = frontmatterScalar(entry.frontmatter, "type");
               const fmStatus = frontmatterScalar(entry.frontmatter, "status");
               return (
-                <div
-                  className="virtual-list-row entry"
-                  key={row.key}
-                  style={{ height: row.height, transform: `translateY(${top}px)` }}
+                <button
+                  key={entry.path}
+                  className={selectedPath === entry.path ? "doc-row selected" : "doc-row"}
+                  onClick={() => onSelect(entry)}
                 >
-                  <button
-                    type="button"
-                    className={selectedPath === entry.path ? "doc-row selected" : "doc-row"}
-                    onClick={() => onSelect(entry)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setContextMenu({
-                        x: event.clientX,
-                        y: event.clientY,
-                        targetPath: entry.path,
-                        title: entry.title,
-                      });
-                    }}
-                  >
-                    <div className="doc-row-top">
-                      {fmType ? (
-                        <span className="type-badge" data-type={fmType.toLowerCase()}>
-                          {fmType}
-                        </span>
-                      ) : (
-                        <span className="type-badge">{entry.fileKind.toUpperCase()}</span>
-                      )}
-                      {fmStatus ? (
-                        <span className="status-pill" data-status={fmStatus.toLowerCase()}>
-                          {fmStatus}
-                        </span>
-                      ) : null}
-                      <time dateTime={entry.updatedAt ?? undefined}>
-                        {formatRelativeDate(entry.updatedAt, locale)}
-                      </time>
-                    </div>
-                    <strong>{entry.title}</strong>
-                    {entry.snippet ? <p>{entry.snippet}</p> : null}
-                    <div className="doc-row-meta">
-                      <span>
-                        {t("list.meta.words", {
-                          count: entry.wordCount.toLocaleString(locale),
-                        })}
+                  <div className="doc-row-top">
+                    {fmType ? (
+                      <span className="type-badge" data-type={fmType.toLowerCase()}>
+                        {fmType}
                       </span>
-                      {entry.versionCount > 0 ? (
-                        <>
-                          <span className="dot" />
-                          <span>
-                            {t("list.meta.versions", {
-                              count: entry.versionCount.toLocaleString(locale),
-                            })}
-                          </span>
-                        </>
-                      ) : null}
-                      <span className="dot" />
-                      <span title={entry.relPath}>{entry.relPath}</span>
-                    </div>
-                  </button>
-                </div>
+                    ) : (
+                      <span className="type-badge">{entry.fileKind.toUpperCase()}</span>
+                    )}
+                    {fmStatus ? (
+                      <span className="status-pill" data-status={fmStatus.toLowerCase()}>
+                        {fmStatus}
+                      </span>
+                    ) : null}
+                    <time dateTime={entry.updatedAt ?? undefined}>
+                      {formatRelativeDate(entry.updatedAt, locale)}
+                    </time>
+                  </div>
+                  <strong>{entry.title}</strong>
+                  {entry.snippet ? <p>{entry.snippet}</p> : null}
+                  <div className="doc-row-meta">
+                    <span>
+                      {t("list.meta.words", {
+                        count: entry.wordCount.toLocaleString(locale),
+                      })}
+                    </span>
+                    {entry.versionCount > 0 ? (
+                      <>
+                        <span className="dot" />
+                        <span>
+                          {t("list.meta.versions", {
+                            count: entry.versionCount.toLocaleString(locale),
+                          })}
+                        </span>
+                      </>
+                    ) : null}
+                    <span className="dot" />
+                    <span title={entry.relPath}>{entry.relPath}</span>
+                  </div>
+                </button>
               );
             })}
           </div>
-        ) : null}
+        ))}
       </div>
-      {contextMenu ? (
-        <div
-          className="context-menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <div className="context-menu-title" title={contextMenu.title}>
-            {contextMenu.title}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              const target = contextMenu.targetPath;
-              setContextMenu(null);
-              onRevealInFinder(target);
-            }}
-          >
-            {t("context.revealInFinder")}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
-});
-
-interface DocumentTreeProps {
-  rows: VirtualTreeRow[];
-  totalHeight: number;
-  rowHeight: number;
-  selectedPath: string | null;
-  collapsedTreeFolders: string[];
-  forceExpand: boolean;
-  onCollapsedTreeFoldersChange: (paths: string[]) => void;
-  onSelect: (entry: VaultEntry) => void;
-  onContextMenu: (
-    event: React.MouseEvent,
-    targetPath: string,
-    title: string,
-  ) => void;
-  vaultPath?: string | null;
-  t: (key: string, vars?: Record<string, string | number>) => string;
 }
-
-const DocumentTree = memo(function DocumentTree({
-  rows,
-  totalHeight,
-  rowHeight,
-  selectedPath,
-  collapsedTreeFolders,
-  forceExpand,
-  onCollapsedTreeFoldersChange,
-  onSelect,
-  onContextMenu,
-  vaultPath,
-  t,
-}: DocumentTreeProps) {
-  return (
-    <div
-      className="tree-virtual-spacer"
-      role="tree"
-      aria-label={t("list.view.tree")}
-      style={{ height: totalHeight }}
-    >
-      {rows.map(({ row, top }) => {
-        const paddingLeft = 8 + row.depth * 16;
-        if (row.kind === "folder") {
-          return (
-            <div
-              key={row.id}
-              className="virtual-list-row tree"
-              style={{ height: rowHeight, transform: `translateY(${top}px)` }}
-            >
-              <TreeFolderRow
-                row={row}
-                paddingLeft={paddingLeft}
-                collapsedTreeFolders={collapsedTreeFolders}
-                forceExpand={forceExpand}
-                onCollapsedTreeFoldersChange={onCollapsedTreeFoldersChange}
-                onContextMenu={onContextMenu}
-                vaultPath={vaultPath}
-              />
-            </div>
-          );
-        }
-        return (
-          <div
-            key={row.id}
-            className="virtual-list-row tree"
-            style={{ height: rowHeight, transform: `translateY(${top}px)` }}
-          >
-            <TreeEntryRow
-              row={row}
-              paddingLeft={paddingLeft}
-              selected={selectedPath === row.entry.path}
-              onSelect={onSelect}
-              onContextMenu={onContextMenu}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-});
-
-type FolderRow = Extract<DocumentTreeRow, { kind: "folder" }>;
-type EntryRow = Extract<DocumentTreeRow, { kind: "entry" }>;
-
-const TreeFolderRow = memo(function TreeFolderRow({
-  row,
-  paddingLeft,
-  collapsedTreeFolders,
-  forceExpand,
-  onCollapsedTreeFoldersChange,
-  onContextMenu,
-  vaultPath,
-}: {
-  row: FolderRow;
-  paddingLeft: number;
-  collapsedTreeFolders: string[];
-  forceExpand: boolean;
-  onCollapsedTreeFoldersChange: (paths: string[]) => void;
-  onContextMenu: (
-    event: React.MouseEvent,
-    targetPath: string,
-    title: string,
-  ) => void;
-  vaultPath?: string | null;
-}) {
-  const folderTarget = vaultPath ? joinVaultPath(vaultPath, row.path) : row.path;
-  return (
-    <button
-      type="button"
-      className="tree-row folder"
-      style={{ paddingLeft }}
-      aria-expanded={!row.collapsed}
-      onClick={() =>
-        onCollapsedTreeFoldersChange(
-          nextCollapsedFolders(
-            collapsedTreeFolders,
-            row.path,
-            forceExpand ? true : !row.collapsed,
-          ),
-        )
-      }
-      title={row.path}
-      onContextMenu={(event) => onContextMenu(event, folderTarget, row.path)}
-    >
-      <ChevronRight
-        size={13}
-        className={row.collapsed ? "tree-chevron" : "tree-chevron open"}
-      />
-      <Folder size={14} />
-      <span className="tree-row-title">{row.name}</span>
-      <span className="tree-count">{row.count}</span>
-    </button>
-  );
-});
-
-const TreeEntryRow = memo(function TreeEntryRow({
-  row,
-  paddingLeft,
-  selected,
-  onSelect,
-  onContextMenu,
-}: {
-  row: EntryRow;
-  paddingLeft: number;
-  selected: boolean;
-  onSelect: (entry: VaultEntry) => void;
-  onContextMenu: (
-    event: React.MouseEvent,
-    targetPath: string,
-    title: string,
-  ) => void;
-}) {
-  const fmType = frontmatterScalar(row.entry.frontmatter, "type");
-  return (
-    <button
-      type="button"
-      className={selected ? "tree-row file selected" : "tree-row file"}
-      style={{ paddingLeft }}
-      onClick={() => onSelect(row.entry)}
-      onContextMenu={(event) => onContextMenu(event, row.entry.path, row.entry.title)}
-      title={row.entry.relPath}
-    >
-      <span className="tree-indent-slot" />
-      <FileText size={13} />
-      <span className="tree-row-title">{row.entry.title}</span>
-      {fmType ? (
-        <span className="tree-type" data-type={fmType.toLowerCase()}>
-          {fmType}
-        </span>
-      ) : (
-        <span className="tree-type">{row.entry.fileKind.toUpperCase()}</span>
-      )}
-    </button>
-  );
-});
 
 function FileShape() {
   return (
@@ -697,8 +182,4 @@ function FileShape() {
       <path d="M14 4v4h4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   );
-}
-
-function joinVaultPath(vaultPath: string, relPath: string): string {
-  return `${vaultPath.replace(/\/+$/, "")}/${relPath.replace(/^\/+/, "")}`;
 }

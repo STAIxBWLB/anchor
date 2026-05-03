@@ -107,17 +107,8 @@ export function CommitDialog({ open, vaultPath, status, onClose, onCommitted }: 
     }
   }
 
-  const fileCounts =
-    files.length > 0
-      ? {
-          staged: files.filter((file) => file.staged).length,
-          modified: files.filter((file) => !file.staged && !file.untracked).length,
-          untracked: files.filter((file) => file.untracked).length,
-        }
-      : null;
-  const summary = fileCounts ?? status;
-  const total = summary
-    ? summary.modified + summary.staged + summary.untracked
+  const total = status
+    ? status.modified + status.staged + status.untracked
     : 0;
 
   function renderDiff(text: string): React.ReactNode {
@@ -161,14 +152,14 @@ export function CommitDialog({ open, vaultPath, status, onClose, onCommitted }: 
             </Dialog.Close>
           </div>
 
-          {summary ? (
+          {status ? (
             <div className="commit-summary">
-              <span className="commit-branch">{status?.branch ?? "—"}</span>
+              <span className="commit-branch">{status.branch ?? "—"}</span>
               <span className="commit-counts">
                 {t("commit.summary", {
-                  staged: summary.staged.toString(),
-                  modified: summary.modified.toString(),
-                  untracked: summary.untracked.toString(),
+                  staged: status.staged.toString(),
+                  modified: status.modified.toString(),
+                  untracked: status.untracked.toString(),
                   total: total.toString(),
                 })}
               </span>

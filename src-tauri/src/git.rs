@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::path::{Component, Path};
 use std::process::Command;
 
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::assert_anchor_owns_writes;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,9 +20,6 @@ pub struct GitStatus {
     pub staged: usize,
     /// Untracked files (`?? path`).
     pub untracked: usize,
-    /// False for fast badge polling where untracked files were intentionally
-    /// skipped to avoid cold-start I/O.
-    pub untracked_known: bool,
     /// Convenience: true when modified + staged + untracked == 0.
     pub clean: bool,
     /// Current branch name from `## …` line, or None when detached HEAD or
@@ -32,23 +29,13 @@ pub struct GitStatus {
 
 #[tauri::command]
 pub fn git_status(vault_path: String) -> Result<GitStatus, String> {
-    git_status_with_mode(vault_path, true)
-}
-
-#[tauri::command]
-pub fn git_status_fast(vault_path: String) -> Result<GitStatus, String> {
-    git_status_with_mode(vault_path, false)
-}
-
-fn git_status_with_mode(vault_path: String, include_untracked: bool) -> Result<GitStatus, String> {
     let path = Path::new(&vault_path);
     if !path.is_dir() {
-        return Err(format!("Workspace path is not a directory: {vault_path}"));
+        return Err(format!("Vault path is not a directory: {vault_path}"));
     }
 
-    let untracked_arg = if include_untracked { "-uall" } else { "-uno" };
     let output = Command::new("git")
-        .args(["status", "--porcelain=v1", untracked_arg, "--branch"])
+        .args(["status", "--porcelain=v1", "-uall", "--branch"])
         .current_dir(path)
         .output()
         .map_err(|err| format!("git invocation failed: {err}"))?;
@@ -63,7 +50,6 @@ fn git_status_with_mode(vault_path: String, include_untracked: bool) -> Result<G
                 modified: 0,
                 staged: 0,
                 untracked: 0,
-                untracked_known: include_untracked,
                 clean: true,
                 branch: None,
             });
@@ -109,8 +95,7 @@ fn git_status_with_mode(vault_path: String, include_untracked: bool) -> Result<G
         modified,
         staged,
         untracked,
-        untracked_known: include_untracked,
-        clean: modified == 0 && staged == 0 && (untracked == 0 || !include_untracked),
+        clean: modified == 0 && staged == 0 && untracked == 0,
         branch,
     })
 }
@@ -118,7 +103,7 @@ fn git_status_with_mode(vault_path: String, include_untracked: bool) -> Result<G
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitFileChange {
-    /// Workspace-relative path. Renamed entries surface only the new path —
+    /// Vault-relative path. Renamed entries surface only the new path —
     /// commit dialog Phase 1B doesn't visualise renames yet.
     pub path: String,
     /// Porcelain v1 column 1 (index/staged status). Single char: M, A, D,
@@ -141,7 +126,7 @@ const MAX_CHANGE_ROWS: usize = 200;
 pub fn git_changes(vault_path: String) -> Result<Vec<GitFileChange>, String> {
     let path = Path::new(&vault_path);
     if !path.is_dir() {
-        return Err(format!("Workspace path is not a directory: {vault_path}"));
+        return Err(format!("Vault path is not a directory: {vault_path}"));
     }
     let output = Command::new("git")
         .args(["status", "--porcelain=v1", "-uall"])
@@ -194,7 +179,7 @@ const MAX_DIFF_BYTES: usize = 64 * 1024;
 pub fn git_diff(vault_path: String, file_path: String) -> Result<String, String> {
     let path = Path::new(&vault_path);
     if !path.is_dir() {
-        return Err(format!("Workspace path is not a directory: {vault_path}"));
+        return Err(format!("Vault path is not a directory: {vault_path}"));
     }
 
     // Combined diff: index changes ∪ worktree changes for this path. -U2
@@ -253,9 +238,9 @@ pub fn git_commit(
 
     let path = Path::new(&vault_path);
     if !path.is_dir() {
-        return Err(format!("Workspace path is not a directory: {vault_path}"));
+        return Err(format!("Vault path is not a directory: {vault_path}"));
     }
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
+    assert_anchor_owns_writes(&vault_path)?;
 
     let selected_paths = match paths {
         Some(paths) => {
@@ -355,28 +340,6 @@ mod tests {
         let result = git_status(cwd.to_string_lossy().to_string()).unwrap();
         assert!(result.is_repo);
         assert!(result.branch.is_some());
-        assert!(result.untracked_known);
-    }
-
-    #[test]
-    fn fast_status_skips_untracked_enumeration() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        run_git(root, &["init"]);
-        run_git(root, &["config", "user.email", "anchor@example.test"]);
-        run_git(root, &["config", "user.name", "Anchor Test"]);
-        fs::write(root.join("tracked.md"), "a\n").unwrap();
-        run_git(root, &["add", "."]);
-        run_git(root, &["commit", "-m", "initial"]);
-        fs::write(root.join("untracked.md"), "new\n").unwrap();
-
-        let full = git_status(root.to_string_lossy().to_string()).unwrap();
-        let fast = git_status_fast(root.to_string_lossy().to_string()).unwrap();
-
-        assert_eq!(full.untracked, 1);
-        assert!(full.untracked_known);
-        assert_eq!(fast.untracked, 0);
-        assert!(!fast.untracked_known);
     }
 
     #[test]

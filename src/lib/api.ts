@@ -6,8 +6,7 @@ import {
   mockCreateVersion,
   mockEntries,
   mockInboxDropItems,
-  mockSetActiveWorkspaceRoot,
-  mockWorkspaceRegistry,
+  mockVaultList,
   readMockDocument,
 } from "./fixtures";
 import type {
@@ -19,12 +18,9 @@ import type {
   InboxClassification,
   InboxDropItem,
   VaultEntry,
-  WorkspaceRegistry,
-  WorkspaceRootEntry,
-  WorkspaceVisibility,
+  VaultList,
   VersionSnapshot,
 } from "./types";
-import type { TerminalKind } from "./terminal";
 
 declare global {
   interface Window {
@@ -49,18 +45,9 @@ export async function chooseVaultDirectory(title: string): Promise<string | null
   return typeof selected === "string" ? selected : null;
 }
 
-export async function chooseWorkspaceDirectory(title: string): Promise<string | null> {
-  return chooseVaultDirectory(title);
-}
-
 export async function scanVault(vaultPath: string): Promise<VaultEntry[]> {
-  if (!isTauri()) return mockEntries(vaultPath);
+  if (!isTauri()) return mockEntries();
   return invoke<VaultEntry[]>("scan_vault", { vaultPath });
-}
-
-export async function readVaultCache(vaultPath: string): Promise<VaultEntry[] | null> {
-  if (!isTauri()) return mockEntries(vaultPath);
-  return invoke<VaultEntry[] | null>("read_vault_cache", { vaultPath });
 }
 
 export async function scanInboxDrop(vaultPath: string): Promise<InboxDropItem[]> {
@@ -144,52 +131,39 @@ export async function createVersion(
   });
 }
 
-// === Workspace registry ===
+// === Multi-vault registry ===
 
-export async function listWorkspaceRoots(): Promise<WorkspaceRegistry> {
-  if (!isTauri()) return mockWorkspaceRegistry();
-  return invoke<WorkspaceRegistry>("list_workspace_roots");
+export async function listVaults(): Promise<VaultList> {
+  if (!isTauri()) return mockVaultList();
+  return invoke<VaultList>("list_vaults");
 }
 
-export async function addWorkspaceRoot(
-  entry: WorkspaceRootEntry,
-): Promise<WorkspaceRegistry> {
-  if (!isTauri()) return mockWorkspaceRegistry();
-  return invoke<WorkspaceRegistry>("add_workspace_root", { entry });
-}
-
-export async function removeWorkspaceRoot(path: string): Promise<WorkspaceRegistry> {
-  if (!isTauri()) return mockWorkspaceRegistry();
-  return invoke<WorkspaceRegistry>("remove_workspace_root", { path });
-}
-
-export async function setActiveWorkspaceRoot(
+export async function addVault(
+  label: string,
   path: string,
-  visibility: WorkspaceVisibility,
-): Promise<WorkspaceRegistry> {
-  if (!isTauri()) return mockSetActiveWorkspaceRoot(path, visibility);
-  return invoke<WorkspaceRegistry>("set_active_workspace_root", { path, visibility });
+  externalWriter?: string | null,
+): Promise<VaultList> {
+  if (!isTauri()) return mockVaultList();
+  return invoke<VaultList>("add_vault", { label, path, externalWriter: externalWriter ?? null });
 }
 
-export async function refreshWorkspaceCapabilities(path: string): Promise<WorkspaceRegistry> {
-  if (!isTauri()) return mockWorkspaceRegistry();
-  return invoke<WorkspaceRegistry>("refresh_workspace_capabilities", { path });
+export async function removeVault(path: string): Promise<VaultList> {
+  if (!isTauri()) return mockVaultList();
+  return invoke<VaultList>("remove_vault", { path });
+}
+
+export async function setActiveVault(path: string): Promise<VaultList> {
+  if (!isTauri()) return mockVaultList();
+  return invoke<VaultList>("set_active_vault", { path });
 }
 
 // === Git ===
 
 export async function gitStatus(vaultPath: string): Promise<GitStatus> {
   if (!isTauri()) {
-    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: true, clean: true, branch: null };
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, clean: true, branch: null };
   }
   return invoke<GitStatus>("git_status", { vaultPath });
-}
-
-export async function gitStatusFast(vaultPath: string): Promise<GitStatus> {
-  if (!isTauri()) {
-    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: false, clean: true, branch: null };
-  }
-  return invoke<GitStatus>("git_status_fast", { vaultPath });
 }
 
 export async function gitCommit(
@@ -198,7 +172,7 @@ export async function gitCommit(
   paths?: string[],
 ): Promise<GitStatus> {
   if (!isTauri()) {
-    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: true, clean: true, branch: null };
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, clean: true, branch: null };
   }
   return invoke<GitStatus>("git_commit", { vaultPath, message, paths: paths ?? null });
 }
@@ -211,16 +185,6 @@ export async function gitChanges(vaultPath: string): Promise<GitFileChange[]> {
 export async function gitDiff(vaultPath: string, filePath: string): Promise<string> {
   if (!isTauri()) return "";
   return invoke<string>("git_diff", { vaultPath, filePath });
-}
-
-export async function revealInFileManager(
-  vaultPath: string,
-  targetPath: string,
-): Promise<void> {
-  if (!isTauri()) {
-    throw new Error("Reveal in Finder requires the Tauri app.");
-  }
-  await invoke("reveal_in_file_manager", { vaultPath, targetPath });
 }
 
 // === Phase 2 inbox watcher / AI bridge / classifier ===
@@ -269,54 +233,6 @@ export async function startClaudeCliInvocation(
     throw new Error("Claude CLI invocation is only available inside the Tauri shell.");
   }
   return invoke<string>("start_claude_cli_invocation", { prompt, cwd, extraArgs });
-}
-
-// === Integrated terminal ===
-
-export function terminalAvailable(): boolean {
-  return isTauri();
-}
-
-export interface TerminalSpawnOptions {
-  command?: string | null;
-  extraArgs?: string[] | null;
-}
-
-export async function terminalSpawn(
-  sessionId: string,
-  kind: TerminalKind,
-  cwd: string | null = null,
-  options: TerminalSpawnOptions = {},
-): Promise<string> {
-  if (!isTauri()) {
-    throw new Error("Integrated terminal is only available inside the Tauri shell.");
-  }
-  return invoke<string>("terminal_spawn", {
-    sessionId,
-    kind,
-    cwd,
-    command: options.command ?? null,
-    extraArgs: options.extraArgs ?? null,
-  });
-}
-
-export async function terminalWrite(sessionId: string, data: string): Promise<void> {
-  if (!isTauri()) return;
-  await invoke("terminal_write", { sessionId, data });
-}
-
-export async function terminalResize(
-  sessionId: string,
-  cols: number,
-  rows: number,
-): Promise<void> {
-  if (!isTauri()) return;
-  await invoke("terminal_resize", { sessionId, cols, rows });
-}
-
-export async function terminalKill(sessionId: string): Promise<void> {
-  if (!isTauri()) return;
-  await invoke("terminal_kill", { sessionId });
 }
 
 /** Pull unread Gmail messages via the user's existing `gws` Google

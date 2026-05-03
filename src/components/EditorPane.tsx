@@ -29,15 +29,11 @@ export interface EditorTabSummary {
 
 interface EditorPaneProps {
   document: DocumentPayload | null;
-  openingEntry: VaultEntry | null;
   draftContent: string;
   saving: boolean;
   dirty: boolean;
   outlineOpen: boolean;
-  activeWorkspaceLabel: string | null;
-  readOnly: boolean;
-  canSnapshot: boolean;
-  readOnlyReason: string | null;
+  activeVaultLabel: string | null;
   viewMode: EditorViewMode;
   tabs: EditorTabSummary[];
   activeTabId: string | null;
@@ -56,15 +52,11 @@ interface EditorPaneProps {
 export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function EditorPane(
   {
     document,
-    openingEntry,
     draftContent,
     saving,
     dirty,
     outlineOpen,
-    activeWorkspaceLabel,
-    readOnly,
-    canSnapshot,
-    readOnlyReason,
+    activeVaultLabel,
     viewMode,
     tabs,
     activeTabId,
@@ -95,8 +87,8 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
     });
 
   const previewHtml = useMemo(
-    () => (document && viewMode === "preview" ? renderMarkdown(draftContent) : ""),
-    [draftContent, document, viewMode],
+    () => (document ? renderMarkdown(draftContent) : ""),
+    [draftContent, document],
   );
 
   const handlePreviewClick = useCallback(
@@ -111,20 +103,6 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
     },
     [onWikilinkClick],
   );
-
-  if (openingEntry && openingEntry.path !== document?.path) {
-    return (
-      <main className="editor-pane editor-empty" ref={ref}>
-        <div className="empty-document-plate">
-          <div className="icon-circle">
-            <FileText size={26} />
-          </div>
-          <h2>{openingEntry.title}</h2>
-          <p>{openingEntry.relPath}</p>
-        </div>
-      </main>
-    );
-  }
 
   if (!document) {
     return (
@@ -176,9 +154,9 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
       </div>
       <header className="editor-topbar">
         <div className="breadcrumb" title={document.relPath}>
-          {activeWorkspaceLabel ? (
+          {activeVaultLabel ? (
             <>
-              <span className="crumb">{activeWorkspaceLabel}</span>
+              <span className="crumb">{activeVaultLabel}</span>
               <ChevronRight size={12} className="sep" />
             </>
           ) : null}
@@ -195,18 +173,12 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
             {dirty ? <Clock3 size={12} /> : <Check size={12} />}
             {dirty ? t("editor.dirty") : t("editor.saved")}
           </span>
-          {readOnly ? (
-            <span className="save-state readonly" title={readOnlyReason ?? undefined}>
-              {t("editor.readOnly")}
-            </span>
-          ) : null}
           <Button
             variant="ghost"
             size="sm"
             onClick={onSnapshot}
-            disabled={!canSnapshot}
             icon={<GitCommit size={14} />}
-            title={!canSnapshot && readOnlyReason ? readOnlyReason : t("editor.snapshot")}
+            title={t("editor.snapshot")}
           >
             {t("editor.snapshot")}
           </Button>
@@ -214,9 +186,8 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
             variant="primary"
             size="sm"
             onClick={onSave}
-            disabled={readOnly || saving || !dirty}
+            disabled={saving || !dirty}
             icon={<Save size={14} />}
-            title={readOnly && readOnlyReason ? readOnlyReason : undefined}
           >
             {saving ? t("editor.saving") : t("editor.save")}
           </Button>
@@ -248,16 +219,15 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
             {t("editor.tab.preview")}
           </Tabs.Trigger>
         </Tabs.List>
-        <Tabs.Content className="tab-panel" value="rich">
-          <RichMarkdownEditor value={draftContent} onChange={onChange} readOnly={readOnly} />
+        <Tabs.Content className="tab-panel" value="rich" forceMount>
+          <RichMarkdownEditor value={draftContent} onChange={onChange} />
         </Tabs.Content>
-        <Tabs.Content className="tab-panel" value="source">
+        <Tabs.Content className="tab-panel" value="source" forceMount>
           <textarea
             ref={taRef}
             className="source-editor"
             value={draftContent}
             onChange={(event) => onChange(event.target.value)}
-            readOnly={readOnly}
             onKeyDown={autocompleteHandlers.onKeyDown}
             onKeyUp={autocompleteHandlers.onKeyUp}
             onClick={autocompleteHandlers.onClick}
@@ -267,7 +237,7 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
           />
           {autocompletePopup}
         </Tabs.Content>
-        <Tabs.Content className="tab-panel" value="preview">
+        <Tabs.Content className="tab-panel" value="preview" forceMount>
           <article
             className="preview-surface"
             onClick={handlePreviewClick}

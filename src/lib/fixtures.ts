@@ -3,16 +3,11 @@ import type {
   DocumentPayload,
   InboxDropItem,
   VaultEntry,
-  WorkspaceRegistry,
+  VaultList,
   VersionSnapshot,
 } from "./types";
 
-export const MOCK_WORKSPACE_PATH = "mock://anchor-sample-workspace";
-export const MOCK_VAULT_PATH = MOCK_WORKSPACE_PATH;
-export const MOCK_PUBLIC_WORKSPACE_PATH = "mock://anchor-public-workspace";
-export const MOCK_PUBLIC_READONLY_WORKSPACE_PATH = "mock://anchor-sharepoint-workspace";
-let mockActivePrivate = MOCK_WORKSPACE_PATH;
-let mockActivePublic: string | null = null;
+export const MOCK_VAULT_PATH = "mock://anchor-sample-vault";
 
 const now = "2026-04-27T09:00:00+09:00";
 
@@ -73,9 +68,9 @@ export const mockDocuments: DocumentPayload[] = [
   },
 ];
 
-export function mockEntries(rootPath = MOCK_VAULT_PATH): VaultEntry[] {
+export function mockEntries(): VaultEntry[] {
   return mockDocuments.map((doc, index) => ({
-    path: `${rootPath}/${doc.relPath}`,
+    path: doc.path,
     relPath: doc.relPath,
     title: doc.title,
     frontmatter: doc.meta,
@@ -121,111 +116,14 @@ export function mockCreateVersion(title: string): VersionSnapshot {
   };
 }
 
-export function mockWorkspaceRegistry(): WorkspaceRegistry {
-  const includePublic =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).has("mockPublic");
-  const workspaces: WorkspaceRegistry["workspaces"] = [
-    {
-      label: "Sample Workspace",
-      path: MOCK_WORKSPACE_PATH,
-      visibility: "private",
-      provider: "local",
-      providerId: null,
-      externalWriter: null,
-      writePolicy: "direct",
-      permissionSummary: {
-        role: null,
-        source: "filesystem",
-        checkedAt: "2026-04-27T09:00:00+09:00",
-        capabilities: {
-          canRead: true,
-          canCreate: true,
-          canModify: true,
-          canDelete: true,
-          canRenameMove: true,
-          canShare: true,
-          canManageMembers: true,
-        },
-      },
-    },
-  ];
-  if (includePublic) {
-    workspaces.push({
-      label: "Public Workspace",
-      path: MOCK_PUBLIC_WORKSPACE_PATH,
-      visibility: "public",
-      provider: "googleDrive",
-      providerId: "mock-shared-drive",
-      externalWriter: null,
-      writePolicy: "direct",
-      permissionSummary: {
-        role: "contentManager",
-        source: "manual",
-        checkedAt: "2026-04-27T09:00:00+09:00",
-        capabilities: {
-          canRead: true,
-          canCreate: true,
-          canModify: true,
-          canDelete: true,
-          canRenameMove: true,
-          canShare: true,
-          canManageMembers: false,
-        },
-      },
-    });
-    workspaces.push({
-      label: "Shared Reference",
-      path: MOCK_PUBLIC_READONLY_WORKSPACE_PATH,
-      visibility: "public",
-      provider: "sharePoint",
-      providerId: "mock-site-docs",
-      externalWriter: null,
-      writePolicy: "direct",
-      permissionSummary: {
-        role: "Can view",
-        source: "manual",
-        checkedAt: "2026-04-27T09:00:00+09:00",
-        capabilities: {
-          canRead: true,
-          canCreate: false,
-          canModify: false,
-          canDelete: false,
-          canRenameMove: false,
-          canShare: false,
-          canManageMembers: false,
-        },
-      },
-    });
-  }
-  if (!workspaces.some((workspace) => workspace.path === mockActivePrivate)) {
-    mockActivePrivate = MOCK_WORKSPACE_PATH;
-  }
-  if (!includePublic) {
-    mockActivePublic = null;
-  } else if (!mockActivePublic || !workspaces.some((workspace) => workspace.path === mockActivePublic)) {
-    mockActivePublic = MOCK_PUBLIC_WORKSPACE_PATH;
-  }
+export function mockVaultList(): VaultList {
   return {
-    workspaces,
-    activeByVisibility: {
-      private: mockActivePrivate,
-      public: includePublic ? mockActivePublic : null,
-    },
+    vaults: [
+      { label: "Sample Vault", path: MOCK_VAULT_PATH },
+    ],
+    activeVault: MOCK_VAULT_PATH,
     hiddenDefaults: [],
   };
-}
-
-export function mockSetActiveWorkspaceRoot(
-  path: string,
-  visibility: "private" | "public",
-): WorkspaceRegistry {
-  if (visibility === "public") {
-    mockActivePublic = path;
-  } else {
-    mockActivePrivate = path;
-  }
-  return mockWorkspaceRegistry();
 }
 
 export function mockInboxDropItems(): InboxDropItem[] {

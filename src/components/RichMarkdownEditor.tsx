@@ -8,14 +8,13 @@ import { splitFrontmatter } from "../lib/wikilinks";
 interface RichMarkdownEditorProps {
   value: string;
   onChange: (content: string) => void;
-  readOnly?: boolean;
 }
 
 function mergeFrontmatter(frontmatter: string, body: string): string {
   return `${frontmatter}${body}`;
 }
 
-export function RichMarkdownEditor({ value, onChange, readOnly = false }: RichMarkdownEditorProps) {
+export function RichMarkdownEditor({ value, onChange }: RichMarkdownEditorProps) {
   const editor = useCreateBlockNote();
   const latestValueRef = useRef(value);
   const lastEmittedValueRef = useRef<string | null>(null);
@@ -53,7 +52,6 @@ export function RichMarkdownEditor({ value, onChange, readOnly = false }: RichMa
   }, [editor, value]);
 
   async function handleChange() {
-    if (readOnly) return;
     if (suppressChangeRef.current) return;
     try {
       const [frontmatter] = splitFrontmatter(latestValueRef.current);
@@ -69,7 +67,7 @@ export function RichMarkdownEditor({ value, onChange, readOnly = false }: RichMa
 
   return (
     <div className="rich-editor-surface">
-      <BlockNoteView editor={editor} editable={!readOnly} onChange={() => void handleChange()} />
+      <BlockNoteView editor={editor} onChange={() => void handleChange()} />
     </div>
   );
 }

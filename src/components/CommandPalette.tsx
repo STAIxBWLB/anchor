@@ -1,13 +1,12 @@
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Hash, Search } from "lucide-react";
 import { useTranslation } from "../lib/i18n";
-import { frontmatterScalar } from "../lib/document";
-import { getCommandPaletteDocs, type DocumentIndex } from "../lib/documentIndex";
+import { filterEntries, frontmatterScalar } from "../lib/document";
 import type { VaultEntry } from "../lib/types";
 
 interface CommandPaletteProps {
   open: boolean;
-  documentIndex: DocumentIndex;
+  entries: VaultEntry[];
   onClose: () => void;
   onSelectEntry: (entry: VaultEntry) => boolean | Promise<boolean>;
   onRunCommand: (id: string) => void;
@@ -24,9 +23,9 @@ type PaletteItem =
   | { kind: "doc"; entry: VaultEntry }
   | { kind: "action"; action: CommandAction };
 
-export const CommandPalette = memo(function CommandPalette({
+export function CommandPalette({
   open,
-  documentIndex,
+  entries,
   onClose,
   onSelectEntry,
   onRunCommand,
@@ -37,7 +36,6 @@ export const CommandPalette = memo(function CommandPalette({
   const [picking, setPicking] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
-  const deferredQuery = useDeferredValue(query);
 
   const actions: CommandAction[] = useMemo(
     () => [
@@ -47,18 +45,17 @@ export const CommandPalette = memo(function CommandPalette({
       { id: "toggle-preview", label: t("cmdk.action.togglePreview"), shortcut: "⌘ P" },
       { id: "toggle-outline", label: t("cmdk.action.toggleOutline"), shortcut: "⌘ \\" },
       { id: "toggle-locale", label: t("cmdk.action.toggleLocale"), shortcut: "⌘ ⇧ L" },
-      { id: "refresh-workspace", label: t("cmdk.action.refresh"), shortcut: "⌘ R" },
+      { id: "refresh-vault", label: t("cmdk.action.refresh"), shortcut: "⌘ R" },
       { id: "open-inbox", label: t("cmdk.action.openInbox") },
       { id: "open-docs", label: t("cmdk.action.openDocs") },
-      { id: "open-settings", label: t("cmdk.action.openSettings"), shortcut: "⌘ ," },
-      { id: "add-workspace", label: t("cmdk.action.addWorkspace") },
+      { id: "add-vault", label: t("cmdk.action.addVault") },
     ],
     [t],
   );
 
   const filteredDocs = useMemo(
-    () => getCommandPaletteDocs(documentIndex, deferredQuery, deferredQuery.trim() ? 24 : 12),
-    [documentIndex, deferredQuery],
+    () => (query.trim() ? filterEntries(entries, query).slice(0, 24) : entries.slice(0, 12)),
+    [entries, query],
   );
   const filteredActions = useMemo(() => {
     if (!query.trim()) return [];
@@ -252,4 +249,4 @@ export const CommandPalette = memo(function CommandPalette({
       </div>
     </div>
   );
-});
+}
