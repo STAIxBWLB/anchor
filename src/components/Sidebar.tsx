@@ -1,45 +1,60 @@
-import { Clock, FileText, Layers, Plus } from "lucide-react";
-import { useMemo } from "react";
-import { frontmatterScalar } from "../lib/document";
+import { Clock, FileText, Layers, PanelLeftClose, Plus } from "lucide-react";
+import { memo } from "react";
 import { useTranslation } from "../lib/i18n";
 import type { VaultEntry } from "../lib/types";
 
 interface SidebarProps {
-  entries: VaultEntry[];
+  contentCount: number;
+  typeCounts: Array<[string, number]>;
   recentEntries: VaultEntry[];
   selectedPath: string | null;
   typeFilter: string | null;
   onTypeFilter: (type: string | null) => void;
   onNewDocument: () => void;
+  canCreateDocument: boolean;
   onSelectRecent: (entry: VaultEntry) => void;
   onOpenCommandPalette: () => void;
+  onClose?: () => void;
 }
 
-export function Sidebar({
-  entries,
+export const Sidebar = memo(function Sidebar({
+  contentCount,
+  typeCounts,
   recentEntries,
   selectedPath,
   typeFilter,
   onTypeFilter,
   onNewDocument,
+  canCreateDocument,
   onSelectRecent,
   onOpenCommandPalette,
+  onClose,
 }: SidebarProps) {
   const { t } = useTranslation();
 
-  const typeCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const entry of entries) {
-      const type = frontmatterScalar(entry.frontmatter, "type") ?? "_";
-      counts.set(type, (counts.get(type) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [entries]);
-
   return (
     <aside className="sidebar">
+      <div className="sidebar-header">
+        <strong>{t("sidebar.types")}</strong>
+        {onClose ? (
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onClose}
+            title={t("layout.hideDocumentTypes")}
+            aria-label={t("layout.hideDocumentTypes")}
+          >
+            <PanelLeftClose size={14} />
+          </button>
+        ) : null}
+      </div>
       <div className="sidebar-section">
-        <button type="button" className="sidebar-cta" onClick={onNewDocument}>
+        <button
+          type="button"
+          className="sidebar-cta"
+          onClick={onNewDocument}
+          disabled={!canCreateDocument}
+        >
           <Plus size={15} />
           {t("newDoc.button")}
         </button>
@@ -71,7 +86,7 @@ export function Sidebar({
           >
             <span style={{ width: 6, height: 6, borderRadius: 3, background: "var(--faint)" }} />
             <span>{t("sidebar.types.all")}</span>
-            <span className="count">{entries.length}</span>
+            <span className="count">{contentCount}</span>
           </button>
           {typeCounts.map(([type, count]) => {
             const isUntyped = type === "_";
@@ -137,7 +152,7 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});
 
 function colorForType(type: string): string {
   switch (type.toLowerCase()) {
