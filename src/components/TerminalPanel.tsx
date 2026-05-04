@@ -181,7 +181,7 @@ export const TerminalPanel = memo(function TerminalPanel({
     if (!open || !activeTab) return;
     window.requestAnimationFrame(() => fitTab(activeTab.id));
     if (rightTab) window.requestAnimationFrame(() => fitTab(rightTab.id));
-  }, [activeTab, draftHeight, fitTab, maximized, open, rightTab, splitOpen]);
+  }, [activeTab, draftHeight, fitTab, maximized, open, rightTab, splitOpen, splitRatio]);
 
   useEffect(() => {
     if (!open || !activeTab) return;
@@ -408,26 +408,17 @@ export const TerminalPanel = memo(function TerminalPanel({
   );
 
   const panelStyle = open && !maximized ? { height: draftHeight } : undefined;
-  const splitBodyStyle =
-    splitOpen && rightTab
-      ? { gridTemplateColumns: `${splitRatio}fr ${1 - splitRatio}fr` }
-      : undefined;
+  const splitMode = splitOpen && Boolean(rightTab);
+  // Use a CSS variable instead of grid columns so terminal-instance divs stay
+  // direct children of terminal-body. If we wrapped each side in its own
+  // container the LEFT instance's DOM parent would change every time split
+  // toggles, React would remount the div, and xterm.Terminal.open() would
+  // refuse to re-attach (its element.parentElement guard) — leaving the left
+  // pane blank and unable to receive input.
+  const splitBodyStyle = splitMode
+    ? ({ "--terminal-split-ratio": String(splitRatio) } as React.CSSProperties)
+    : undefined;
   const focusedTabId = focusedGroup === "right" && rightTab ? rightTab.id : state.activeTabId;
-  const renderTerminalInstances = (tabs: typeof state.tabs, activeId: string | null) =>
-    tabs.map((tab) => (
-      <div
-        key={tab.id}
-        className={tab.id === activeId ? "terminal-instance active" : "terminal-instance"}
-        ref={(node) => {
-          if (node) {
-            hostRef.current.set(tab.id, node);
-            attachTerminal(tab.id);
-          } else {
-            hostRef.current.delete(tab.id);
-          }
-        }}
-      />
-    ));
 
   return (
     <section
@@ -526,7 +517,7 @@ export const TerminalPanel = memo(function TerminalPanel({
             ))}
           </div>
       <div
-        className={splitOpen && rightTab ? "terminal-body split" : "terminal-body"}
+        className={splitMode ? "terminal-body split" : "terminal-body"}
         style={splitBodyStyle}
         hidden={!open}
       >
@@ -534,26 +525,41 @@ export const TerminalPanel = memo(function TerminalPanel({
           <div className="terminal-empty">{t("terminal.tauriRequired")}</div>
         ) : state.tabs.length === 0 ? (
           <div className="terminal-empty">{t("terminal.empty.detail")}</div>
-        ) : splitOpen && rightTab ? (
-          <>
-            <div
-              className={focusedGroup === "left" ? "terminal-group active" : "terminal-group"}
-              onPointerDown={() => setFocusedGroup("left")}
-            >
-              {renderTerminalInstances(
-                state.tabs.filter((tab) => tab.id !== rightTab.id),
-                state.activeTabId,
-              )}
-            </div>
-            <div
-              className={focusedGroup === "right" ? "terminal-group active" : "terminal-group"}
-              onPointerDown={() => setFocusedGroup("right")}
-            >
-              {renderTerminalInstances([rightTab], rightTab.id)}
-            </div>
-          </>
         ) : (
-          renderTerminalInstances(state.tabs, state.activeTabId)
+          // Flat sibling list under terminal-body. Each instance keeps the
+          // same parent across split toggles so xterm DOM is never reparented.
+          state.tabs.map((tab) => {
+            const isRight = splitMode && rightTabId === tab.id;
+            const isLeftActive = !isRight && state.activeTabId === tab.id;
+            const isVisible = isRight || isLeftActive;
+            const isFocused =
+              isVisible &&
+              splitMode &&
+              (isRight ? focusedGroup === "right" : focusedGroup === "left");
+            const className = [
+              "terminal-instance",
+              isVisible ? "active" : null,
+              splitMode ? (isRight ? "pane-right" : "pane-left") : null,
+              isFocused ? "focused" : null,
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return (
+              <div
+                key={tab.id}
+                className={className}
+                onPointerDown={() => setFocusedGroup(isRight ? "right" : "left")}
+                ref={(node) => {
+                  if (node) {
+                    hostRef.current.set(tab.id, node);
+                    attachTerminal(tab.id);
+                  } else {
+                    hostRef.current.delete(tab.id);
+                  }
+                }}
+              />
+            );
+          })
         )}
       </div>
       {open && error ? <div className="terminal-error">{error}</div> : null}
