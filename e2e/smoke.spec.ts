@@ -132,7 +132,63 @@ test("supports tree bulk controls and Finder context menu", async ({ page }) => 
   await documentList.getByRole("button", { name: /Anchor 용어집/ }).click({
     button: "right",
   });
+  await expect(page.getByRole("button", { name: "파일 열기" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Finder에서 보기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "경로 복사", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "상대 경로 복사" })).toBeVisible();
+});
+
+test("resizes document and right panes with drag handles", async ({ page }) => {
+  await page.goto("/");
+
+  const documentList = page.locator(".document-list");
+  const outlinePane = page.locator(".outline-pane");
+  await expect(documentList).toBeVisible();
+  await expect(outlinePane).toBeVisible();
+
+  const initialDocumentBox = await documentList.boundingBox();
+  const documentHandleBox = await page.locator(".documents-pane-resize").boundingBox();
+  expect(initialDocumentBox).not.toBeNull();
+  expect(documentHandleBox).not.toBeNull();
+  if (!initialDocumentBox || !documentHandleBox) return;
+
+  await page.mouse.move(
+    documentHandleBox.x + documentHandleBox.width / 2,
+    documentHandleBox.y + documentHandleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    documentHandleBox.x + documentHandleBox.width / 2 + 70,
+    documentHandleBox.y + documentHandleBox.height / 2,
+  );
+  await page.mouse.up();
+
+  const resizedDocumentBox = await documentList.boundingBox();
+  expect(resizedDocumentBox).not.toBeNull();
+  if (!resizedDocumentBox) return;
+  expect(resizedDocumentBox.width).toBeGreaterThan(initialDocumentBox.width + 40);
+
+  const initialOutlineBox = await outlinePane.boundingBox();
+  const outlineHandleBox = await page.locator(".outline-pane-resize").boundingBox();
+  expect(initialOutlineBox).not.toBeNull();
+  expect(outlineHandleBox).not.toBeNull();
+  if (!initialOutlineBox || !outlineHandleBox) return;
+
+  await page.mouse.move(
+    outlineHandleBox.x + outlineHandleBox.width / 2,
+    outlineHandleBox.y + outlineHandleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    outlineHandleBox.x + outlineHandleBox.width / 2 - 60,
+    outlineHandleBox.y + outlineHandleBox.height / 2,
+  );
+  await page.mouse.up();
+
+  const resizedOutlineBox = await outlinePane.boundingBox();
+  expect(resizedOutlineBox).not.toBeNull();
+  if (!resizedOutlineBox) return;
+  expect(resizedOutlineBox.width).toBeGreaterThan(initialOutlineBox.width + 35);
 });
 
 test("centers the empty editor placeholder", async ({ page }) => {

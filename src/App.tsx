@@ -127,6 +127,10 @@ import {
 const LAST_OPEN_KEY = "anchor:lastOpenedNote:v1";
 const OPEN_TABS_KEY = "anchor:openTabs:v1";
 const RECENT_KEY = "anchor:recent:v1";
+const MIN_DOCUMENTS_PANE_WIDTH = 260;
+const MAX_DOCUMENTS_PANE_WIDTH = 560;
+const MIN_OUTLINE_PANE_WIDTH = 240;
+const MAX_OUTLINE_PANE_WIDTH = 520;
 
 assertParityOrThrow();
 
@@ -282,6 +286,11 @@ function SettingsWindowRoot({ workPath }: { workPath: string | null }) {
   );
 }
 
+function clampPaneWidth(value: number, min: number, max: number): number {
+  const upper = Math.max(min, max);
+  return Math.round(Math.min(upper, Math.max(min, value)));
+}
+
 function MainApp() {
   const localeValue = useLocaleState();
   const { t, locale, setLocale } = localeValue;
@@ -343,6 +352,9 @@ function MainApp() {
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const appShellRef = useRef<HTMLDivElement>(null);
+  const documentsPaneRef = useRef<HTMLElement>(null);
+  const outlinePaneRef = useRef<HTMLElement>(null);
   const editorSplitShellRef = useRef<HTMLDivElement>(null);
   const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const rightEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -2153,6 +2165,23 @@ function MainApp() {
     documentTypesPaneOpen ? "" : " types-closed"
   }${documentsPaneOpen ? "" : " documents-closed"}${terminalMaximizedClass}`;
   const themeVars = useMemo(() => buildThemeVars(anchorSettings), [anchorSettings]);
+  const shellStyle = useMemo(
+    () =>
+      ({
+        ...themeVars,
+        "--documents-col": documentsPaneOpen
+          ? `${layoutSettings.documentsPaneWidth}px`
+          : "0px",
+        "--outline-col": outlineOpen ? `${layoutSettings.outlinePaneWidth}px` : "0px",
+      }) as React.CSSProperties & Record<`--${string}`, string>,
+    [
+      documentsPaneOpen,
+      layoutSettings.documentsPaneWidth,
+      layoutSettings.outlinePaneWidth,
+      outlineOpen,
+      themeVars,
+    ],
+  );
   const editorSplitStyle =
     editorSplitOpen && rightTab
       ? {
@@ -2178,6 +2207,91 @@ function MainApp() {
           Math.max(0.3, (clientX - rect.left) / rect.width),
         );
         updateLayoutSettings({ editorSplitRatio });
+      };
+      update(event.clientX);
+
+      const cleanup = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onEnd);
+        handle.removeEventListener("pointercancel", onEnd);
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      };
+      const onMove = (move: PointerEvent) => {
+        if (move.pointerId !== pointerId) return;
+        update(move.clientX);
+      };
+      const onEnd = (end: PointerEvent) => {
+        if (end.pointerId !== pointerId) return;
+        cleanup();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onEnd);
+      handle.addEventListener("pointercancel", onEnd);
+    },
+    [updateLayoutSettings],
+  );
+
+  const startDocumentsPaneResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const handle = event.currentTarget;
+      const pointerId = event.pointerId;
+      handle.setPointerCapture(pointerId);
+
+      const update = (clientX: number) => {
+        const paneRect = documentsPaneRef.current?.getBoundingClientRect();
+        if (!paneRect) return;
+        updateLayoutSettings({
+          documentsPaneWidth: clampPaneWidth(
+            clientX - paneRect.left,
+            MIN_DOCUMENTS_PANE_WIDTH,
+            MAX_DOCUMENTS_PANE_WIDTH,
+          ),
+        });
+      };
+      update(event.clientX);
+
+      const cleanup = () => {
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onEnd);
+        handle.removeEventListener("pointercancel", onEnd);
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      };
+      const onMove = (move: PointerEvent) => {
+        if (move.pointerId !== pointerId) return;
+        update(move.clientX);
+      };
+      const onEnd = (end: PointerEvent) => {
+        if (end.pointerId !== pointerId) return;
+        cleanup();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onEnd);
+      handle.addEventListener("pointercancel", onEnd);
+    },
+    [updateLayoutSettings],
+  );
+
+  const startOutlinePaneResize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const shellRect = appShellRef.current?.getBoundingClientRect();
+      const paneRect = outlinePaneRef.current?.getBoundingClientRect();
+      if (!shellRect || !paneRect) return;
+      const handle = event.currentTarget;
+      const pointerId = event.pointerId;
+      handle.setPointerCapture(pointerId);
+
+      const update = (clientX: number) => {
+        updateLayoutSettings({
+          outlinePaneWidth: clampPaneWidth(
+            paneRect.right - clientX,
+            MIN_OUTLINE_PANE_WIDTH,
+            MAX_OUTLINE_PANE_WIDTH,
+          ),
+        });
       };
       update(event.clientX);
 
@@ -2275,7 +2389,7 @@ function MainApp() {
 
   return (
     <LocaleContext.Provider value={localeValue}>
-      <div className={shellClass} style={themeVars}>
+      <div className={shellClass} style={shellStyle} ref={appShellRef}>
         <header
           className="topbar"
           data-tauri-drag-region
@@ -2478,7 +2592,22 @@ function MainApp() {
                 refreshing={explorerWorkspaceState.refreshing}
                 onClose={() => updateLayoutSettings({ documentsPaneOpen: false })}
                 searchInputRef={searchInputRef}
+                paneRef={documentsPaneRef}
                 vaultPath={explorerWorkspacePath}
+              />
+            ) : null}
+            {documentsPaneOpen ? (
+              <div
+                className="pane-resize-handle documents-pane-resize"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("layout.resizeDocuments")}
+                title={t("layout.resizeDocuments")}
+                aria-valuemin={MIN_DOCUMENTS_PANE_WIDTH}
+                aria-valuemax={MAX_DOCUMENTS_PANE_WIDTH}
+                aria-valuenow={layoutSettings.documentsPaneWidth}
+                data-no-drag="true"
+                onPointerDown={startDocumentsPaneResize}
               />
             ) : null}
 
@@ -2505,6 +2634,21 @@ function MainApp() {
             </div>
 
             {outlineOpen ? (
+              <div
+                className="pane-resize-handle outline-pane-resize"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t("layout.resizeOutline")}
+                title={t("layout.resizeOutline")}
+                aria-valuemin={MIN_OUTLINE_PANE_WIDTH}
+                aria-valuemax={MAX_OUTLINE_PANE_WIDTH}
+                aria-valuenow={layoutSettings.outlinePaneWidth}
+                data-no-drag="true"
+                onPointerDown={startOutlinePaneResize}
+              />
+            ) : null}
+
+            {outlineOpen ? (
               <OutlinePane
                 document={document}
                 draftContent={draftContent}
@@ -2518,6 +2662,7 @@ function MainApp() {
                 onUpdateField={updateField}
                 onSelectEntry={selectEntry}
                 onMissingWikilink={handleWikilinkClick}
+                paneRef={outlinePaneRef}
               />
             ) : null}
           </>

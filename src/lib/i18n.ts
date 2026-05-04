@@ -35,6 +35,8 @@ const ko: Record<string, string> = {
   "layout.showDocumentTypes": "문서 타입 패널 보이기",
   "layout.hideDocuments": "문서 패널 숨기기",
   "layout.showDocuments": "문서 패널 보이기",
+  "layout.resizeDocuments": "문서 패널 크기 조절",
+  "layout.resizeOutline": "오른쪽 패널 크기 조절",
 
   "workspace.current": "현재 Workspace",
   "workspace.add": "Workspace 추가",
@@ -120,7 +122,10 @@ const ko: Record<string, string> = {
   "list.tree.actions": "트리 전체 조작",
   "list.tree.collapseAll": "모두 접기",
   "list.tree.expandAll": "모두 펴기",
+  "context.openFile": "파일 열기",
   "context.revealInFinder": "Finder에서 보기",
+  "context.copyPath": "경로 복사",
+  "context.copyRelativePath": "상대 경로 복사",
 
   "editor.empty.title": "문서를 선택하세요",
   "editor.empty.description":
@@ -408,6 +413,8 @@ const en: Record<string, string> = {
   "layout.showDocumentTypes": "Show document types panel",
   "layout.hideDocuments": "Hide documents panel",
   "layout.showDocuments": "Show documents panel",
+  "layout.resizeDocuments": "Resize documents panel",
+  "layout.resizeOutline": "Resize right panel",
 
   "workspace.current": "Current workspace",
   "workspace.add": "Add workspace",
@@ -493,7 +500,10 @@ const en: Record<string, string> = {
   "list.tree.actions": "Tree bulk actions",
   "list.tree.collapseAll": "Collapse all",
   "list.tree.expandAll": "Expand all",
+  "context.openFile": "Open file",
   "context.revealInFinder": "Reveal in Finder",
+  "context.copyPath": "Copy path",
+  "context.copyRelativePath": "Copy relative path",
 
   "editor.empty.title": "Select a document",
   "editor.empty.description":

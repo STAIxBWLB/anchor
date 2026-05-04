@@ -17,6 +17,8 @@ describe("normalizeAnchorSettings", () => {
         themeMode: "dark",
         accentColor: "#445566",
         layout: {
+          documentsPaneWidth: 999,
+          outlinePaneWidth: 100,
           editorSplitOpen: true,
           editorSplitRatio: 0.9,
           terminalSplitOpen: true,
@@ -43,6 +45,8 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.themeMode).toBe("dark");
     expect(settings.ui.accentColor).toBe("#445566");
     expect(settings.ui.layout.editorSplitOpen).toBe(true);
+    expect(settings.ui.layout.documentsPaneWidth).toBe(560);
+    expect(settings.ui.layout.outlinePaneWidth).toBe(240);
     expect(settings.ui.layout.editorSplitRatio).toBe(0.7);
     expect(settings.ui.layout.terminalSplitOpen).toBe(true);
     expect(settings.ui.layout.terminalSplitRatio).toBe(0.3);
@@ -72,7 +76,9 @@ describe("normalizeAnchorSettings", () => {
         layout: {
           documentTypesPaneOpen: false,
           documentsPaneOpen: false,
+          documentsPaneWidth: 420,
           outlineOpen: false,
+          outlinePaneWidth: 360,
           terminalOpen: true,
           terminalHeight: 300,
           terminalMaximized: true,
@@ -93,7 +99,9 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.layout).toMatchObject({
       documentTypesPaneOpen: false,
       documentsPaneOpen: false,
+      documentsPaneWidth: 420,
       outlineOpen: false,
+      outlinePaneWidth: 360,
       terminalOpen: true,
       terminalHeight: 300,
       terminalMaximized: true,

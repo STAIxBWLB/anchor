@@ -238,6 +238,7 @@ a {
 }
 
 .app-shell.terminal-maximized .document-list,
+.app-shell.terminal-maximized .pane-resize-handle,
 .app-shell.terminal-maximized .editor-split-shell,
 .app-shell.terminal-maximized .outline-pane,
 .app-shell.terminal-maximized .inbox-pane {
@@ -256,11 +257,17 @@ a {
 .document-list {
   grid-area: list;
 }
+.documents-pane-resize {
+  grid-area: list;
+}
 .editor-pane {
   grid-area: editor;
 }
 .editor-split-shell {
   grid-area: editor;
+}
+.outline-pane-resize {
+  grid-area: outline;
 }
 .outline-pane {
   grid-area: outline;
@@ -857,6 +864,40 @@ a {
   background: var(--panel-2);
 }
 
+.pane-resize-handle {
+  align-self: stretch;
+  width: 9px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 12;
+  touch-action: none;
+}
+
+.pane-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+}
+
+.pane-resize-handle:hover::after,
+.pane-resize-handle:active::after {
+  background: var(--accent);
+}
+
+.documents-pane-resize {
+  justify-self: end;
+  transform: translateX(4px);
+}
+
+.outline-pane-resize {
+  justify-self: start;
+  transform: translateX(-4px);
+}
+
 .workspace-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1070,6 +1111,12 @@ a {
 .context-menu button:hover {
   background: var(--accent-tint);
   color: var(--accent);
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line-soft);
 }
 
 .list-group {

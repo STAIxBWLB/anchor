@@ -12,6 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   chooseFiles,
@@ -53,6 +54,7 @@ interface OutlinePaneProps {
   ) => Promise<void>;
   onSelectEntry: (entry: VaultEntry) => void;
   onMissingWikilink?: (target: string) => void;
+  paneRef?: React.RefObject<HTMLElement | null>;
 }
 
 const STANDARD_TYPES = [
@@ -88,6 +90,7 @@ export function OutlinePane({
   onUpdateField,
   onSelectEntry,
   onMissingWikilink,
+  paneRef,
 }: OutlinePaneProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<"outline" | "files" | "memo" | "info">("outline");
@@ -114,7 +117,7 @@ export function OutlinePane({
   }, [entries]);
 
   return (
-    <aside className="outline-pane">
+    <aside className="outline-pane" ref={paneRef}>
       <div className="outline-header">
         <h3>{t("rightPane.title")}</h3>
         <button

@@ -280,7 +280,9 @@ fn default_settings_json() -> JsonValue {
             "layout": {
                 "documentTypesPaneOpen": true,
                 "documentsPaneOpen": true,
+                "documentsPaneWidth": 340,
                 "outlineOpen": true,
+                "outlinePaneWidth": 280,
                 "terminalOpen": false,
                 "terminalHeight": 260,
                 "terminalMaximized": false,

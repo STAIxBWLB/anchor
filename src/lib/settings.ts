@@ -13,7 +13,9 @@ export interface WindowBoundsSettings {
 export interface LayoutSettings {
   documentTypesPaneOpen: boolean;
   documentsPaneOpen: boolean;
+  documentsPaneWidth: number;
   outlineOpen: boolean;
+  outlinePaneWidth: number;
   terminalOpen: boolean;
   terminalHeight: number;
   terminalMaximized: boolean;
@@ -66,7 +68,9 @@ export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
     layout: {
       documentTypesPaneOpen: true,
       documentsPaneOpen: true,
+      documentsPaneWidth: 340,
       outlineOpen: true,
+      outlinePaneWidth: 280,
       terminalOpen: false,
       terminalHeight: 260,
       terminalMaximized: false,
@@ -239,10 +243,22 @@ function normalizeLayout(value: unknown, legacyTerminal: Record<string, unknown>
       typeof layout.documentsPaneOpen === "boolean"
         ? layout.documentsPaneOpen
         : DEFAULT_ANCHOR_SETTINGS.ui.layout.documentsPaneOpen,
+    documentsPaneWidth: normalizePaneWidth(
+      layout.documentsPaneWidth,
+      DEFAULT_ANCHOR_SETTINGS.ui.layout.documentsPaneWidth,
+      260,
+      560,
+    ),
     outlineOpen:
       typeof layout.outlineOpen === "boolean"
         ? layout.outlineOpen
         : DEFAULT_ANCHOR_SETTINGS.ui.layout.outlineOpen,
+    outlinePaneWidth: normalizePaneWidth(
+      layout.outlinePaneWidth,
+      DEFAULT_ANCHOR_SETTINGS.ui.layout.outlinePaneWidth,
+      240,
+      520,
+    ),
     terminalOpen,
     terminalHeight,
     terminalMaximized:
@@ -270,6 +286,16 @@ function normalizeSplitRatio(value: unknown): number {
     return 0.5;
   }
   return Math.min(0.7, Math.max(0.3, value));
+}
+
+function normalizePaneWidth(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.round(Math.min(max, Math.max(min, value)));
 }
 
 function normalizeWindowBounds(value: unknown): WindowBoundsSettings | null {

@@ -65,6 +65,7 @@ interface DocumentListProps {
   refreshing?: boolean;
   onClose?: () => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  paneRef?: React.RefObject<HTMLElement | null>;
   vaultPath?: string | null;
 }
 
@@ -91,6 +92,7 @@ export const DocumentList = memo(function DocumentList({
   refreshing = false,
   onClose,
   searchInputRef,
+  paneRef,
   vaultPath,
 }: DocumentListProps) {
   const { t, locale } = useTranslation();
@@ -102,7 +104,9 @@ export const DocumentList = memo(function DocumentList({
     x: number;
     y: number;
     targetPath: string;
+    relPath: string;
     title: string;
+    entry: VaultEntry | null;
   } | null>(null);
   const [, startSearchTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
@@ -243,9 +247,15 @@ export const DocumentList = memo(function DocumentList({
       ? t("sidebar.types.untyped")
       : typeFilter
     : t("list.title");
+  const copyContextText = (value: string) => {
+    if (!value) return;
+    const write = navigator.clipboard?.writeText(value);
+    void write?.catch(() => {});
+    setContextMenu(null);
+  };
 
   return (
-    <section className="document-list">
+    <section className="document-list" ref={paneRef}>
       <div className="workspace-tabs" role="tablist" aria-label={t("workspace.tabs.label")}>
         <button
           type="button"
@@ -399,14 +409,13 @@ export const DocumentList = memo(function DocumentList({
             forceExpand={forceExpandTree}
             onCollapsedTreeFoldersChange={onCollapsedTreeFoldersChange}
             onSelect={onSelect}
-            onContextMenu={(event, targetPath, title) => {
+            onContextMenu={(event, target) => {
               event.preventDefault();
               event.stopPropagation();
               setContextMenu({
                 x: event.clientX,
                 y: event.clientY,
-                targetPath,
-                title,
+                ...target,
               });
             }}
             vaultPath={vaultPath}
@@ -455,7 +464,9 @@ export const DocumentList = memo(function DocumentList({
                         x: event.clientX,
                         y: event.clientY,
                         targetPath: entry.path,
+                        relPath: entry.relPath,
                         title: entry.title,
+                        entry,
                       });
                     }}
                   >
@@ -513,6 +524,18 @@ export const DocumentList = memo(function DocumentList({
           <div className="context-menu-title" title={contextMenu.title}>
             {contextMenu.title}
           </div>
+          {contextMenu.entry ? (
+            <button
+              type="button"
+              onClick={() => {
+                const entry = contextMenu.entry;
+                setContextMenu(null);
+                if (entry) void onSelect(entry);
+              }}
+            >
+              {t("context.openFile")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -522,6 +545,13 @@ export const DocumentList = memo(function DocumentList({
             }}
           >
             {t("context.revealInFinder")}
+          </button>
+          <div className="context-menu-separator" />
+          <button type="button" onClick={() => copyContextText(contextMenu.targetPath)}>
+            {t("context.copyPath")}
+          </button>
+          <button type="button" onClick={() => copyContextText(contextMenu.relPath)}>
+            {t("context.copyRelativePath")}
           </button>
         </div>
       ) : null}
@@ -540,8 +570,7 @@ interface DocumentTreeProps {
   onSelect: (entry: VaultEntry) => void;
   onContextMenu: (
     event: React.MouseEvent,
-    targetPath: string,
-    title: string,
+    target: DocumentContextTarget,
   ) => void;
   vaultPath?: string | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
@@ -613,6 +642,12 @@ const DocumentTree = memo(function DocumentTree({
 
 type FolderRow = Extract<DocumentTreeRow, { kind: "folder" }>;
 type EntryRow = Extract<DocumentTreeRow, { kind: "entry" }>;
+type DocumentContextTarget = {
+  targetPath: string;
+  relPath: string;
+  title: string;
+  entry: VaultEntry | null;
+};
 
 const TreeFolderRow = memo(function TreeFolderRow({
   row,
@@ -630,8 +665,7 @@ const TreeFolderRow = memo(function TreeFolderRow({
   onCollapsedTreeFoldersChange: (paths: string[]) => void;
   onContextMenu: (
     event: React.MouseEvent,
-    targetPath: string,
-    title: string,
+    target: DocumentContextTarget,
   ) => void;
   vaultPath?: string | null;
 }) {
@@ -652,7 +686,14 @@ const TreeFolderRow = memo(function TreeFolderRow({
         )
       }
       title={row.path}
-      onContextMenu={(event) => onContextMenu(event, folderTarget, row.path)}
+      onContextMenu={(event) =>
+        onContextMenu(event, {
+          targetPath: folderTarget,
+          relPath: row.path,
+          title: row.path,
+          entry: null,
+        })
+      }
     >
       <ChevronRight
         size={13}
@@ -679,8 +720,7 @@ const TreeEntryRow = memo(function TreeEntryRow({
   onSelect: (entry: VaultEntry) => void;
   onContextMenu: (
     event: React.MouseEvent,
-    targetPath: string,
-    title: string,
+    target: DocumentContextTarget,
   ) => void;
   documentLabelMode: DocumentLabelMode;
 }) {
@@ -691,7 +731,14 @@ const TreeEntryRow = memo(function TreeEntryRow({
       className={selected ? "tree-row file selected" : "tree-row file"}
       style={{ paddingLeft }}
       onClick={() => onSelect(row.entry)}
-      onContextMenu={(event) => onContextMenu(event, row.entry.path, row.entry.title)}
+      onContextMenu={(event) =>
+        onContextMenu(event, {
+          targetPath: row.entry.path,
+          relPath: row.entry.relPath,
+          title: row.entry.title,
+          entry: row.entry,
+        })
+      }
       title={row.entry.relPath}
     >
       <span className="tree-indent-slot" />
