@@ -6,7 +6,8 @@ import {
   mockCreateVersion,
   mockEntries,
   mockInboxDropItems,
-  mockVaultList,
+  mockSetActiveWorkspaceRoot,
+  mockWorkspaceRegistry,
   readMockDocument,
 } from "./fixtures";
 import type {
@@ -19,16 +20,12 @@ import type {
   InboxDropItem,
   InboxSettings,
   VaultEntry,
-  VaultList,
+  WorkspaceRegistry,
+  WorkspaceRootEntry,
+  WorkspaceVisibility,
   VersionSnapshot,
 } from "./types";
 import type { TerminalKind } from "./terminal";
-
-export const DEFAULT_INBOX_SETTINGS: InboxSettings = {
-  inboxRoot: "inbox/downloads",
-  sources: ["outlook", "sharepoint", "gmail", "kakao", "telegram", "downloads"],
-  gwsPath: null,
-};
 
 declare global {
   interface Window {
@@ -37,6 +34,12 @@ declare global {
 }
 
 const isTauri = () => typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
+
+export const DEFAULT_INBOX_SETTINGS: InboxSettings = {
+  inboxRoot: "inbox/downloads",
+  sources: ["outlook", "sharepoint", "gmail", "kakao", "telegram", "downloads"],
+  gwsPath: null,
+};
 
 export async function getSampleVaultPath(): Promise<string> {
   if (!isTauri()) return MOCK_VAULT_PATH;
@@ -58,8 +61,13 @@ export async function chooseWorkspaceDirectory(title: string): Promise<string | 
 }
 
 export async function scanVault(vaultPath: string): Promise<VaultEntry[]> {
-  if (!isTauri()) return mockEntries();
+  if (!isTauri()) return mockEntries(vaultPath);
   return invoke<VaultEntry[]>("scan_vault", { vaultPath });
+}
+
+export async function readVaultCache(vaultPath: string): Promise<VaultEntry[] | null> {
+  if (!isTauri()) return mockEntries(vaultPath);
+  return invoke<VaultEntry[] | null>("read_vault_cache", { vaultPath });
 }
 
 export async function scanInboxDrop(vaultPath: string): Promise<InboxDropItem[]> {
@@ -143,39 +151,52 @@ export async function createVersion(
   });
 }
 
-// === Multi-vault registry ===
+// === Workspace registry ===
 
-export async function listVaults(): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("list_vaults");
+export async function listWorkspaceRoots(): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("list_workspace_roots");
 }
 
-export async function addVault(
-  label: string,
+export async function addWorkspaceRoot(
+  entry: WorkspaceRootEntry,
+): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("add_workspace_root", { entry });
+}
+
+export async function removeWorkspaceRoot(path: string): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("remove_workspace_root", { path });
+}
+
+export async function setActiveWorkspaceRoot(
   path: string,
-  externalWriter?: string | null,
-): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("add_vault", { label, path, externalWriter: externalWriter ?? null });
+  visibility: WorkspaceVisibility,
+): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockSetActiveWorkspaceRoot(path, visibility);
+  return invoke<WorkspaceRegistry>("set_active_workspace_root", { path, visibility });
 }
 
-export async function removeVault(path: string): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("remove_vault", { path });
-}
-
-export async function setActiveVault(path: string): Promise<VaultList> {
-  if (!isTauri()) return mockVaultList();
-  return invoke<VaultList>("set_active_vault", { path });
+export async function refreshWorkspaceCapabilities(path: string): Promise<WorkspaceRegistry> {
+  if (!isTauri()) return mockWorkspaceRegistry();
+  return invoke<WorkspaceRegistry>("refresh_workspace_capabilities", { path });
 }
 
 // === Git ===
 
 export async function gitStatus(vaultPath: string): Promise<GitStatus> {
   if (!isTauri()) {
-    return { isRepo: false, modified: 0, staged: 0, untracked: 0, clean: true, branch: null };
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: true, clean: true, branch: null };
   }
   return invoke<GitStatus>("git_status", { vaultPath });
+}
+
+export async function gitStatusFast(vaultPath: string): Promise<GitStatus> {
+  if (!isTauri()) {
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: false, clean: true, branch: null };
+  }
+  return invoke<GitStatus>("git_status_fast", { vaultPath });
 }
 
 export async function gitCommit(
@@ -184,7 +205,7 @@ export async function gitCommit(
   paths?: string[],
 ): Promise<GitStatus> {
   if (!isTauri()) {
-    return { isRepo: false, modified: 0, staged: 0, untracked: 0, clean: true, branch: null };
+    return { isRepo: false, modified: 0, staged: 0, untracked: 0, untrackedKnown: true, clean: true, branch: null };
   }
   return invoke<GitStatus>("git_commit", { vaultPath, message, paths: paths ?? null });
 }
@@ -197,6 +218,16 @@ export async function gitChanges(vaultPath: string): Promise<GitFileChange[]> {
 export async function gitDiff(vaultPath: string, filePath: string): Promise<string> {
   if (!isTauri()) return "";
   return invoke<string>("git_diff", { vaultPath, filePath });
+}
+
+export async function revealInFileManager(
+  vaultPath: string,
+  targetPath: string,
+): Promise<void> {
+  if (!isTauri()) {
+    throw new Error("Reveal in Finder requires the Tauri app.");
+  }
+  await invoke("reveal_in_file_manager", { vaultPath, targetPath });
 }
 
 // === Phase 2 inbox watcher / AI bridge / classifier ===
@@ -299,16 +330,18 @@ export async function terminalKill(sessionId: string): Promise<void> {
  *  Workspace CLI. Returns id / from / subject / date — anchor never
  *  fetches the message body, just the envelope, matching the Phase 2
  *  triage surface. Empty `query` falls back to gws's default
- *  `is:unread`. `vaultPath` lets the backend pick up an optional
- *  `gwsPath` override from `<vault>/.anchor/inbox.json`. */
+ *  `is:unread`. */
 export async function fetchGmailUnread(
-  vaultPath: string | null = null,
-  max: number | null = null,
-  query: string | null = null,
+  maxOrVaultPath: number | string | null = null,
+  queryOrMax: string | number | null = null,
+  maybeQuery: string | null = null,
 ): Promise<GmailMessage[]> {
   if (!isTauri()) {
     return mockGmailUnread();
   }
+  const vaultPath = typeof maxOrVaultPath === "string" ? maxOrVaultPath : null;
+  const max = typeof maxOrVaultPath === "number" ? maxOrVaultPath : typeof queryOrMax === "number" ? queryOrMax : null;
+  const query = typeof queryOrMax === "string" ? queryOrMax : maybeQuery;
   return invoke<GmailMessage[]>("fetch_gmail_unread", { vaultPath, max, query });
 }
 

@@ -89,32 +89,19 @@ export interface WorkspaceRegistry {
   hiddenDefaults: string[];
 }
 
-/** Anchor multi-vault registry. external_writer === "mcp-obsidian"
- *  signals that anchor reads but defers writes to an Obsidian instance
- *  (write delegation lands in Phase 2). */
-export interface VaultRegistryEntry {
-  label: string;
-  path: string;
-  externalWriter?: string | null;
-}
-
-export interface VaultList {
-  vaults: VaultRegistryEntry[];
-  activeVault: string | null;
-  hiddenDefaults: string[];
-}
-
 export interface AppError {
   message: string;
 }
 
-/** Git working-tree status of the active vault. Returned by the Rust
+/** Git working-tree status of the active workspace. Returned by the Rust
  *  `git_status` command via shelling out to the user's git binary. */
 export interface GitStatus {
   isRepo: boolean;
   modified: number;
   staged: number;
   untracked: number;
+  /** False when badge polling intentionally skipped untracked enumeration. */
+  untrackedKnown: boolean;
   clean: boolean;
   branch: string | null;
 }
@@ -169,13 +156,11 @@ export interface GmailMessage {
   date: string;
 }
 
-/** Per-vault inbox configuration persisted at `<vault>/.anchor/inbox.json`.
- *  Read on vault activation and applied to scan / watcher / Gmail commands. */
+/** Per-workspace inbox configuration persisted at `<workspace>/.anchor/inbox.json`. */
 export interface InboxSettings {
-  /** Vault-relative path to the inbox root directory. */
+  /** Workspace-relative path to the inbox root directory. */
   inboxRoot: string;
-  /** Source folder names that should be classified. Empty list means
-   *  "accept everything", but the UI treats it as "no filter active". */
+  /** Source folder names that should be classified. Empty means no filter. */
   sources: string[];
   /** Optional absolute path to the `gws` CLI binary. */
   gwsPath: string | null;
@@ -195,8 +180,8 @@ export interface WorkspacePaths {
   primary?: string | null;
   vault?: string | null;
   mirror?: string | null;
-  private?: string | string[] | null;
-  public?: string | string[] | WorkspacePublicPathSpec | WorkspacePublicPathSpec[] | null;
+  "private"?: string | string[] | null;
+  "public"?: string | string[] | WorkspacePublicPathSpec | WorkspacePublicPathSpec[] | null;
 }
 
 export interface WorkspacePublicPathSpec {
@@ -216,6 +201,7 @@ export interface WorkspaceConfig {
   ssot?: Record<string, string>;
   skills?: Record<string, unknown>;
   inbox?: Record<string, unknown>;
+  /** Unmodelled keys in workspace.config.yaml are surfaced here. */
   [extra: string]: unknown;
 }
 
@@ -259,12 +245,16 @@ export interface AnchorWorkspaceMeta {
   pairedVaultPath: string | null;
   ownerName: string | null;
   locale: string | null;
+  /** "pkm" | "inbox" | "system" */
   lastActiveMode: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface AnchorWorkspaceMetaPatch {
+  /** v1 semantics: pass a string to set the field. Omitting (or
+   *  passing `null`/`undefined`) leaves the existing value unchanged.
+   *  Clearing a field is not yet supported through this patch. */
   pairedVaultPath?: string | null;
   ownerName?: string | null;
   locale?: string | null;
@@ -301,7 +291,8 @@ export interface ImportItem {
   originAbs: string;
   originRel: string;
   targetRel: string;
-  status: "new" | "update" | "unchanged";
+  /** "new" | "update" | "unchanged" */
+  status: string;
   originSha256: string;
   label: string;
 }

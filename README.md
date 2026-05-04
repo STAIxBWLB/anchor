@@ -1,16 +1,17 @@
-# Anchor
+# AI Workspace
 
-Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
+AI workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
-## Status (2026-05-01)
+## Status (2026-05-04)
 
 | Phase | State | Outcome |
 |-------|-------|---------|
-| 0 — Hardening | ✅ shipped | Open existing vaults safely. Frontmatter byte-identical round-trip. Multi-vault registry. ko/en parity. |
+| 0 — Hardening | ✅ shipped | Open existing workspaces safely. Frontmatter byte-identical round-trip. Multi-workspace registry. ko/en parity. |
 | 0.5 — UI polish | ✅ shipped | Topbar, sidebar with type filters + recents, command palette (⌘K), Pretendard Korean typography, light/dark. |
 | 1A — Killer feature MVP | ✅ shipped | Doc-selection reliability, frontmatter inline edit (InspectorPane), wikilink autocomplete (Korean IME-aware) + click-to-navigate, typed neighborhood pane (project / mentions / peers), in-memory nav history (⌘[ / ⌘]). |
-| 1B — Rich editor / git | ✅ feature-complete | Git status badge + commit-from-app (file list + per-file diff + syntax color + auto-refresh on focus). `scan_vault` rayon parallelism: 2.78s → 385ms on 7.1k files. Multi-tab editor (per-vault persistence, ⌘1..⌘8 select, ⌘W close, dirty stash). BlockNote rich + source + preview 3-way toggle (frontmatter line preserved). Browser smoke e2e is in place. **Deferred**: vault cache (385ms acceptable), monorepo extraction. |
+| 1B — Rich editor / git | ✅ feature-complete | Git status badge + commit-from-app (file list + per-file diff + syntax color + auto-refresh on focus). Workspace scan rayon parallelism plus cache-backed warm startup for `~/workspace/work`: cached entries + active document render first, then authoritative scan reconciles in the background. Multi-tab editor (per-workspace persistence, ⌘1..⌘8 select, ⌘W close, dirty stash). BlockNote rich + source + preview 3-way toggle (frontmatter line preserved). Browser smoke e2e is in place. **Deferred**: monorepo extraction. |
 | 2 — Inbox + AI | 🚧 read-only surface live | Backend (polling, watcher, date parser, Claude CLI bridge, classifier, Gmail via `gws` CLI) + UI (`InboxPane` with parallel Files / Gmail sections, classify/accept/reject) all shipped. Accept/reject currently updates UI state only; file-move on accept + Gmail label-modify/archive remain. |
+| 2.5 — Tree + Cursor shell + Terminal launchers | ✅ shipped | Document browser supports list/tree mode with persisted folder collapse state, collapse/expand-all, and Reveal in Finder. The shell now uses a Cursor-style activity rail, a single Explorer pane with Private/Public workspace tabs, editor layout, and bottom integrated terminal. Private workspace is the default write target; Public workspace is optional and selected explicitly when present. `.anchor/settings.json` stores theme/accent/layout/window/terminal defaults plus future AI, inbox-channel, and connector placeholders. Claude, Codex, and Shell launch as real PTY tabs from the active workspace; first run starts with the terminal collapsed and restores the user's last layout afterward. |
 | 3 — Built-in Skills | 📋 planned | |
 | 4 — Document Edit Mode | 📋 planned | |
 
@@ -18,11 +19,11 @@ Local-first markdown vault desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
 Phase 2 has crossed the read-only boundary. The next work is the smallest safe write/apply loop:
 
-1. **File accept action** — move accepted drops from `inbox/downloads/<source>/...` into the classifier's `suggestedFolder` when present; otherwise require a user-selected target. Keep all moves inside the vault boundary.
+1. **File accept action** — move accepted drops from `inbox/downloads/<source>/...` into the classifier's `suggestedFolder` when present; otherwise require a user-selected target. Keep all moves inside the workspace boundary.
 2. **Gmail accept/reject action** — call `gws` to apply Anchor labels and archive accepted mail. Rejected mail should be labelled or left unread until the policy is chosen.
 3. **Keyboard accept loop** — add focused inbox selection plus `a` / `r` actions so the button-only UI becomes the promised one-keystroke flow.
-4. **Real-vault verification** — verify dropped files, real chu.ac.kr unread mail, Claude classification, and accept/reject in one Tauri session.
-5. **Phase 3 bridge prep** — reuse the Claude CLI event stream for command-palette skill invocation after the inbox apply loop is stable.
+4. **Real-workspace verification** — verify dropped files, real chu.ac.kr unread mail, Claude classification, and accept/reject in one Tauri session.
+5. **Phase 3 bridge prep** — the Claude inbox bridge, integrated terminal, and `.anchor/settings.json` terminal defaults are in place; next is wiring skills to the command palette with accept/reject diffs.
 
 ## Architecture
 
@@ -32,20 +33,22 @@ Phase 2 has crossed the read-only boundary. The next work is the smallest safe w
 │   React 19 + Radix UI + marked (preview) + DOMPurify         │
 │   Phase 1B: + BlockNote rich editor + MediaPipe (Phase 4)    │
 │                                                               │
-│   [PKM] [Inbox] [Skills] [Doc Edit]  ← 4-mode lens (Phase 1+)│
+│   Activity rail: Docs / Inbox / Settings                     │
+│   Tabbed Explorer tree + editor + bottom integrated terminal  │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Tauri IPC
 ┌──────────────────────────────▼──────────────────────────────┐
 │  Rust core (src-tauri/src/)                                  │
-│   vault.rs       — walkdir + .anchorignore + parallel scan   │
+│   workspace scan — walkdir + .anchorignore + cached index           │
 │   frontmatter/   — line-by-line YAML edit (preserves order)  │
 │   document.rs    — read/save/create/version + field patch    │
 │   git.rs         — status/commit/diff via shell-out          │
-│   vault_list.rs  — multi-vault registry + active vault       │
+│   vault_list.rs  — workspace registry + private/public active roots │
 │   filename_rules.rs — Korean NFC/NFD safety, Windows reserve │
 │                                                               │
 │   inbox.rs / inbox_watcher.rs / korean_date.rs               │
-│   inbox_classifier.rs / gmail_gws.rs / ai_router.rs          │
+│   inbox_classifier.rs / gmail_gws.rs / ai_router.rs / terminal.rs │
+│   anchor_dir.rs  — .anchor settings/rules/templates/catalogs  │
 │   Phase 3+: + skill_host.rs                                  │
 │   Phase 4+: + whisper bridge / mcp lifecycle                 │
 └──────┬─────────────────────────────────────────────────────┘
@@ -57,7 +60,7 @@ Phase 2 has crossed the read-only boundary. The next work is the smallest safe w
 ```
 
 **Module boundary rules**:
-- Rust core **owns** vault FS / cache / git / frontmatter / inbox scan/watch/classification / Gmail `gws` bridge / Claude CLI subprocess.
+- Rust core **owns** workspace FS / cache / git / frontmatter / inbox scan/watch/classification / Gmail `gws` bridge / `.anchor/settings.json` / Claude inbox subprocess / integrated terminal PTY sessions.
 - React handles **only** BlockNote / command palette / neighborhood / gesture worker / AudioWorklet. No business logic.
 - Node sidecar holds the MCP server + marketplace (Phase 3+).
 - Python sidecar holds Whisper only (Phase 4). HWPX is delegated to the user's `hwpx` Claude Code skill — not rewritten.
@@ -71,10 +74,10 @@ Each phase is defined in **outcomes the user actually exercises**. No phase exis
 **Outcome**: anchor is a first-class editor capable of carrying one project's meeting notes through a full week.
 
 - [x] **BlockNote rich editor + raw + preview 3-way toggle** — `RichMarkdownEditor` wraps `@blocknote/mantine`; frontmatter line is preserved across rich↔source by splitting on the leading `---…---\n` block before parsing. Source tab is the textarea (with Korean IME-aware `[[` autocomplete). Preview tab is `marked` + DOMPurify. Round-trip on real notes still needs the Phase 1A verification pass.
-- [x] **Single-window multi-tab editor** — per-vault `anchor:openTabs:v1` persistence, `EditorTab` discriminator, latest-wins selection, ⌘1..⌘8 to select by index, ⌘W to close active. Closing a dirty tab stashes the draft into the existing Phase 1A `discardedEdit` toast (Tauri webview swallows native `confirm()`, so the toast is the non-blocking equivalent).
-- [ ] **Vault cache** — lift `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC). **Trigger threshold raised**: a one-shot 385ms warm scan is bearable. Revisit only if cold scan is painful or BlockNote integration changes the latency budget.
-- [ ] **Monorepo extraction** — `crates/anchor-vault`, `crates/anchor-git`. Done at the seam between Phase 1B and Phase 2.
-- [x] **Playwright smoke + e2e** — browser smoke covers sample-vault boot, multi-tab open, source tab, and preview tab. Broader inbox/native Tauri e2e still belongs to Phase 2 verification.
+- [x] **Single-window multi-tab editor** — shared editor tabs persist their workspace path and private/public visibility, with `EditorTab` discriminator, latest-wins selection, ⌘1..⌘8 select, ⌘W close. Closing a dirty tab stashes the draft into the existing Phase 1A `discardedEdit` toast.
+- [x] **Workspace cache** — lightweight JSON cache at `<workspace>/.anchor/cache/workspace-index-v1.json`. Startup reads the disposable cache first, restores only the active tab before first paint, then runs the authoritative workspace scan in the background. Full scans also precompute version names once and reuse compiled regexes.
+- [ ] **Monorepo extraction** — `crates/anchor-workspace`, `crates/anchor-git`. Done at the seam between Phase 1B and Phase 2.
+- [x] **Playwright smoke + e2e** — browser smoke covers sample workspace boot, multi-tab open, source tab, and preview tab. Broader inbox/native Tauri e2e still belongs to Phase 2 verification.
 
 **Verification gate**: a full week of multi-tab work with project + meeting + people open simultaneously, daily commits, frontmatter preserved.
 
@@ -84,14 +87,22 @@ Each phase is defined in **outcomes the user actually exercises**. No phase exis
 
 **Shipped read-only surface**:
 
-1. **Vault polling scan (✓ shipped)** — `scan_inbox_drop(vault_path)` walks `<vault>/inbox/downloads/{*}/...` and returns `InboxDropItem[]` (id, source, size, mtime).
-2. **Filesystem watcher (✓ shipped)** — `notify` watches `<vault>/inbox/downloads/` and emits `inbox://file_event`; the frontend treats events as hints to re-run the cheap polling scan.
+1. **Workspace polling scan (✓ shipped)** — `scan_inbox_drop(vault_path)` walks `<workspace>/inbox/downloads/{*}/...` and returns `InboxDropItem[]` (id, source, size, mtime). The Rust command keeps its legacy argument name for compatibility.
+2. **Filesystem watcher (✓ shipped)** — `notify` watches `<workspace>/inbox/downloads/` and emits `inbox://file_event`; the frontend treats events as hints to re-run the cheap polling scan.
 3. **Korean NL date parser (✓ shipped)** — pure Rust parser for phrases such as "내일", "다음 주 금요일", "3월 15일", and "오늘 오후 3시".
-4. **Claude Code CLI subprocess bridge (✓ shipped)** — `start_claude_cli_invocation(prompt, cwd?, extra_args?)` spawns `claude -p` and streams `ai://output`, `ai://done`, and `ai://error`.
+4. **Claude Code CLI subprocess bridge (✓ shipped)** — `start_claude_cli_invocation(prompt, cwd?, extra_args?)` spawns `claude -p --permission-mode plan` and streams `ai://output`, `ai://done`, and `ai://error`.
 5. **Inbox classifier (✓ shipped)** — `build_inbox_classification_prompt(item)` + `parse_inbox_classification(raw)` with a closed category set (`task`/`reference`/`meeting`/`admin`/`noise`) and tolerant JSON parsing.
 6. **Gmail via `gws` CLI (✓ shipped)** — Anchor shells out to `gws gmail +triage --format json` and exposes `fetch_gmail_unread(max?, query?) -> GmailMessage[]`.
 7. **Inbox UI (✓ shipped)** — `InboxPane` shows parallel Files / Gmail sections and supports classify/accept/reject button actions.
-8. **Browser smoke e2e (✓ shipped)** — Playwright verifies sample-vault boot, multi-tab editor open, source tab, and preview tab.
+8. **Browser smoke e2e (✓ shipped)** — Playwright verifies sample workspace boot, multi-tab editor open, source tab, and preview tab.
+
+**Tree + Cursor shell + integrated terminal add-on (✓ shipped)**:
+
+1. **Document tree** — the document browser has list/tree mode, folder-first sorting, search/type-filter auto-expansion, per-visibility collapsed folders, collapse/expand-all, and a Reveal in Finder context menu for files/folders.
+2. **Workspace settings** — `.anchor/settings.json` carries UI defaults, theme/accent, panel/window layout state, terminal defaults, launcher preferences, and placeholders for AI providers, inbox channels, and connectors. `.anchor/mcp.json` and `.anchor/skills.json` remain their own SSOT files.
+3. **Cursor-style shell** — the main app uses a left activity rail for Docs / Inbox / Settings, a single tabbed Explorer pane, central editor tabs, and a collapsible bottom terminal panel.
+4. **Integrated terminal** — `portable-pty` sessions stream through `terminal://output` and `terminal://exit`. Launcher buttons start `claude`, `codex --cd <cwd>`, or `$SHELL` in independent xterm tabs; closing a tab kills its PTY process. First run keeps the terminal panel collapsed; later launches restore the previous panel height/open state and auto-start Shell only when the panel is open with no tabs.
+5. **Settings window** — Settings opens in a separate Tauri window and edits document browser mode, theme mode, accent color, terminal auto-launch, and raw JSON surfaces for AI, inbox channels, connectors, MCP, projects, and skills.
 
 **Remaining write/apply work**:
 
@@ -101,10 +112,10 @@ Each phase is defined in **outcomes the user actually exercises**. No phase exis
 4. **Native Tauri e2e** — cover watcher events, Claude CLI success/failure, and Gmail CLI failure taxonomy.
 5. **KakaoTalk macOS notification watcher (optional)** — still deferred while the full-disk-access prompt is avoidable.
 
-**AI dispatch**:
-- Primary: Claude Code CLI subprocess (user's Max plan, marginal cost $0).
-- Fallback: Anthropic API (Haiku for classification, Sonnet for drafting).
-- Streaming: tolaria `ai_agents.rs` SSE bridge.
+**AI / terminal dispatch**:
+- Inbox classification: Claude Code CLI subprocess through `start_claude_cli_invocation`, streamed with the existing `ai://*` events.
+- General Claude/Codex use: integrated terminal PTY tabs, using each CLI's own auth, sandbox, and approval policy.
+- Future API fallback: Anthropic/OpenAI settings can be added in the Settings window once there is a write/apply workflow that needs it.
 
 **Skip in Phase 2**: iMessage DB, Slack, Outlook (Phase 3 wraps Outlook via the `ms-office` skill).
 
@@ -135,9 +146,9 @@ Five skills:
 - One-Euro filter + gesture worker (prev/next, scroll, accept/reject diff).
 - PostToolUse → SSE diff stream (surgical edits, not chat).
 
-**Generalize** (RISE-specific → vault-level):
-- Glossary enforcement → `.anchor/glossary.yml` per vault.
-- Templates → `.anchor/templates/` per vault.
+**Generalize** (RISE-specific → workspace-level):
+- Glossary enforcement → `.anchor/glossary.yml` per workspace.
+- Templates → `.anchor/templates/` per workspace.
 
 **Drop**: HoloBackground / R3F HUD (cute demo, no daily value). Hard-coded division/program lists. Next.js shell.
 
@@ -157,8 +168,8 @@ In likelihood order:
 
 Items requiring the user's decision before further phases proceed:
 
-1. **Vault cache trigger threshold** — warm scan is now 385ms (after rayon parallelism). Need to confirm perceived latency before scheduling the cache lift. Cold-cache measurement also needed.
-2. **BlockNote ↔ raw default** — rich for general notes; raw for precision-sensitive editing such as the RISE proposal. Per-vault setting vs per-doc setting?
+1. **Workspace cache threshold** — shipped as a lightweight JSON index because `~/workspace/work` startup latency is dominated by the full initial pipeline, not only the Rust scan. Keep measuring cold scan and warm cache paint before lifting to a heavier database cache.
+2. **BlockNote ↔ raw default** — rich for general notes; raw for precision-sensitive editing such as the RISE proposal. Per-workspace setting vs per-doc setting?
 3. **Multi-tab UX** — close-with-dirty confirmation: Obsidian pattern (autosave) vs VS Code pattern (confirm)?
 4. **Unresolved-wikilink behavior** — Phase 1A surfaces a soft notice. Phase 1B should pick: (a) red underline + create-new dialog, or (b) auto-stub note then open it.
 5. **anchor MCP port** — 9710 (matches tolaria) or fall back to 9712/9713?
@@ -179,7 +190,7 @@ Out of scope for v1 by explicit decision:
 - Multi-user collab, CRDT, realtime (single user, single device, git for history).
 - PDF annotation, OCR (file-extracted text is enough).
 - Agent-autonomous edits (every Claude write goes through accept/reject diff).
-- iCloud / Dropbox vault awareness (user's responsibility).
+- iCloud / Dropbox workspace awareness (user's responsibility).
 - Unsigned / ad-hoc auto-updater feeds (updates are accepted only through signed GitHub Release artifacts).
 
 ## Development
@@ -211,19 +222,60 @@ pnpm tauri build
 # Rust unit + integration tests:
 cd src-tauri && cargo test
 
-# Bench scan_vault on a real vault:
-cd src-tauri && cargo test --release bench_scan_real_vault \
+# Bench workspace scan on a real workspace:
+cd src-tauri && cargo test --release bench_scan_real_workspace \
     -- --ignored --nocapture --test-threads=1
-# → ANCHOR_BENCH_VAULT=/some/path overrides the default ~/workspace/work
+# → ANCHOR_BENCH_WORKSPACE=/some/path overrides the default ~/workspace/work
+
+# Cold/warm startup expectation:
+# 1. first scan creates <workspace>/.anchor/cache/workspace-index-v1.json
+# 2. next app load renders cached entries + active document before the
+#    background scan refreshes the index
 ```
 
-## Vault layout
+## Release Bundles
 
-A vault is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files. anchor stores per-vault state at:
+Publishing a GitHub Release triggers `.github/workflows/release-bundles.yml`.
+The workflow builds native Tauri bundles on macOS, Ubuntu, and Windows, then
+uploads the generated `.app` / `.dmg`, `.deb` / `.rpm` / `.AppImage`, `.exe`,
+and `.msi` assets to that same release.
+
+Release asset versions come from the app metadata in `package.json`,
+`src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; keep those in sync
+before tagging or publishing a release.
+
+## Workspace Layout
+
+An AI workspace is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files.
+
+Private workspace is the required default. Public workspace is optional and means a provider-managed shared root, not internet publishing. V1 capability support is registry-only: Anchor stores non-secret provider metadata in `workspaces.json`, maps a manually entered provider role to coarse capabilities, intersects that with a filesystem writability probe, and gates direct writes in the UI and Rust commands. OAuth, Microsoft Graph, Google Drive, and Nextcloud live API checks are deferred.
+
+Supported public providers are Local, Google Drive, OneDrive, SharePoint, Nextcloud, Obsidian, and Unknown. `workspace.config.yaml` accepts:
+
+```yaml
+paths:
+  private: ~/workspace/work
+  public:
+    - label: Team Drive
+      path: ~/gdrive-workspace/work
+      provider: googleDrive
+      providerId: shared-drive-id
+      writePolicy: direct
+      role: contentManager
+    - label: Reference Site
+      path: ~/shared/reference
+      provider: sharePoint
+      writePolicy: readOnly
+      role: Can view
+```
+
+Anchor stores per-workspace state at:
 
 ```
-<vault>/
+<workspace>/
   .anchor/
+    cache/           # disposable workspace index for warm startup
+    settings.json    # anchor UI/theme/layout/window/terminal defaults
     versions/        # snapshots created via the "Version" button
   .anchorignore      # optional, gitignore-style segment patterns
 ```
@@ -234,46 +286,22 @@ A vault is any folder containing `.md` (or `.markdown`, `.html`, `.htm`) files. 
 node_modules
 .venv
 dist
+build
 _sys/env
 target
+.next
+.turbo
+.cache
+.anchor/cache
 ```
-
-## Code lift map
-
-Major deliverables come from existing, validated codebases — anchor is integration, not greenfield.
-
-| Phase | Source | Destination | Type |
-|-------|--------|-------------|------|
-| 0 | `tolaria/src-tauri/src/frontmatter/{yaml,ops}.rs` | `src-tauri/src/frontmatter/` | line-edit, byte-identical |
-| 0 | `tolaria/src-tauri/src/vault_list.rs` | `src-tauri/src/vault_list.rs` | multi-vault registry |
-| 0 | `tolaria/src-tauri/src/vault/filename_rules.rs` | `src-tauri/src/filename_rules.rs` | NFC/NFD safety |
-| 1A | `tolaria/src/utils/wikilinks.ts` | `src/lib/wikilinks.ts` | 255 LOC, verbatim |
-| 1A | `tolaria/src/utils/wikilinkSuggestions.ts` | `src/lib/wikilinkSuggestions.ts` | adapted, +memo index |
-| 1A | `tolaria/src/utils/neighborhoodHistory.ts` | `src/lib/neighborhoodHistory.ts` | adapted, in-memory only |
-| 1A | `tolaria/src/components/InlineWikilinkSuggest.tsx` | `src/components/WikilinkAutocomplete.tsx` | IME-aware adapted |
-| 1B | `tolaria/src-tauri/src/vault/cache.rs` (1,422 LOC) | `crates/anchor-vault/src/cache.rs` (planned) | wait until latency demands it |
-| 1B | `tolaria/src-tauri/src/git/{status,commit}.rs` | `src-tauri/src/git.rs` (shell-out) | lightweight alternative to git2 |
-| 1B | `tolaria/src/components/{Editor,RawEditorView,BlockNote*}.tsx` | `src/components/Editor*.tsx` | one-week budget, fragile |
-| 1B | `tolaria/src/hooks/useEditorTabSwap.ts` (1,149 LOC) | `src/hooks/useEditorTabSwap.ts` | simplifiable |
-| 1B | `tolaria/playwright.smoke.config.ts` | `e2e/` | smoke + flow tests |
-| 2 | n/a | `src-tauri/src/inbox.rs` + `src-tauri/src/inbox_watcher.rs` | polling scan + notify watcher |
-| 2 | n/a (replaces tidy/imap.js) | `src-tauri/src/gmail_gws.rs` | shell out to user's `gws` CLI; no IMAP code |
-| 2 | `tidy/app/electron/ipc-handlers.js:20-109` | `src-tauri/src/korean_date.rs` | Korean NL date parser |
-| 2 | `tolaria/src-tauri/src/{ai_agents,claude_cli}.rs` | `src-tauri/src/ai_router.rs` | Tauri event stream bridge, adapted |
-| 2 | n/a | `src-tauri/src/inbox_classifier.rs` + `src/lib/aiInvoke.ts` | prompt/parser + frontend orchestration |
-| 4 | `anchor-editor/services/whisper/server.py` | `services/whisper/` | Korean large-v3 |
-| 4 | `anchor-editor/apps/web/lib/intent-fusion.ts` | `src/lib/intent-fusion.ts` | RISE-generic generalization |
-| 4 | `anchor-editor/apps/web/workers/gesture.worker.ts` | `src/workers/gesture.worker.ts` | One-Euro filter |
-
-**Principle**: tolaria's PKM code + tidy's inbox/AI code + anchor-editor's voice/gesture code, fused into one desktop app. The user's `~/.claude/skills/*` is read-only — anchor only invokes; never rewrites.
 
 ## Critical invariants
 
-1. **Filesystem is authoritative.** The cache (`<vault>/.anchor/cache.db`, Phase 1B+) is disposable. React state is derived.
+1. **Filesystem is authoritative.** The cache (`<workspace>/.anchor/cache/workspace-index-v1.json`) is disposable. React state is derived.
 2. **Frontmatter key order + comments preserved.** A single-field patch must never disturb the order or comments of any other key (verified by cargo test).
-3. **Crash-safe rename.** `.anchor-rename-txn/` staging dir + recovery on the next vault scan (Phase 1B).
+3. **Crash-safe rename.** `.anchor-rename-txn/` staging dir + recovery on the next workspace scan (Phase 1B).
 4. **Dynamic relationship detection.** Any frontmatter field containing `[[wikilink]]` is treated as a relationship. No hard-coded field lists.
-5. **Symlinks inside the vault are honored.** Deliberate user-created symlinks (e.g. `~/workspace/work/inbox/downloads → ~/gdrive-workspace/...`) are considered part of the vault. anchor uses lexical containment, not `canonicalize()`.
+5. **Symlinks inside the workspace are honored.** Deliberate user-created symlinks (e.g. `~/workspace/work/inbox/downloads → ~/gdrive-workspace/...`) are considered part of the workspace. Anchor uses lexical containment, not `canonicalize()`.
 
 ## License
 
