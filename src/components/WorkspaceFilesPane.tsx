@@ -55,6 +55,7 @@ interface WorkspaceFilesPaneProps {
   activeWorkspaceLabel: string | null;
   paneMode: ExplorerPaneMode;
   filter: WorkspaceFileFilter;
+  binaryIncludePatterns: string[];
   collapsedFileFolders: string[];
   onWorkspaceVisibilityChange: (visibility: WorkspaceVisibility) => void;
   onAddPublicWorkspace: () => void;
@@ -82,6 +83,7 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
   activeWorkspaceLabel,
   paneMode,
   filter,
+  binaryIncludePatterns,
   collapsedFileFolders,
   onWorkspaceVisibilityChange,
   onAddPublicWorkspace,
@@ -118,8 +120,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
   }, [query]);
 
   const filtered = useMemo(
-    () => filterWorkspaceFiles(entries, deferredQuery, filter),
-    [entries, deferredQuery, filter],
+    () => filterWorkspaceFiles(entries, deferredQuery, filter, binaryIncludePatterns),
+    [entries, deferredQuery, filter, binaryIncludePatterns],
   );
   const forceExpandTree = Boolean(deferredQuery.trim()) || filter !== "all";
   const folderPaths = useMemo(() => collectWorkspaceFileFolderPaths(filtered), [filtered]);

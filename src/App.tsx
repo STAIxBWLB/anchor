@@ -3242,6 +3242,7 @@ function MainApp() {
                 activeWorkspaceLabel={explorerWorkspaceCaption}
                 paneMode={anchorSettings.ui.explorerPaneMode}
                 filter={anchorSettings.ui.workspaceFileFilter}
+                binaryIncludePatterns={anchorSettings.ui.binaryFileIncludePatterns}
                 collapsedFileFolders={collapsedFileFolders}
                 onWorkspaceVisibilityChange={(visibility) => {
                   setExplorerVisibility(visibility);

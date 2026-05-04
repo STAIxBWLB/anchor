@@ -6,6 +6,40 @@ export type FileQueueDefaultOperation = "copy" | "move";
 export type TerminalLauncherId = "claude" | "codex" | "shell";
 export type ThemeMode = "system" | "light" | "dark";
 
+export const DEFAULT_BINARY_FILE_INCLUDE_PATTERNS = [
+  "*.tgz",
+  "*.gz",
+  "*.zst",
+  "*.ogg",
+  "*.mp3",
+  "*.wav",
+  "*.flac",
+  "*.mp4",
+  "*.avi",
+  "*.mov",
+  "*.mkv",
+  "*.srt",
+  "*.png",
+  "*.jpg",
+  "*.jpeg",
+  "*.heic",
+  "*.ai",
+  "*.key",
+  "*.pdf",
+  "*.hwp*",
+  "*.doc",
+  "*.docx",
+  "*.ppt",
+  "*.pptx",
+  "*.ppsx",
+  "*.pps",
+  "*.xls*",
+  "*.xlsx",
+  "*.xlsm",
+  "*.tsv",
+  "*.html",
+] as const;
+
 export interface WindowBoundsSettings {
   x: number;
   y: number;
@@ -44,6 +78,7 @@ export interface AnchorSettings {
     documentBrowserMode: DocumentBrowserMode;
     documentLabelMode: DocumentLabelMode;
     workspaceFileFilter: WorkspaceFileFilter;
+    binaryFileIncludePatterns: string[];
     collapsedTreeFolders: string[];
     collapsedFileFolders: string[];
     documentTreeStateInitialized: boolean;
@@ -71,6 +106,7 @@ export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
     documentBrowserMode: "tree",
     documentLabelMode: "title",
     workspaceFileFilter: "all",
+    binaryFileIncludePatterns: [...DEFAULT_BINARY_FILE_INCLUDE_PATTERNS],
     collapsedTreeFolders: [],
     collapsedFileFolders: [],
     documentTreeStateInitialized: false,
@@ -138,6 +174,9 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
       documentBrowserMode: parseBrowserMode(ui.documentBrowserMode) ?? "tree",
       documentLabelMode: parseDocumentLabelMode(ui.documentLabelMode) ?? "title",
       workspaceFileFilter: parseWorkspaceFileFilter(ui.workspaceFileFilter) ?? "all",
+      binaryFileIncludePatterns: normalizeBinaryFileIncludePatterns(
+        ui.binaryFileIncludePatterns,
+      ),
       collapsedTreeFolders: parseStringArray(ui.collapsedTreeFolders),
       collapsedFileFolders: parseStringArray(ui.collapsedFileFolders),
       documentTreeStateInitialized: typeof ui.documentTreeStateInitialized === "boolean"
@@ -186,6 +225,9 @@ function cloneDefaultSettings(): AnchorSettings {
     ...DEFAULT_ANCHOR_SETTINGS,
     ui: {
       ...DEFAULT_ANCHOR_SETTINGS.ui,
+      binaryFileIncludePatterns: [
+        ...DEFAULT_ANCHOR_SETTINGS.ui.binaryFileIncludePatterns,
+      ],
       collapsedTreeFolders: [...DEFAULT_ANCHOR_SETTINGS.ui.collapsedTreeFolders],
       collapsedFileFolders: [...DEFAULT_ANCHOR_SETTINGS.ui.collapsedFileFolders],
       documentTreeStateInitialized: DEFAULT_ANCHOR_SETTINGS.ui.documentTreeStateInitialized,
@@ -256,6 +298,42 @@ function parseAutoLaunch(value: unknown): TerminalLauncherId | null {
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
+}
+
+export function formatBinaryFileIncludePatterns(patterns: readonly string[]): string {
+  return patterns.join("\n");
+}
+
+export function parseBinaryFileIncludePatternsText(text: string): string[] {
+  return normalizePatternList(text.split(/\r?\n/), []);
+}
+
+function normalizeBinaryFileIncludePatterns(value: unknown): string[] {
+  if (typeof value === "undefined" || value === null) {
+    return [...DEFAULT_BINARY_FILE_INCLUDE_PATTERNS];
+  }
+  if (typeof value === "string") {
+    return normalizePatternList(value.split(/\r?\n/), []);
+  }
+  if (Array.isArray(value)) {
+    return normalizePatternList(value, []);
+  }
+  return [...DEFAULT_BINARY_FILE_INCLUDE_PATTERNS];
+}
+
+function normalizePatternList(values: unknown[], fallback: readonly string[]): string[] {
+  const patterns: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const pattern = value.trim().replace(/\\/g, "/");
+    if (!pattern || pattern.startsWith("#")) continue;
+    const key = pattern.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    patterns.push(pattern);
+  }
+  return patterns.length > 0 || values.length > 0 ? patterns : [...fallback];
 }
 
 function normalizeLayout(value: unknown, legacyTerminal: Record<string, unknown>): LayoutSettings {

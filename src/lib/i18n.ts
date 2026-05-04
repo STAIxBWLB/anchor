@@ -371,6 +371,9 @@ const ko: Record<string, string> = {
   "system.preferences.documentLabel.title": "문서 제목",
   "system.preferences.documentLabel.filename": "파일명",
   "system.preferences.filesFilter": "파일 기본 필터",
+  "system.preferences.binaryIncludePatterns": "Binary 포함 패턴",
+  "system.preferences.binaryIncludePatterns.help":
+    "Binary 필터에서 표시할 파일 패턴입니다. 한 줄에 하나씩 입력하며 대소문자는 구분하지 않습니다.",
   "system.preferences.fileQueueOperation": "파일 큐 기본 작업",
   "system.preferences.terminalDefaultOpen": "터미널 패널 기본 열기",
   "system.preferences.themeMode": "테마",
@@ -780,6 +783,9 @@ const en: Record<string, string> = {
   "system.preferences.documentLabel.title": "Document title",
   "system.preferences.documentLabel.filename": "File name",
   "system.preferences.filesFilter": "Default file filter",
+  "system.preferences.binaryIncludePatterns": "Binary include patterns",
+  "system.preferences.binaryIncludePatterns.help":
+    "Files shown by the Binary filter. Enter one case-insensitive pattern per line.",
   "system.preferences.fileQueueOperation": "Default file queue operation",
   "system.preferences.terminalDefaultOpen": "Open terminal panel by default",
   "system.preferences.themeMode": "Theme",

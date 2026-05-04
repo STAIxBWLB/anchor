@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ANCHOR_SETTINGS, normalizeAnchorSettings } from "./settings";
+import {
+  DEFAULT_ANCHOR_SETTINGS,
+  normalizeAnchorSettings,
+  parseBinaryFileIncludePatternsText,
+} from "./settings";
 
 describe("normalizeAnchorSettings", () => {
   it("returns defaults for invalid or broken input", () => {
@@ -14,6 +18,7 @@ describe("normalizeAnchorSettings", () => {
         documentBrowserMode: "tree",
         documentLabelMode: "filename",
         workspaceFileFilter: "tracked",
+        binaryFileIncludePatterns: ["*.pdf", "*.HWP*", "*.pdf"],
         collapsedTreeFolders: ["projects/rise"],
         collapsedFileFolders: ["assets"],
         documentTreeStateInitialized: true,
@@ -47,6 +52,7 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.documentBrowserMode).toBe("tree");
     expect(settings.ui.documentLabelMode).toBe("filename");
     expect(settings.ui.workspaceFileFilter).toBe("tracked");
+    expect(settings.ui.binaryFileIncludePatterns).toEqual(["*.pdf", "*.HWP*"]);
     expect(settings.ui.collapsedTreeFolders).toEqual(["projects/rise"]);
     expect(settings.ui.collapsedFileFolders).toEqual(["assets"]);
     expect(settings.ui.documentTreeStateInitialized).toBe(true);
@@ -77,6 +83,9 @@ describe("normalizeAnchorSettings", () => {
 
     expect(settings.ui.explorerPaneMode).toBe("documents");
     expect(settings.ui.workspaceFileFilter).toBe("all");
+    expect(settings.ui.binaryFileIncludePatterns).toEqual(
+      DEFAULT_ANCHOR_SETTINGS.ui.binaryFileIncludePatterns,
+    );
     expect(settings.ui.fileQueueDefaultOperation).toBe("copy");
     expect(settings.ui.layout.terminalOpen).toBe(false);
     expect(settings.terminal.defaultPanelOpen).toBe(false);
@@ -144,5 +153,24 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.terminal.launchers.claude.enabled).toBe(false);
     expect(settings.terminal.launchers.claude.label).toBe("Claude Local");
     expect(settings.ai).toEqual({ providers: {}, defaults: {} });
+  });
+
+  it("normalizes binary include pattern text with comments and case-insensitive duplicates", () => {
+    expect(
+      parseBinaryFileIncludePatternsText(`
+# archives
+*.tgz
+*.PDF
+*.pdf
+docs/*.html
+`),
+    ).toEqual(["*.tgz", "*.PDF", "docs/*.html"]);
+
+    const settings = normalizeAnchorSettings({
+      ui: {
+        binaryFileIncludePatterns: "# docs\n*.docx\n\n*.pptx",
+      },
+    });
+    expect(settings.ui.binaryFileIncludePatterns).toEqual(["*.docx", "*.pptx"]);
   });
 });

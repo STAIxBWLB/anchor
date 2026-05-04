@@ -25,16 +25,18 @@ function file(relPath: string, extras: Partial<WorkspaceFileEntry> = {}): Worksp
 }
 
 describe("workspace file tree", () => {
-  it("filters all, tracked, and binary files", () => {
+  it("filters all, tracked, and binary include-pattern files", () => {
     const entries = [
       file("docs/a.md", { gitTracked: true }),
-      file("attachments/report.pdf", { binary: true }),
+      file("attachments/report.pdf"),
+      file("exports/PAGE.HTML"),
       file("tmp/raw.bin", { binary: true, gitTracked: true }),
     ];
 
     expect(filterWorkspaceFiles(entries, "", "all").map((entry) => entry.relPath)).toEqual([
       "docs/a.md",
       "attachments/report.pdf",
+      "exports/PAGE.HTML",
       "tmp/raw.bin",
     ]);
     expect(filterWorkspaceFiles(entries, "", "tracked").map((entry) => entry.relPath)).toEqual([
@@ -43,8 +45,11 @@ describe("workspace file tree", () => {
     ]);
     expect(filterWorkspaceFiles(entries, "", "binary").map((entry) => entry.relPath)).toEqual([
       "attachments/report.pdf",
-      "tmp/raw.bin",
+      "exports/PAGE.HTML",
     ]);
+    expect(
+      filterWorkspaceFiles(entries, "", "binary", ["tmp/*.bin"]).map((entry) => entry.relPath),
+    ).toEqual(["tmp/raw.bin"]);
   });
 
   it("collapses folders by default", () => {

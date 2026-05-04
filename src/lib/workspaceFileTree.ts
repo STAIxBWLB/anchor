@@ -1,5 +1,8 @@
 import type { WorkspaceFileEntry } from "./types";
-import type { WorkspaceFileFilter } from "./settings";
+import {
+  DEFAULT_BINARY_FILE_INCLUDE_PATTERNS,
+  type WorkspaceFileFilter,
+} from "./settings";
 
 export type WorkspaceFileTreeRow =
   | {
@@ -40,11 +43,16 @@ export function filterWorkspaceFiles(
   entries: WorkspaceFileEntry[],
   query: string,
   filter: WorkspaceFileFilter,
+  binaryIncludePatterns: readonly string[] = DEFAULT_BINARY_FILE_INCLUDE_PATTERNS,
 ): WorkspaceFileEntry[] {
   const q = query.trim().toLowerCase();
+  const binaryMatchers =
+    filter === "binary" ? compileWorkspaceFileIncludePatterns(binaryIncludePatterns) : [];
   return entries.filter((entry) => {
     if (filter === "tracked" && !entry.gitTracked) return false;
-    if (filter === "binary" && !entry.binary) return false;
+    if (filter === "binary" && !matchesWorkspaceFileIncludePatterns(entry, binaryMatchers)) {
+      return false;
+    }
     if (!q) return true;
     return (
       entry.name.toLowerCase().includes(q) ||
@@ -52,6 +60,39 @@ export function filterWorkspaceFiles(
       entry.fileKind.toLowerCase().includes(q)
     );
   });
+}
+
+interface CompiledWorkspaceFileIncludePattern {
+  regex: RegExp;
+  matchPath: boolean;
+}
+
+export function compileWorkspaceFileIncludePatterns(
+  patterns: readonly string[],
+): CompiledWorkspaceFileIncludePattern[] {
+  const compiled: CompiledWorkspaceFileIncludePattern[] = [];
+  const seen = new Set<string>();
+  for (const value of patterns) {
+    const pattern = value.trim().replace(/\\/g, "/");
+    if (!pattern || pattern.startsWith("#")) continue;
+    const key = pattern.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    compiled.push({
+      regex: globToRegExp(pattern),
+      matchPath: pattern.includes("/"),
+    });
+  }
+  return compiled;
+}
+
+function matchesWorkspaceFileIncludePatterns(
+  entry: WorkspaceFileEntry,
+  patterns: readonly CompiledWorkspaceFileIncludePattern[],
+): boolean {
+  const relPath = entry.relPath.replace(/\\/g, "/");
+  const name = entry.name.replace(/\\/g, "/");
+  return patterns.some((pattern) => pattern.regex.test(pattern.matchPath ? relPath : name));
 }
 
 export function buildWorkspaceFileTreeRows(
@@ -182,6 +223,21 @@ function flattenNode(
   }
 
   return rows;
+}
+
+function globToRegExp(pattern: string): RegExp {
+  let source = "^";
+  for (const char of pattern) {
+    if (char === "*") {
+      source += ".*";
+    } else if (char === "?") {
+      source += ".";
+    } else {
+      source += char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+  }
+  source += "$";
+  return new RegExp(source, "i");
 }
 
 function compareName(a: string, b: string): number {

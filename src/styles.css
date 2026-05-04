@@ -4555,7 +4555,14 @@ button.git-badge:hover {
   font-weight: 650;
 }
 
-.settings-form select {
+.settings-form .field small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.settings-form select,
+.settings-form .settings-textarea {
   height: 34px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -4563,6 +4570,16 @@ button.git-badge:hover {
   color: var(--ink);
   padding: 0 10px;
   outline: 0;
+}
+
+.settings-form .settings-textarea {
+  min-height: 180px;
+  height: auto;
+  padding: 10px;
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 .system-skill-list {

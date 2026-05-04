@@ -33,7 +33,11 @@ import type {
   ThemeMode,
   WorkspaceFileFilter,
 } from "../lib/settings";
-import { normalizeAnchorSettings } from "../lib/settings";
+import {
+  formatBinaryFileIncludePatterns,
+  normalizeAnchorSettings,
+  parseBinaryFileIncludePatternsText,
+} from "../lib/settings";
 import { normalizeAccentInput } from "../lib/theme";
 import type {
   ImportItem,
@@ -194,6 +198,13 @@ function PreferencesTab({
   onSettingsChange: (settings: AnchorSettings) => void;
 }) {
   const { t } = useTranslation();
+  const [binaryPatternsText, setBinaryPatternsText] = useState(() =>
+    formatBinaryFileIncludePatterns(settings.ui.binaryFileIncludePatterns),
+  );
+
+  useEffect(() => {
+    setBinaryPatternsText(formatBinaryFileIncludePatterns(settings.ui.binaryFileIncludePatterns));
+  }, [settings.ui.binaryFileIncludePatterns]);
 
   const updateBrowserMode = (mode: DocumentBrowserMode) => {
     onSettingsChange(
@@ -226,6 +237,18 @@ function PreferencesTab({
         ui: {
           ...settings.ui,
           workspaceFileFilter,
+        },
+      }),
+    );
+  };
+
+  const commitBinaryFileIncludePatterns = (text: string) => {
+    onSettingsChange(
+      normalizeAnchorSettings({
+        ...settings,
+        ui: {
+          ...settings.ui,
+          binaryFileIncludePatterns: parseBinaryFileIncludePatternsText(text),
         },
       }),
     );
@@ -328,6 +351,18 @@ function PreferencesTab({
             <option value="tracked">{t("files.filter.tracked")}</option>
             <option value="binary">{t("files.filter.binary")}</option>
           </select>
+        </label>
+        <label className="field">
+          <span>{t("system.preferences.binaryIncludePatterns")}</span>
+          <textarea
+            className="settings-textarea"
+            value={binaryPatternsText}
+            onChange={(event) => setBinaryPatternsText(event.target.value)}
+            onBlur={() => commitBinaryFileIncludePatterns(binaryPatternsText)}
+            spellCheck={false}
+            rows={8}
+          />
+          <small>{t("system.preferences.binaryIncludePatterns.help")}</small>
         </label>
         <label className="field">
           <span>{t("system.preferences.fileQueueOperation")}</span>
