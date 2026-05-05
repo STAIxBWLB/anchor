@@ -327,6 +327,8 @@ export const DocumentList = memo(function DocumentList({
           type="button"
           className={paneMode === "documents" ? "active" : ""}
           onClick={() => onPaneModeChange("documents")}
+          title={t("explorer.mode.documents")}
+          aria-label={t("explorer.mode.documents")}
         >
           <FileText size={13} />
           <span>{t("explorer.mode.documents")}</span>
@@ -335,6 +337,8 @@ export const DocumentList = memo(function DocumentList({
           type="button"
           className={paneMode === "files" ? "active" : ""}
           onClick={() => onPaneModeChange("files")}
+          title={t("explorer.mode.files")}
+          aria-label={t("explorer.mode.files")}
         >
           <Files size={13} />
           <span>{t("explorer.mode.files")}</span>
@@ -376,6 +380,8 @@ export const DocumentList = memo(function DocumentList({
           type="button"
           className={browserMode === "list" ? "active" : ""}
           onClick={() => onBrowserModeChange("list")}
+          title={t("list.view.list")}
+          aria-label={t("list.view.list")}
         >
           <List size={13} />
           <span>{t("list.view.list")}</span>
@@ -384,6 +390,8 @@ export const DocumentList = memo(function DocumentList({
           type="button"
           className={browserMode === "tree" ? "active" : ""}
           onClick={() => onBrowserModeChange("tree")}
+          title={t("list.view.tree")}
+          aria-label={t("list.view.tree")}
         >
           <Folder size={13} />
           <span>{t("list.view.tree")}</span>
@@ -397,6 +405,7 @@ export const DocumentList = memo(function DocumentList({
             onClick={() => onCollapsedTreeFoldersChange([])}
             disabled={folderPaths.length === 0}
             title={t("list.tree.collapseAll")}
+            aria-label={t("list.tree.collapseAll")}
           >
             <ChevronsDownUp size={13} />
             <span>{t("list.tree.collapseAll")}</span>
@@ -406,6 +415,7 @@ export const DocumentList = memo(function DocumentList({
             onClick={() => onCollapsedTreeFoldersChange(folderPaths)}
             disabled={folderPaths.length === 0}
             title={t("list.tree.expandAll")}
+            aria-label={t("list.tree.expandAll")}
           >
             <ChevronsUpDown size={13} />
             <span>{t("list.tree.expandAll")}</span>
@@ -413,7 +423,7 @@ export const DocumentList = memo(function DocumentList({
         </div>
       ) : null}
 
-      <label className="search-box">
+      <label className="search-box" title={t("list.searchPlaceholder")}>
         <Search size={14} />
         <input
           ref={searchInputRef}
@@ -449,7 +459,7 @@ export const DocumentList = memo(function DocumentList({
 
         {!loading && filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-illus">
+            <div className="empty-illus" title={t("list.empty.title")}>
               <FileShape />
             </div>
             <strong>{t("list.empty.title")}</strong>

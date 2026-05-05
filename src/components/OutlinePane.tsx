@@ -198,7 +198,7 @@ export function OutlinePane({
                     ))}
                   </div>
                 ) : (
-                  <div className="outline-empty">
+                  <div className="outline-empty" title={t("outline.empty")}>
                     <Hash size={20} className="outline-empty-icon" />
                     <div>{t("outline.empty")}</div>
                   </div>
@@ -415,11 +415,21 @@ function FilesQueuePane({
   return (
     <section className="right-tool-pane">
       <div className="right-tool-actions file-shelf-toolbar">
-        <button type="button" onClick={pickFiles}>
+        <button
+          type="button"
+          onClick={pickFiles}
+          title={t("rightPane.files.pick")}
+          aria-label={t("rightPane.files.pick")}
+        >
           <FilePlus2 size={13} />
           <span>{t("rightPane.files.pick")}</span>
         </button>
-        <button type="button" onClick={pickFolders}>
+        <button
+          type="button"
+          onClick={pickFolders}
+          title={t("rightPane.files.pickFolder")}
+          aria-label={t("rightPane.files.pickFolder")}
+        >
           <FolderPlus size={13} />
           <span>{t("rightPane.files.pickFolder")}</span>
         </button>
@@ -446,6 +456,7 @@ function FilesQueuePane({
       </div>
       <div
         className={queue.length === 0 ? "file-drop-zone empty" : "file-drop-zone"}
+        title={t("rightPane.files.dropTitle")}
         onContextMenu={(event) => {
           event.preventDefault();
           setContextMenu({ x: event.clientX, y: event.clientY });
@@ -496,6 +507,7 @@ function FilesQueuePane({
                 onClick={() => onUpdateItem(item.id, { operation: "copy" })}
                 disabled={item.status !== "queued"}
                 title={t("rightPane.files.copy")}
+                aria-label={t("rightPane.files.copy")}
               >
                 <Copy size={12} />
               </button>
@@ -505,6 +517,7 @@ function FilesQueuePane({
                 onClick={() => onUpdateItem(item.id, { operation: "move" })}
                 disabled={item.status !== "queued"}
                 title={t("rightPane.files.move")}
+                aria-label={t("rightPane.files.move")}
               >
                 <MoveRight size={12} />
               </button>
@@ -513,6 +526,7 @@ function FilesQueuePane({
                 onClick={() => void chooseDestination(item)}
                 disabled={item.status !== "queued"}
                 title={t("rightPane.files.chooseDestination")}
+                aria-label={t("rightPane.files.chooseDestination")}
               >
                 <Files size={12} />
               </button>
@@ -521,11 +535,23 @@ function FilesQueuePane({
         ))}
       </div>
       <div className="right-tool-actions bottom">
-        <button type="button" disabled={cannotApply} onClick={() => void apply()}>
+        <button
+          type="button"
+          disabled={cannotApply}
+          onClick={() => void apply()}
+          title={t("rightPane.files.applyQueue")}
+          aria-label={t("rightPane.files.applyQueue")}
+        >
           <Save size={13} />
           <span>{t("rightPane.files.applyQueue")}</span>
         </button>
-        <button type="button" disabled={queue.length === 0 || working} onClick={onClear}>
+        <button
+          type="button"
+          disabled={queue.length === 0 || working}
+          onClick={onClear}
+          title={t("rightPane.files.clearQueue")}
+          aria-label={t("rightPane.files.clearQueue")}
+        >
           <Trash2 size={13} />
           <span>{t("rightPane.files.clearQueue")}</span>
         </button>
@@ -771,11 +797,21 @@ function MemoPane({
   return (
     <section className="right-tool-pane memo-pane">
       <div className="right-tool-actions">
-        <button type="button" onClick={newMemo}>
+        <button
+          type="button"
+          onClick={newMemo}
+          title={t("rightPane.memo.new")}
+          aria-label={t("rightPane.memo.new")}
+        >
           <Plus size={13} />
           <span>{t("rightPane.memo.new")}</span>
         </button>
-        <button type="button" onClick={() => void refresh()}>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          title={t("rightPane.memo.refresh")}
+          aria-label={t("rightPane.memo.refresh")}
+        >
           <List size={13} />
           <span>{t("rightPane.memo.refresh")}</span>
         </button>
@@ -818,11 +854,24 @@ function MemoPane({
       />
       <div className={`memo-autosave-status ${saveState}`}>{autoSaveLabel}</div>
       <div className="right-tool-actions bottom">
-        <button type="button" className="danger" disabled={!workspacePath || !selectedPath || saving} onClick={() => void deleteCurrent()}>
+        <button
+          type="button"
+          className="danger"
+          disabled={!workspacePath || !selectedPath || saving}
+          onClick={() => void deleteCurrent()}
+          title={t("rightPane.memo.delete")}
+          aria-label={t("rightPane.memo.delete")}
+        >
           <Trash2 size={13} />
           <span>{t("rightPane.memo.delete")}</span>
         </button>
-        <button type="button" disabled={saving} onClick={() => void saveAs()}>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void saveAs()}
+          title={t("rightPane.memo.saveAs")}
+          aria-label={t("rightPane.memo.saveAs")}
+        >
           <Save size={13} />
           <span>{t("rightPane.memo.saveAs")}</span>
         </button>
@@ -957,6 +1006,7 @@ function TagsInput({ value, onCommit, readOnly = false }: TagsInputProps) {
             type="button"
             className="tag-chip-x"
             aria-label={`remove ${tag}`}
+            title={`remove ${tag}`}
             disabled={readOnly}
             onClick={() => applyNext(tags.filter((t) => t !== tag))}
           >

@@ -259,6 +259,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           type="button"
           className={paneMode === "documents" ? "active" : ""}
           onClick={() => onPaneModeChange("documents")}
+          title={t("explorer.mode.documents")}
+          aria-label={t("explorer.mode.documents")}
         >
           <FileText size={13} />
           <span>{t("explorer.mode.documents")}</span>
@@ -267,6 +269,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           type="button"
           className={paneMode === "files" ? "active" : ""}
           onClick={() => onPaneModeChange("files")}
+          title={t("explorer.mode.files")}
+          aria-label={t("explorer.mode.files")}
         >
           <Files size={13} />
           <span>{t("explorer.mode.files")}</span>
@@ -308,6 +312,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           type="button"
           className={filter === "all" ? "active" : ""}
           onClick={() => onFilterChange("all")}
+          title={t("files.filter.all")}
+          aria-label={t("files.filter.all")}
         >
           <Files size={13} />
           <span>{t("files.filter.all")}</span>
@@ -316,6 +322,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           type="button"
           className={filter === "tracked" ? "active" : ""}
           onClick={() => onFilterChange("tracked")}
+          title={t("files.filter.tracked")}
+          aria-label={t("files.filter.tracked")}
         >
           <GitBranch size={13} />
           <span>{t("files.filter.tracked")}</span>
@@ -324,6 +332,8 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           type="button"
           className={filter === "binary" ? "active" : ""}
           onClick={() => onFilterChange("binary")}
+          title={t("files.filter.binary")}
+          aria-label={t("files.filter.binary")}
         >
           <Archive size={13} />
           <span>{t("files.filter.binary")}</span>
@@ -336,6 +346,7 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           onClick={() => onCollapsedFileFoldersChange([])}
           disabled={folderPaths.length === 0}
           title={t("list.tree.collapseAll")}
+          aria-label={t("list.tree.collapseAll")}
         >
           <ChevronsDownUp size={13} />
           <span>{t("list.tree.collapseAll")}</span>
@@ -345,6 +356,7 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           onClick={() => onCollapsedFileFoldersChange(folderPaths)}
           disabled={folderPaths.length === 0}
           title={t("list.tree.expandAll")}
+          aria-label={t("list.tree.expandAll")}
         >
           <ChevronsUpDown size={13} />
           <span>{t("list.tree.expandAll")}</span>
@@ -354,13 +366,14 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           onClick={() => onQueueFiles(selectedEntries)}
           disabled={selectedEntries.length === 0}
           title={t("files.queueSelected")}
+          aria-label={t("files.queueSelected")}
         >
           <Plus size={13} />
           <span>{t("files.queueSelected")}</span>
         </button>
       </div>
 
-      <label className="search-box">
+      <label className="search-box" title={t("files.searchPlaceholder")}>
         <Search size={14} />
         <input
           value={inputQuery}
@@ -394,7 +407,7 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
 
         {!loading && filtered.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-illus">
+            <div className="empty-illus" title={t("files.empty.title")}>
               <Files size={22} />
             </div>
             <strong>{t("files.empty.title")}</strong>

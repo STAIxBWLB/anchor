@@ -339,7 +339,7 @@ function SettingsWindowRoot({ workPath }: { workPath: string | null }) {
         />
         {error ? (
           <div className="toast-stack">
-            <div className="toast">
+            <div className="toast" title={error}>
               <AlertTriangle size={15} />
               <span>{error}</span>
               <button
@@ -3932,6 +3932,7 @@ function MainApp() {
                   ? "toast notice"
                   : "toast"
               }
+              title={error}
             >
               <AlertTriangle size={15} />
               <span>{error}</span>
@@ -3948,7 +3949,10 @@ function MainApp() {
           ) : null}
 
           {discardedEdit ? (
-            <div className="toast notice">
+            <div
+              className="toast notice"
+              title={t("toast.discardedEdit", { title: discardedEdit.entry.title })}
+            >
               <Clock3 size={15} />
               <span>
                 {t("toast.discardedEdit", { title: discardedEdit.entry.title })}
@@ -3973,7 +3977,27 @@ function MainApp() {
           ) : null}
 
           {updateToast ? (
-            <div className={updateToast.kind === "error" ? "toast" : "toast notice"}>
+            <div
+              className={updateToast.kind === "error" ? "toast" : "toast notice"}
+              title={
+                updateToast.kind === "checking"
+                  ? t("updates.checking")
+                  : updateToast.kind === "available"
+                    ? t("updates.available", { version: updateToast.info.version })
+                    : updateToast.kind === "notAvailable"
+                      ? t("updates.none")
+                      : updateToast.kind === "downloading"
+                        ? t("updates.downloading", {
+                            progress:
+                              updateToast.progress?.percent != null
+                                ? `${updateToast.progress.percent}%`
+                                : "…",
+                          })
+                        : updateToast.kind === "ready"
+                          ? t("updates.ready")
+                          : t("updates.error", { message: updateToast.message })
+              }
+            >
               {updateToast.kind === "checking" || updateToast.kind === "downloading" ? (
                 <RefreshCcw size={15} className="spin" />
               ) : (
