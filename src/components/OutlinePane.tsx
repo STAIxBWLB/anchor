@@ -1,5 +1,7 @@
 import {
   Copy,
+  FolderPlus,
+  Grid2X2,
   FilePlus2,
   Files,
   Hash,
@@ -15,6 +17,7 @@ import {
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  chooseDirectories,
   chooseFiles,
   chooseSaveFile,
   chooseWorkspaceDirectory,
@@ -58,9 +61,12 @@ interface OutlinePaneProps {
     id: string,
     patch: Partial<Pick<FileQueueItem, "targetDir" | "operation">>,
   ) => void;
-  onQueueExternalFiles: (paths: string[]) => void;
+  selectedFileQueueItemIds: string[];
+  onSelectFileQueueItem: (id: string, additive: boolean) => void;
+  onQueueExternalFiles: (paths: string[]) => Promise<void>;
   onApplyFileQueue: () => Promise<void>;
   onClearFileQueue: () => void;
+  onClearSelectedFileQueueItems: () => void;
   paneRef?: React.RefObject<HTMLElement | null>;
 }
 
@@ -100,9 +106,12 @@ export function OutlinePane({
   fileQueue,
   canApplyFileQueue,
   onUpdateFileQueueItem,
+  selectedFileQueueItemIds,
+  onSelectFileQueueItem,
   onQueueExternalFiles,
   onApplyFileQueue,
   onClearFileQueue,
+  onClearSelectedFileQueueItems,
   paneRef,
 }: OutlinePaneProps) {
   const { t } = useTranslation();
@@ -214,11 +223,14 @@ export function OutlinePane({
             <FilesQueuePane
               queue={fileQueue}
               canApplyFileQueue={canApplyFileQueue}
+              selectedIds={selectedFileQueueItemIds}
               onError={onError}
               onUpdateItem={onUpdateFileQueueItem}
+              onSelectItem={onSelectFileQueueItem}
               onQueueExternalFiles={onQueueExternalFiles}
               onApply={onApplyFileQueue}
               onClear={onClearFileQueue}
+              onClearSelected={onClearSelectedFileQueueItems}
               t={t}
             />
           ) : null}
@@ -310,33 +322,42 @@ export function OutlinePane({
 function FilesQueuePane({
   queue,
   canApplyFileQueue,
+  selectedIds,
   onError,
   onUpdateItem,
+  onSelectItem,
   onQueueExternalFiles,
   onApply,
   onClear,
+  onClearSelected,
   t,
 }: {
   queue: FileQueueItem[];
   canApplyFileQueue: boolean;
+  selectedIds: string[];
   onError: (message: string | null) => void;
   onUpdateItem: (
     id: string,
     patch: Partial<Pick<FileQueueItem, "targetDir" | "operation">>,
   ) => void;
-  onQueueExternalFiles: (paths: string[]) => void;
+  onSelectItem: (id: string, additive: boolean) => void;
+  onQueueExternalFiles: (paths: string[]) => Promise<void>;
   onApply: () => Promise<void>;
   onClear: () => void;
+  onClearSelected: () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   const [working, setWorking] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "icons">("list");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   useEffect(() => {
     let dispose: (() => void) | null = null;
     void import("@tauri-apps/api/webview")
       .then(({ getCurrentWebview }) =>
         getCurrentWebview().onDragDropEvent((event) => {
-          if (event.payload.type === "drop") onQueueExternalFiles(event.payload.paths);
+          if (event.payload.type === "drop") void onQueueExternalFiles(event.payload.paths);
         }),
       )
       .then((off) => {
@@ -346,8 +367,26 @@ function FilesQueuePane({
     return () => dispose?.();
   }, [onQueueExternalFiles]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contextMenu]);
+
   const pickFiles = async () => {
-    onQueueExternalFiles(await chooseFiles(t("rightPane.files.pick")));
+    await onQueueExternalFiles(await chooseFiles(t("rightPane.files.pick")));
+  };
+
+  const pickFolders = async () => {
+    await onQueueExternalFiles(await chooseDirectories(t("rightPane.files.pickFolder")));
   };
 
   const chooseDestination = async (item: FileQueueItem) => {
@@ -375,25 +414,77 @@ function FilesQueuePane({
 
   return (
     <section className="right-tool-pane">
-      <div className="right-tool-actions">
+      <div className="right-tool-actions file-shelf-toolbar">
         <button type="button" onClick={pickFiles}>
           <FilePlus2 size={13} />
           <span>{t("rightPane.files.pick")}</span>
         </button>
+        <button type="button" onClick={pickFolders}>
+          <FolderPlus size={13} />
+          <span>{t("rightPane.files.pickFolder")}</span>
+        </button>
+        <div className="queue-view-toggle" role="group" aria-label={t("rightPane.files.viewMode")}>
+          <button
+            type="button"
+            className={viewMode === "list" ? "active" : ""}
+            onClick={() => setViewMode("list")}
+            title={t("rightPane.files.viewList")}
+            aria-label={t("rightPane.files.viewList")}
+          >
+            <List size={13} />
+          </button>
+          <button
+            type="button"
+            className={viewMode === "icons" ? "active" : ""}
+            onClick={() => setViewMode("icons")}
+            title={t("rightPane.files.viewIcons")}
+            aria-label={t("rightPane.files.viewIcons")}
+          >
+            <Grid2X2 size={13} />
+          </button>
+        </div>
       </div>
-      <div className={queue.length === 0 ? "file-drop-zone empty" : "file-drop-zone"}>
+      <div
+        className={queue.length === 0 ? "file-drop-zone empty" : "file-drop-zone"}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setContextMenu({ x: event.clientX, y: event.clientY });
+        }}
+      >
         <Files size={18} />
-        <strong>{t("rightPane.files.queueTitle")}</strong>
-        <span>{t("rightPane.files.queueDescription")}</span>
+        <strong>{t("rightPane.files.dropTitle")}</strong>
+        <span>{t("rightPane.files.dropDescription")}</span>
       </div>
-      <div className="right-list">
+      <div className={viewMode === "icons" ? "right-list file-shelf-icons" : "right-list"}>
         {queue.length === 0 ? (
           <div className="outline-empty">{t("rightPane.files.emptyQueue")}</div>
         ) : null}
         {queue.map((item) => (
-          <div className={`right-list-item queue ${item.status}`} key={item.id} title={item.sourcePath}>
+          <div
+            role="button"
+            tabIndex={0}
+            className={`right-list-item queue ${item.status}${selectedSet.has(item.id) ? " selected" : ""}`}
+            key={item.id}
+            title={item.sourcePath}
+            aria-selected={selectedSet.has(item.id)}
+            draggable={selectedSet.has(item.id)}
+            onClick={(event) => onSelectItem(item.id, event.metaKey || event.ctrlKey || event.shiftKey)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onSelectItem(item.id, event.metaKey || event.ctrlKey || event.shiftKey);
+            }}
+            onDragStart={(event) => {
+              if (!selectedSet.has(item.id)) onSelectItem(item.id, false);
+              event.dataTransfer.effectAllowed = "copyMove";
+              event.dataTransfer.setData("application/x-anchor-file-queue", item.id);
+            }}
+          >
             <div className="queue-copy">
-              <strong>{item.fileName}</strong>
+              <strong>
+                {item.sourceKind === "directory" ? <Files size={12} /> : <FilePlus2 size={12} />}
+                <span>{item.fileName}</span>
+              </strong>
               <span>{item.sourceRelPath}</span>
               <span title={item.targetDir}>{t("rightPane.files.destination")}: {item.targetDir}</span>
               {item.message ? <em>{item.message}</em> : null}
@@ -439,6 +530,41 @@ function FilesQueuePane({
           <span>{t("rightPane.files.clearQueue")}</span>
         </button>
       </div>
+      {contextMenu ? (
+        <div
+          className="context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button type="button" onClick={() => { setContextMenu(null); void pickFiles(); }}>
+            {t("rightPane.files.pick")}
+          </button>
+          <button type="button" onClick={() => { setContextMenu(null); void pickFolders(); }}>
+            {t("rightPane.files.pickFolder")}
+          </button>
+          <div className="context-menu-separator" />
+          <button
+            type="button"
+            disabled={selectedIds.length === 0}
+            onClick={() => {
+              setContextMenu(null);
+              onClearSelected();
+            }}
+          >
+            {t("rightPane.files.clearSelected", { count: selectedIds.length })}
+          </button>
+          <button
+            type="button"
+            disabled={queue.length === 0}
+            onClick={() => {
+              setContextMenu(null);
+              onClear();
+            }}
+          >
+            {t("rightPane.files.clearQueue")}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

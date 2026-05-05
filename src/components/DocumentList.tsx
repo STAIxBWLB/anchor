@@ -20,7 +20,7 @@ import {
   useState,
   useTransition,
 } from "react";
-import type { VaultEntry, WorkspaceVisibility } from "../lib/types";
+import type { FileStoreOperation, VaultEntry, WorkspaceVisibility } from "../lib/types";
 import { documentDisplayName, formatRelativeDate, frontmatterScalar } from "../lib/document";
 import {
   buildDocumentTreeRows,
@@ -71,6 +71,14 @@ interface DocumentListProps {
   vaultPath?: string | null;
   paneMode: ExplorerPaneMode;
   onPaneModeChange: (mode: ExplorerPaneMode) => void;
+  pendingRevealTargetPath?: string | null;
+  onRevealHandled?: () => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
 }
 
 export const DocumentList = memo(function DocumentList({
@@ -100,6 +108,10 @@ export const DocumentList = memo(function DocumentList({
   vaultPath,
   paneMode,
   onPaneModeChange,
+  pendingRevealTargetPath = null,
+  onRevealHandled,
+  selectedFileQueueCount = 0,
+  onApplyFileQueueToDestination,
 }: DocumentListProps) {
   const { t, locale } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -113,6 +125,7 @@ export const DocumentList = memo(function DocumentList({
     relPath: string;
     title: string;
     entry: VaultEntry | null;
+    targetKind: "file" | "directory";
   } | null>(null);
   const [, startSearchTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
@@ -247,6 +260,27 @@ export const DocumentList = memo(function DocumentList({
     node.scrollTop = 0;
     setViewport({ scrollTop: 0, height: node.clientHeight || 720 });
   }, [deferredQuery, deferredTypeFilter]);
+
+  useEffect(() => {
+    if (!pendingRevealTargetPath || browserMode !== "tree") return;
+    const index = treeRows.findIndex(
+      (row) => row.kind === "entry" && row.entry.path === pendingRevealTargetPath,
+    );
+    if (index < 0) return;
+    const node = scrollRef.current;
+    if (!node) return;
+    const top = index * TREE_ROW_HEIGHT;
+    node.scrollTop = Math.max(0, top - TREE_ROW_HEIGHT);
+    setViewport({ scrollTop: node.scrollTop, height: node.clientHeight || 720 });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const selector = `[data-tree-target-path="${CSS.escape(pendingRevealTargetPath)}"]`;
+        const target = scrollRef.current?.querySelector<HTMLButtonElement>(selector);
+        target?.focus({ preventScroll: true });
+        onRevealHandled?.();
+      });
+    });
+  }, [browserMode, onRevealHandled, pendingRevealTargetPath, treeRows]);
 
   const headerCaption = typeFilter
     ? typeFilter === "_"
@@ -445,6 +479,8 @@ export const DocumentList = memo(function DocumentList({
             vaultPath={vaultPath}
             t={t}
             documentLabelMode={documentLabelMode}
+            selectedFileQueueCount={selectedFileQueueCount}
+            onApplyFileQueueToDestination={onApplyFileQueueToDestination}
           />
         ) : null}
 
@@ -491,6 +527,7 @@ export const DocumentList = memo(function DocumentList({
                         relPath: entry.relPath,
                         title: entry.title,
                         entry,
+                        targetKind: "file",
                       });
                     }}
                   >
@@ -570,6 +607,33 @@ export const DocumentList = memo(function DocumentList({
           >
             {t("context.revealInFinder")}
           </button>
+          {selectedFileQueueCount > 0 && onApplyFileQueueToDestination ? (
+            <>
+              <div className="context-menu-separator" />
+              <button
+                type="button"
+                onClick={() => {
+                  const target = contextMenu.targetPath;
+                  const kind = contextMenu.targetKind;
+                  setContextMenu(null);
+                  onApplyFileQueueToDestination(target, kind, "copy");
+                }}
+              >
+                {t("rightPane.files.copySelectedHere", { count: selectedFileQueueCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = contextMenu.targetPath;
+                  const kind = contextMenu.targetKind;
+                  setContextMenu(null);
+                  onApplyFileQueueToDestination(target, kind, "move");
+                }}
+              >
+                {t("rightPane.files.moveSelectedHere", { count: selectedFileQueueCount })}
+              </button>
+            </>
+          ) : null}
           <div className="context-menu-separator" />
           <button type="button" onClick={() => copyContextText(contextMenu.targetPath)}>
             {t("context.copyPath")}
@@ -596,6 +660,12 @@ interface DocumentTreeProps {
     event: React.MouseEvent,
     target: DocumentContextTarget,
   ) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
   vaultPath?: string | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
   documentLabelMode: DocumentLabelMode;
@@ -611,6 +681,8 @@ const DocumentTree = memo(function DocumentTree({
   onCollapsedTreeFoldersChange,
   onSelect,
   onContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
   vaultPath,
   t,
   documentLabelMode,
@@ -638,6 +710,8 @@ const DocumentTree = memo(function DocumentTree({
                 forceExpand={forceExpand}
                 onCollapsedTreeFoldersChange={onCollapsedTreeFoldersChange}
                 onContextMenu={onContextMenu}
+                selectedFileQueueCount={selectedFileQueueCount}
+                onApplyFileQueueToDestination={onApplyFileQueueToDestination}
                 vaultPath={vaultPath}
               />
             </div>
@@ -655,6 +729,8 @@ const DocumentTree = memo(function DocumentTree({
               selected={selectedPath === row.entry.path}
               onSelect={onSelect}
               onContextMenu={onContextMenu}
+              selectedFileQueueCount={selectedFileQueueCount}
+              onApplyFileQueueToDestination={onApplyFileQueueToDestination}
               documentLabelMode={documentLabelMode}
             />
           </div>
@@ -671,6 +747,7 @@ type DocumentContextTarget = {
   relPath: string;
   title: string;
   entry: VaultEntry | null;
+  targetKind: "file" | "directory";
 };
 
 const TreeFolderRow = memo(function TreeFolderRow({
@@ -680,6 +757,8 @@ const TreeFolderRow = memo(function TreeFolderRow({
   forceExpand,
   onCollapsedTreeFoldersChange,
   onContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
   vaultPath,
 }: {
   row: FolderRow;
@@ -690,6 +769,12 @@ const TreeFolderRow = memo(function TreeFolderRow({
   onContextMenu: (
     event: React.MouseEvent,
     target: DocumentContextTarget,
+  ) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
   ) => void;
   vaultPath?: string | null;
 }) {
@@ -716,8 +801,18 @@ const TreeFolderRow = memo(function TreeFolderRow({
           relPath: row.path,
           title: row.path,
           entry: null,
+          targetKind: "directory",
         })
       }
+      onDragOver={(event) => {
+        if (!selectedFileQueueCount) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!selectedFileQueueCount || !onApplyFileQueueToDestination) return;
+        event.preventDefault();
+        void onApplyFileQueueToDestination(folderTarget, "directory", event.altKey ? "move" : "copy");
+      }}
     >
       <ChevronRight
         size={13}
@@ -736,6 +831,8 @@ const TreeEntryRow = memo(function TreeEntryRow({
   selected,
   onSelect,
   onContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
   documentLabelMode,
 }: {
   row: EntryRow;
@@ -745,6 +842,12 @@ const TreeEntryRow = memo(function TreeEntryRow({
   onContextMenu: (
     event: React.MouseEvent,
     target: DocumentContextTarget,
+  ) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
   ) => void;
   documentLabelMode: DocumentLabelMode;
 }) {
@@ -761,9 +864,20 @@ const TreeEntryRow = memo(function TreeEntryRow({
           relPath: row.entry.relPath,
           title: row.entry.title,
           entry: row.entry,
+          targetKind: "file",
         })
       }
+      onDragOver={(event) => {
+        if (!selectedFileQueueCount) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!selectedFileQueueCount || !onApplyFileQueueToDestination) return;
+        event.preventDefault();
+        void onApplyFileQueueToDestination(row.entry.path, "file", event.altKey ? "move" : "copy");
+      }}
       title={row.entry.relPath}
+      data-tree-target-path={row.entry.path}
     >
       <span className="tree-indent-slot" />
       <FileText size={13} />

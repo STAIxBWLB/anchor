@@ -33,6 +33,7 @@ import {
   createDocument,
   createVersion,
   DEFAULT_INBOX_SETTINGS,
+  describeFileQueueSources,
   duplicateDocument,
   fetchGmailUnread,
   getSampleVaultPath,
@@ -100,6 +101,7 @@ import {
 import type {
   DocumentPayload,
   FileQueueItem,
+  FileQueueSourceInfo,
   FileStoreOperation,
   GitStatus,
   GmailMessage,
@@ -141,6 +143,10 @@ import {
   workspaceWriteStatus,
 } from "./lib/workspaceCapabilities";
 import {
+  expandDocumentAncestors,
+} from "./lib/documentTree";
+import {
+  expandWorkspaceFileAncestors,
   isOpenableDocumentFile,
 } from "./lib/workspaceFileTree";
 import {
@@ -158,6 +164,11 @@ const MIN_DOCUMENTS_PANE_WIDTH = 260;
 const MAX_DOCUMENTS_PANE_WIDTH = 560;
 const MIN_OUTLINE_PANE_WIDTH = 240;
 const MAX_OUTLINE_PANE_WIDTH = 520;
+
+type PendingExplorerReveal = {
+  pane: ExplorerPaneMode;
+  targetPath: string;
+};
 
 assertParityOrThrow();
 
@@ -406,6 +417,10 @@ function MainApp() {
     Record<string, string[]>
   >({});
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
+  const [selectedFileQueueItemIds, setSelectedFileQueueItemIds] = useState<string[]>([]);
+  const [pendingExplorerReveal, setPendingExplorerReveal] = useState<PendingExplorerReveal | null>(
+    null,
+  );
   const [booting, setBooting] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -624,6 +639,10 @@ function MainApp() {
   );
   const activeWorkspaceCanCreate = activeWorkspaceCaps.canCreate;
   const activeWorkspaceCanModify = activeWorkspaceCaps.canModify;
+  const selectedQueuedFileQueueItems = useMemo(() => {
+    const selected = new Set(selectedFileQueueItemIds);
+    return fileQueue.filter((item) => item.status === "queued" && selected.has(item.id));
+  }, [fileQueue, selectedFileQueueItemIds]);
   const canApplyFileQueue = useMemo(() => {
     const queued = fileQueue.filter((item) => item.status === "queued");
     if (queued.length === 0) return true;
@@ -1032,6 +1051,11 @@ function MainApp() {
     settingsLoaded,
     updateSettings,
   ]);
+
+  useEffect(() => {
+    const ids = new Set(fileQueue.map((item) => item.id));
+    setSelectedFileQueueItemIds((current) => current.filter((id) => ids.has(id)));
+  }, [fileQueue]);
 
   const setDocumentBrowserMode = useCallback(
     (mode: DocumentBrowserMode) => {
@@ -1862,88 +1886,88 @@ function MainApp() {
     [entries, selectEntry, t],
   );
 
+  const addFileQueueSources = useCallback(
+    (
+      sources: FileQueueSourceInfo[],
+      targetDir: string,
+      operation: FileStoreOperation = anchorSettings.ui.fileQueueDefaultOperation,
+    ) => {
+      if (sources.length === 0) return;
+      const addedIds: string[] = [];
+      setFileQueue((current) => {
+        const existing = new Set(
+          current
+            .filter((item) => item.status === "queued")
+            .map((item) => `${item.sourcePath}\u0000${item.targetDir}\u0000${item.sourceKind}`),
+        );
+        const additions: FileQueueItem[] = [];
+        for (const source of sources) {
+          const key = `${source.path}\u0000${targetDir}\u0000${source.sourceKind}`;
+          if (existing.has(key)) continue;
+          existing.add(key);
+          const id = `${Date.now()}-${additions.length}-${source.sourceKind}-${source.path}`;
+          addedIds.push(id);
+          additions.push({
+            id,
+            sourcePath: source.path,
+            sourceKind: source.sourceKind,
+            sourceRelPath: source.sourceRelPath,
+            targetDir,
+            operation,
+            fileName: source.fileName,
+            status: "queued",
+            targetPath: null,
+            message: null,
+          });
+        }
+        return additions.length > 0 ? [...current, ...additions] : current;
+      });
+      if (addedIds.length > 0) setSelectedFileQueueItemIds(addedIds);
+      if (!outlineOpen) updateLayoutSettings({ outlineOpen: true });
+    },
+    [anchorSettings.ui.fileQueueDefaultOperation, outlineOpen, updateLayoutSettings],
+  );
+
   const queueWorkspaceFiles = useCallback(
     (files: WorkspaceFileEntry[]) => {
       const workspacePath = explorerWorkspacePath;
       if (!workspacePath || files.length === 0) return;
-      const defaultOperation = anchorSettings.ui.fileQueueDefaultOperation;
-      const targetDir = workspacePath;
-      setFileQueue((current) => {
-        const existing = new Set(
-          current
-            .filter((item) => item.status === "queued")
-            .map((item) => `${item.sourcePath}\u0000${item.targetDir}`),
-        );
-        const additions: FileQueueItem[] = [];
-        for (const file of files) {
-          const key = `${file.path}\u0000${targetDir}`;
-          if (existing.has(key)) continue;
-          existing.add(key);
-          additions.push({
-            id: `${Date.now()}-${additions.length}-${file.path}`,
-            sourcePath: file.path,
-            sourceRelPath: file.relPath,
-            targetDir,
-            operation: defaultOperation,
-            fileName: file.name,
-            status: "queued",
-            targetPath: null,
-            message: null,
-          });
-        }
-        return additions.length > 0 ? [...current, ...additions] : current;
-      });
-      if (!outlineOpen) updateLayoutSettings({ outlineOpen: true });
+      addFileQueueSources(
+        files.map((file) => ({
+          path: file.path,
+          sourceRelPath: file.relPath,
+          fileName: file.name,
+          sourceKind: "file",
+        })),
+        workspacePath,
+      );
     },
-    [
-      anchorSettings.ui.fileQueueDefaultOperation,
-      explorerWorkspacePath,
-      outlineOpen,
-      updateLayoutSettings,
-    ],
+    [addFileQueueSources, explorerWorkspacePath],
   );
 
   const queueExternalFiles = useCallback(
-    (paths: string[]) => {
+    async (paths: string[]) => {
       const targetDir = activeDocumentWorkspacePath ?? explorerWorkspacePath;
       if (!targetDir || paths.length === 0) return;
-      const defaultOperation = anchorSettings.ui.fileQueueDefaultOperation;
-      setFileQueue((current) => {
-        const existing = new Set(
-          current
-            .filter((item) => item.status === "queued")
-            .map((item) => `${item.sourcePath}\u0000${item.targetDir}`),
-        );
-        const additions: FileQueueItem[] = [];
-        for (const path of paths) {
-          const fileName = path.split("/").pop() ?? path;
-          const key = `${path}\u0000${targetDir}`;
-          if (existing.has(key)) continue;
-          existing.add(key);
-          additions.push({
-            id: `${Date.now()}-external-${additions.length}-${path}`,
-            sourcePath: path,
-            sourceRelPath: fileName,
-            targetDir,
-            operation: defaultOperation,
-            fileName,
-            status: "queued",
-            targetPath: null,
-            message: null,
-          });
-        }
-        return additions.length > 0 ? [...current, ...additions] : current;
-      });
-      if (!outlineOpen) updateLayoutSettings({ outlineOpen: true });
+      try {
+        addFileQueueSources(await describeFileQueueSources(paths), targetDir);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     },
     [
+      addFileQueueSources,
       activeDocumentWorkspacePath,
-      anchorSettings.ui.fileQueueDefaultOperation,
       explorerWorkspacePath,
-      outlineOpen,
-      updateLayoutSettings,
     ],
   );
+
+  const selectFileQueueItem = useCallback((id: string, additive: boolean) => {
+    setSelectedFileQueueItemIds((current) => {
+      if (!additive) return [id];
+      return current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+    });
+  }, []);
 
   const updateFileQueueItem = useCallback(
     (id: string, patch: Partial<Pick<FileQueueItem, "targetDir" | "operation">>) => {
@@ -1969,10 +1993,18 @@ function MainApp() {
 
   const clearFileQueue = useCallback(() => {
     setFileQueue([]);
+    setSelectedFileQueueItemIds([]);
   }, []);
 
-  const applyQueuedFiles = useCallback(async () => {
-    const queued = fileQueue.filter((item) => item.status === "queued");
+  const clearSelectedFileQueueItems = useCallback(() => {
+    const selected = new Set(selectedFileQueueItemIds);
+    if (selected.size === 0) return;
+    setFileQueue((current) => current.filter((item) => !selected.has(item.id)));
+    setSelectedFileQueueItemIds([]);
+  }, [selectedFileQueueItemIds]);
+
+  const applyQueuedFiles = useCallback(async (itemsOverride?: FileQueueItem[]) => {
+    const queued = itemsOverride ?? fileQueue.filter((item) => item.status === "queued");
     if (queued.length === 0) return;
     const groups = new Map<string, FileQueueItem[]>();
     for (const item of queued) {
@@ -2023,6 +2055,10 @@ function MainApp() {
           };
         }),
       );
+      if (itemsOverride) {
+        const appliedIds = new Set(itemsOverride.map((item) => item.id));
+        setSelectedFileQueueItemIds((current) => current.filter((id) => !appliedIds.has(id)));
+      }
       for (const workspacePath of groups.keys()) {
         await refreshWorkspaceFiles(workspacePath);
         const fresh = await scanVault(workspacePath);
@@ -2030,9 +2066,12 @@ function MainApp() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const failedIds = itemsOverride ? new Set(itemsOverride.map((item) => item.id)) : null;
       setFileQueue((current) =>
         current.map((item) =>
-          item.status === "queued" ? { ...item, status: "error", message } : item,
+          item.status === "queued" && (!failedIds || failedIds.has(item.id))
+            ? { ...item, status: "error", message }
+            : item,
         ),
       );
       setError(message);
@@ -2044,6 +2083,30 @@ function MainApp() {
     updateWorkspaceState,
     workspaceRegistry.workspaces,
   ]);
+
+  const applySelectedFileQueueToDestination = useCallback(
+    async (targetPath: string, targetKind: "file" | "directory", operation: FileStoreOperation) => {
+      if (selectedQueuedFileQueueItems.length === 0) return;
+      const targetDir =
+        targetKind === "directory"
+          ? targetPath
+          : targetPath.split("/").slice(0, -1).join("/");
+      if (!targetDir) return;
+      const nextItems = selectedQueuedFileQueueItems.map((item) => ({
+        ...item,
+        targetDir,
+        operation,
+        status: "queued" as const,
+        message: null,
+        targetPath: null,
+      }));
+      setFileQueue((current) =>
+        current.map((item) => nextItems.find((next) => next.id === item.id) ?? item),
+      );
+      await applyQueuedFiles(nextItems);
+    },
+    [applyQueuedFiles, selectedQueuedFileQueueItems],
+  );
 
   const navigateBack = useCallback(() => {
     if (!selectedEntry) return;
@@ -2847,13 +2910,53 @@ function MainApp() {
     (tabId: string, group: EditorGroupId) => {
       const tab = tabs.find((item) => item.id === tabId);
       if (!tab) return;
+      const activePane = anchorSettings.ui.explorerPaneMode;
       setAppMode("pkm");
-      setExplorerPaneMode("documents");
       if (!documentsPaneOpen) updateLayoutSettings({ documentsPaneOpen: true });
       setExplorerVisibility(tab.visibility);
+      if (activePane === "documents") {
+        setDocumentBrowserMode("tree");
+        setExplorerQuery("");
+        setExplorerTypeFilter(null);
+        setCollapsedTreeFoldersByVisibility((current) => {
+          const existing = current[tab.visibility] ?? [];
+          return {
+            ...current,
+            [tab.visibility]: expandDocumentAncestors(existing, tab.entry.relPath),
+          };
+        });
+      } else {
+        setWorkspaceFileFilter("all");
+        setWorkspaceFileQuery("");
+        setCollapsedFileFoldersByVisibility((current) => {
+          const existing = current[tab.visibility] ?? [];
+          return {
+            ...current,
+            [tab.visibility]: expandWorkspaceFileAncestors(existing, tab.entry.relPath),
+          };
+        });
+        setSelectedFilePathsByWorkspace((current) => ({
+          ...current,
+          [tab.workspacePath]: [tab.document.path],
+        }));
+        void refreshWorkspaceFiles(tab.workspacePath);
+      }
       selectTab(tab.id, group);
+      setPendingExplorerReveal({ pane: activePane, targetPath: tab.document.path });
     },
-    [documentsPaneOpen, selectTab, setExplorerPaneMode, tabs, updateLayoutSettings],
+    [
+      anchorSettings.ui.explorerPaneMode,
+      documentsPaneOpen,
+      refreshWorkspaceFiles,
+      selectTab,
+      setDocumentBrowserMode,
+      setExplorerQuery,
+      setExplorerTypeFilter,
+      setWorkspaceFileFilter,
+      setWorkspaceFileQuery,
+      tabs,
+      updateLayoutSettings,
+    ],
   );
 
   const closeRightEditorPane = useCallback(() => {
@@ -3653,6 +3756,16 @@ function MainApp() {
                 vaultPath={explorerWorkspacePath}
                 paneMode={anchorSettings.ui.explorerPaneMode}
                 onPaneModeChange={setExplorerPaneMode}
+                pendingRevealTargetPath={
+                  pendingExplorerReveal?.pane === "documents"
+                    ? pendingExplorerReveal.targetPath
+                    : null
+                }
+                onRevealHandled={() => setPendingExplorerReveal(null)}
+                selectedFileQueueCount={selectedQueuedFileQueueItems.length}
+                onApplyFileQueueToDestination={(targetPath, targetKind, operation) => {
+                  void applySelectedFileQueueToDestination(targetPath, targetKind, operation);
+                }}
               />
             ) : null}
             {documentsPaneOpen && anchorSettings.ui.explorerPaneMode === "files" ? (
@@ -3674,6 +3787,7 @@ function MainApp() {
                 filter={anchorSettings.ui.workspaceFileFilter}
                 binaryIncludePatterns={anchorSettings.ui.binaryFileIncludePatterns}
                 collapsedFileFolders={collapsedFileFolders}
+                workspacePath={explorerWorkspacePath}
                 onWorkspaceVisibilityChange={(visibility) => {
                   setExplorerVisibility(visibility);
                   const nextPath = workspaceRegistry.activeByVisibility[visibility];
@@ -3695,6 +3809,16 @@ function MainApp() {
                 }}
                 onClose={() => updateLayoutSettings({ documentsPaneOpen: false })}
                 paneRef={documentsPaneRef}
+                pendingRevealTargetPath={
+                  pendingExplorerReveal?.pane === "files"
+                    ? pendingExplorerReveal.targetPath
+                    : null
+                }
+                onRevealHandled={() => setPendingExplorerReveal(null)}
+                selectedFileQueueCount={selectedQueuedFileQueueItems.length}
+                onApplyFileQueueToDestination={(targetPath, targetKind, operation) => {
+                  void applySelectedFileQueueToDestination(targetPath, targetKind, operation);
+                }}
               />
             ) : null}
             {documentsPaneOpen ? (
@@ -3766,9 +3890,12 @@ function MainApp() {
                 fileQueue={fileQueue}
                 canApplyFileQueue={canApplyFileQueue}
                 onUpdateFileQueueItem={updateFileQueueItem}
+                selectedFileQueueItemIds={selectedFileQueueItemIds}
+                onSelectFileQueueItem={selectFileQueueItem}
                 onQueueExternalFiles={queueExternalFiles}
                 onApplyFileQueue={applyQueuedFiles}
                 onClearFileQueue={clearFileQueue}
+                onClearSelectedFileQueueItems={clearSelectedFileQueueItems}
                 paneRef={outlinePaneRef}
               />
             ) : null}

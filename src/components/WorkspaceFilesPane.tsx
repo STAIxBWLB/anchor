@@ -27,6 +27,7 @@ import {
 import { useTranslation } from "../lib/i18n";
 import type { ExplorerPaneMode, WorkspaceFileFilter } from "../lib/settings";
 import type {
+  FileStoreOperation,
   WorkspaceFileEntry,
   WorkspaceVisibility,
 } from "../lib/types";
@@ -57,6 +58,7 @@ interface WorkspaceFilesPaneProps {
   filter: WorkspaceFileFilter;
   binaryIncludePatterns: string[];
   collapsedFileFolders: string[];
+  workspacePath?: string | null;
   onWorkspaceVisibilityChange: (visibility: WorkspaceVisibility) => void;
   onAddPublicWorkspace: () => void;
   onPaneModeChange: (mode: ExplorerPaneMode) => void;
@@ -70,6 +72,14 @@ interface WorkspaceFilesPaneProps {
   onRefresh: () => void;
   onClose?: () => void;
   paneRef?: React.RefObject<HTMLElement | null>;
+  pendingRevealTargetPath?: string | null;
+  onRevealHandled?: () => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
 }
 
 export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
@@ -85,6 +95,7 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
   filter,
   binaryIncludePatterns,
   collapsedFileFolders,
+  workspacePath,
   onWorkspaceVisibilityChange,
   onAddPublicWorkspace,
   onPaneModeChange,
@@ -98,6 +109,10 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
   onRefresh,
   onClose,
   paneRef,
+  pendingRevealTargetPath = null,
+  onRevealHandled,
+  selectedFileQueueCount = 0,
+  onApplyFileQueueToDestination,
 }: WorkspaceFilesPaneProps) {
   const { t, locale } = useTranslation();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -107,7 +122,11 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    entry: WorkspaceFileEntry;
+    targetPath: string;
+    relPath: string;
+    title: string;
+    entry: WorkspaceFileEntry | null;
+    targetKind: "file" | "directory";
   } | null>(null);
   const [, startSearchTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
@@ -178,6 +197,27 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
     node.scrollTop = 0;
     setViewport({ scrollTop: 0, height: node.clientHeight || 720 });
   }, [deferredQuery, filter]);
+
+  useEffect(() => {
+    if (!pendingRevealTargetPath) return;
+    const index = rows.findIndex(
+      (row) => row.kind === "file" && row.entry.path === pendingRevealTargetPath,
+    );
+    if (index < 0) return;
+    const node = scrollRef.current;
+    if (!node) return;
+    const top = index * FILE_TREE_ROW_HEIGHT;
+    node.scrollTop = Math.max(0, top - FILE_TREE_ROW_HEIGHT);
+    setViewport({ scrollTop: node.scrollTop, height: node.clientHeight || 720 });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const selector = `[data-tree-target-path="${CSS.escape(pendingRevealTargetPath)}"]`;
+        const target = scrollRef.current?.querySelector<HTMLButtonElement>(selector);
+        target?.focus({ preventScroll: true });
+        onRevealHandled?.();
+      });
+    });
+  }, [onRevealHandled, pendingRevealTargetPath, rows]);
 
   const copyText = (value: string) => {
     if (!value) return;
@@ -376,8 +416,34 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
             onContextMenu={(event, entry) => {
               event.preventDefault();
               event.stopPropagation();
-              setContextMenu({ x: event.clientX, y: event.clientY, entry });
+              setContextMenu({
+                x: event.clientX,
+                y: event.clientY,
+                targetPath: entry.path,
+                relPath: entry.relPath,
+                title: entry.name,
+                entry,
+                targetKind: "file",
+              });
             }}
+            onFolderContextMenu={(event, row) => {
+              if (!workspacePath) return;
+              event.preventDefault();
+              event.stopPropagation();
+              const targetPath = joinWorkspacePath(workspacePath, row.path);
+              setContextMenu({
+                x: event.clientX,
+                y: event.clientY,
+                targetPath,
+                relPath: row.path,
+                title: row.path,
+                entry: null,
+                targetKind: "directory",
+              });
+            }}
+            selectedFileQueueCount={selectedFileQueueCount}
+            onApplyFileQueueToDestination={onApplyFileQueueToDestination}
+            workspacePath={workspacePath}
             t={t}
             locale={locale}
           />
@@ -390,14 +456,15 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <div className="context-menu-title" title={contextMenu.entry.relPath}>
-            {contextMenu.entry.name}
+          <div className="context-menu-title" title={contextMenu.relPath}>
+            {contextMenu.title}
           </div>
-          {isOpenableDocumentFile(contextMenu.entry) ? (
+          {contextMenu.entry && isOpenableDocumentFile(contextMenu.entry) ? (
             <button
               type="button"
               onClick={() => {
                 const entry = contextMenu.entry;
+                if (!entry) return;
                 setContextMenu(null);
                 onOpenFile(entry);
               }}
@@ -410,26 +477,54 @@ export const WorkspaceFilesPane = memo(function WorkspaceFilesPane({
             onClick={() => {
               const entry = contextMenu.entry;
               setContextMenu(null);
-              onQueueFiles([entry]);
+              if (entry) onQueueFiles([entry]);
             }}
+            disabled={!contextMenu.entry}
           >
             {t("files.queue")}
           </button>
           <button
             type="button"
             onClick={() => {
-              const target = contextMenu.entry.path;
+              const target = contextMenu.targetPath;
               setContextMenu(null);
               onRevealInFinder(target);
             }}
           >
             {t("context.revealInFinder")}
           </button>
+          {selectedFileQueueCount > 0 && onApplyFileQueueToDestination ? (
+            <>
+              <div className="context-menu-separator" />
+              <button
+                type="button"
+                onClick={() => {
+                  const target = contextMenu.targetPath;
+                  const kind = contextMenu.targetKind;
+                  setContextMenu(null);
+                  onApplyFileQueueToDestination(target, kind, "copy");
+                }}
+              >
+                {t("rightPane.files.copySelectedHere", { count: selectedFileQueueCount })}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = contextMenu.targetPath;
+                  const kind = contextMenu.targetKind;
+                  setContextMenu(null);
+                  onApplyFileQueueToDestination(target, kind, "move");
+                }}
+              >
+                {t("rightPane.files.moveSelectedHere", { count: selectedFileQueueCount })}
+              </button>
+            </>
+          ) : null}
           <div className="context-menu-separator" />
-          <button type="button" onClick={() => copyText(contextMenu.entry.path)}>
+          <button type="button" onClick={() => copyText(contextMenu.targetPath)}>
             {t("context.copyPath")}
           </button>
-          <button type="button" onClick={() => copyText(contextMenu.entry.relPath)}>
+          <button type="button" onClick={() => copyText(contextMenu.relPath)}>
             {t("context.copyRelativePath")}
           </button>
         </div>
@@ -449,6 +544,14 @@ interface WorkspaceFileTreeProps {
   onSelectFile: (entry: WorkspaceFileEntry, additive: boolean) => void;
   onOpenFile: (entry: WorkspaceFileEntry) => void;
   onContextMenu: (event: React.MouseEvent, entry: WorkspaceFileEntry) => void;
+  onFolderContextMenu: (event: React.MouseEvent, row: FolderRow) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
+  workspacePath?: string | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
   locale: string;
 }
@@ -464,6 +567,10 @@ const WorkspaceFileTree = memo(function WorkspaceFileTree({
   onSelectFile,
   onOpenFile,
   onContextMenu,
+  onFolderContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
+  workspacePath,
   t,
   locale,
 }: WorkspaceFileTreeProps) {
@@ -489,6 +596,10 @@ const WorkspaceFileTree = memo(function WorkspaceFileTree({
                 collapsedFileFolders={collapsedFileFolders}
                 forceExpand={forceExpand}
                 onCollapsedFileFoldersChange={onCollapsedFileFoldersChange}
+                onContextMenu={onFolderContextMenu}
+                selectedFileQueueCount={selectedFileQueueCount}
+                onApplyFileQueueToDestination={onApplyFileQueueToDestination}
+                workspacePath={workspacePath}
               />
             ) : (
               <FileRow
@@ -498,6 +609,8 @@ const WorkspaceFileTree = memo(function WorkspaceFileTree({
                 onSelectFile={onSelectFile}
                 onOpenFile={onOpenFile}
                 onContextMenu={onContextMenu}
+                selectedFileQueueCount={selectedFileQueueCount}
+                onApplyFileQueueToDestination={onApplyFileQueueToDestination}
                 locale={locale}
               />
             )}
@@ -517,12 +630,24 @@ const FileFolderRow = memo(function FileFolderRow({
   collapsedFileFolders,
   forceExpand,
   onCollapsedFileFoldersChange,
+  onContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
+  workspacePath,
 }: {
   row: FolderRow;
   paddingLeft: number;
   collapsedFileFolders: string[];
   forceExpand: boolean;
   onCollapsedFileFoldersChange: (paths: string[]) => void;
+  onContextMenu: (event: React.MouseEvent, row: FolderRow) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
+  workspacePath?: string | null;
 }) {
   return (
     <button
@@ -540,6 +665,20 @@ const FileFolderRow = memo(function FileFolderRow({
         )
       }
       title={row.path}
+      onContextMenu={(event) => onContextMenu(event, row)}
+      onDragOver={(event) => {
+        if (!selectedFileQueueCount) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!selectedFileQueueCount || !onApplyFileQueueToDestination || !workspacePath) return;
+        event.preventDefault();
+        void onApplyFileQueueToDestination(
+          joinWorkspacePath(workspacePath, row.path),
+          "directory",
+          event.altKey ? "move" : "copy",
+        );
+      }}
     >
       <ChevronRight
         size={13}
@@ -559,6 +698,8 @@ const FileRow = memo(function FileRow({
   onSelectFile,
   onOpenFile,
   onContextMenu,
+  selectedFileQueueCount,
+  onApplyFileQueueToDestination,
   locale,
 }: {
   row: FileTreeFileRow;
@@ -567,6 +708,12 @@ const FileRow = memo(function FileRow({
   onSelectFile: (entry: WorkspaceFileEntry, additive: boolean) => void;
   onOpenFile: (entry: WorkspaceFileEntry) => void;
   onContextMenu: (event: React.MouseEvent, entry: WorkspaceFileEntry) => void;
+  selectedFileQueueCount?: number;
+  onApplyFileQueueToDestination?: (
+    targetPath: string,
+    targetKind: "file" | "directory",
+    operation: FileStoreOperation,
+  ) => void;
   locale: string;
 }) {
   return (
@@ -577,8 +724,22 @@ const FileRow = memo(function FileRow({
       onClick={(event) => onSelectFile(row.entry, event.metaKey || event.ctrlKey)}
       onDoubleClick={() => onOpenFile(row.entry)}
       onContextMenu={(event) => onContextMenu(event, row.entry)}
+      onDragOver={(event) => {
+        if (!selectedFileQueueCount) return;
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!selectedFileQueueCount || !onApplyFileQueueToDestination) return;
+        event.preventDefault();
+        void onApplyFileQueueToDestination(
+          row.entry.path,
+          "file",
+          event.altKey ? "move" : "copy",
+        );
+      }}
       title={row.entry.relPath}
       aria-selected={selected}
+      data-tree-target-path={row.entry.path}
     >
       <span className="tree-indent-slot" />
       {isOpenableDocumentFile(row.entry) ? <FileText size={13} /> : <File size={13} />}
@@ -604,4 +765,8 @@ function formatBytes(value: number, locale: string): string {
   if (value < 1024) return `${value.toLocaleString(locale)} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function joinWorkspacePath(workspacePath: string, relPath: string): string {
+  return `${workspacePath.replace(/\/+$/, "")}/${relPath.replace(/^\/+/, "")}`;
 }

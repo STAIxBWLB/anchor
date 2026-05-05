@@ -158,6 +158,7 @@ test("shows supported document tab menu items and performs file operations", asy
   const documentList = page.locator(".document-list");
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
   await documentList.getByRole("button", { name: /Anchor 용어집/ }).click();
+  await documentList.getByRole("button", { name: "목록" }).click();
 
   const glossaryTab = page.locator(".document-tab[title='references/anchor-glossary.md']");
   await expect(glossaryTab).toBeVisible();
@@ -183,7 +184,17 @@ test("shows supported document tab menu items and performs file operations", asy
   await expect(menu).not.toContainText("File History");
   await expect(menu).not.toContainText("Reopen Editor With");
 
-  await menu.getByRole("button", { name: "복제..." }).click();
+  await menu.getByRole("button", { name: "Explorer View에서 보기" }).click();
+  const revealedGlossary = documentList.getByRole("button", { name: /Anchor 용어집/ });
+  await expect(documentList.getByRole("button", { name: "트리" })).toHaveClass(/active/);
+  await expect(revealedGlossary).toBeVisible();
+  await expect(revealedGlossary).toBeFocused();
+
+  await glossaryTab.click({ button: "right" });
+  await page
+    .locator(".document-tab-context-menu")
+    .getByRole("button", { name: "복제..." })
+    .click();
   const copyTab = page.locator(".document-tab[title='references/anchor-glossary-copy.md']");
   await expect(copyTab).toBeVisible();
 
@@ -275,8 +286,22 @@ test("switches between Documents and Files explorer modes", async ({ page }) => 
 
   await explorer.getByRole("button", { name: "전체" }).click();
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
-  await explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ }).dblclick();
-  await expect(page.locator(".document-tab-title", { hasText: "Anchor 사업 주간 점검 회의" })).toBeVisible();
+  await explorer.getByRole("button", { name: /anchor-glossary\.md/ }).dblclick();
+  await expect(page.locator(".document-tab-title", { hasText: "Anchor 용어집" })).toBeVisible();
+  await explorer.getByRole("button", { name: "모두 접기" }).click();
+  await expect(explorer.getByRole("button", { name: /anchor-glossary\.md/ })).toHaveCount(0);
+
+  await page.locator(".document-tab[title='references/anchor-glossary.md']").click({
+    button: "right",
+  });
+  await page
+    .locator(".document-tab-context-menu")
+    .getByRole("button", { name: "Explorer View에서 보기" })
+    .click();
+  const revealedFile = explorer.getByRole("button", { name: /anchor-glossary\.md/ });
+  await expect(explorer.getByRole("button", { name: "Files" })).toHaveClass(/active/);
+  await expect(revealedFile).toBeVisible();
+  await expect(revealedFile).toBeFocused();
 });
 
 test("queues selected files in the right Files pane and applies explicitly", async ({ page }) => {
