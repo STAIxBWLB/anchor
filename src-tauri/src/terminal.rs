@@ -8,6 +8,8 @@ use std::thread::{self, JoinHandle};
 use std::{env, str};
 use tauri::{AppHandle, Emitter, State};
 
+use crate::cli_path::{augmented_path, resolve_program};
+
 const DEFAULT_COLS: u16 = 120;
 const DEFAULT_ROWS: u16 = 30;
 const MAX_COLS: u16 = 500;
@@ -81,9 +83,11 @@ pub fn terminal_spawn(
         })
         .map_err(|err| format!("terminal_pty_failed: {err}"))?;
 
-    let mut cmd = CommandBuilder::new(&spec.program);
+    let program = resolve_terminal_program(&spec.program)?;
+    let mut cmd = CommandBuilder::new(program.as_os_str());
     cmd.args(&spec.args);
     cmd.cwd(spec.cwd.as_os_str());
+    cmd.env("PATH", augmented_path());
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "Anchor");
@@ -314,6 +318,12 @@ fn user_shell() -> String {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "/bin/zsh".to_string())
+}
+
+fn resolve_terminal_program(program: &str) -> Result<PathBuf, String> {
+    resolve_program(program).ok_or_else(|| {
+        format!("terminal_cli_missing: {program} not found in PATH or common install locations")
+    })
 }
 
 #[cfg(test)]

@@ -12,11 +12,12 @@
 // locations and falls back to a user-provided absolute path stored in
 // `<vault>/.anchor/inbox.json`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use crate::cli_path::{augmented_path, is_executable, resolve_program};
 use crate::inbox_settings;
 use crate::vault::resolve_inside_vault;
 
@@ -45,37 +46,6 @@ struct RawMessage {
     date: Option<String>,
 }
 
-/// Locations to probe in addition to the inherited PATH. macOS Tauri
-/// apps launched from Finder do not inherit the user's shell PATH, so
-/// `gws` installed via Homebrew or `go install` is invisible without
-/// this augmentation.
-fn extra_path_dirs() -> Vec<PathBuf> {
-    let mut out = vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-    ];
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        out.push(home.join(".local/bin"));
-        out.push(home.join("go/bin"));
-        out.push(home.join(".cargo/bin"));
-    }
-    out
-}
-
-fn augmented_path() -> std::ffi::OsString {
-    let existing = std::env::var_os("PATH").unwrap_or_default();
-    let extras = extra_path_dirs();
-    let mut paths: Vec<PathBuf> = std::env::split_paths(&existing).collect();
-    for dir in extras {
-        if !paths.iter().any(|p| p == &dir) {
-            paths.push(dir);
-        }
-    }
-    std::env::join_paths(paths).unwrap_or(existing)
-}
-
 /// Resolve the `gws` binary. Priority: explicit override → PATH →
 /// augmented PATH probe. Returns the absolute path so spawning is not
 /// dependent on the inherited PATH.
@@ -84,54 +54,12 @@ fn resolve_gws_path(override_path: Option<&str>) -> Option<PathBuf> {
         let trimmed = raw.trim();
         if !trimmed.is_empty() {
             let candidate = PathBuf::from(trimmed);
-            if candidate.is_file() {
+            if is_executable(&candidate) {
                 return Some(candidate);
             }
         }
     }
-    if let Ok(path) = which_in_path("gws", std::env::var_os("PATH").as_deref()) {
-        return Some(path);
-    }
-    if let Ok(path) = which_in_path("gws", Some(&augmented_path())) {
-        return Some(path);
-    }
-    None
-}
-
-fn which_in_path(
-    program: &str,
-    path_env: Option<&std::ffi::OsStr>,
-) -> Result<PathBuf, std::io::Error> {
-    let Some(path_env) = path_env else {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "PATH unavailable",
-        ));
-    };
-    for dir in std::env::split_paths(path_env) {
-        let candidate = dir.join(program);
-        if is_executable(&candidate) {
-            return Ok(candidate);
-        }
-    }
-    Err(std::io::Error::new(
-        std::io::ErrorKind::NotFound,
-        format!("{program} not found"),
-    ))
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    match std::fs::metadata(path) {
-        Ok(meta) => meta.is_file() && (meta.permissions().mode() & 0o111) != 0,
-        Err(_) => false,
-    }
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
+    resolve_program("gws")
 }
 
 #[tauri::command]
@@ -170,11 +98,12 @@ pub fn fetch_gmail_unread(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail = stderr.trim();
-        let kind = if detail.contains("scope") || detail.contains("consent") || detail.contains("token") {
-            "auth_required"
-        } else {
-            "gws_failed"
-        };
+        let kind =
+            if detail.contains("scope") || detail.contains("consent") || detail.contains("token") {
+                "auth_required"
+            } else {
+                "gws_failed"
+            };
         return Err(format!("{kind}: {detail}"));
     }
 
@@ -187,8 +116,7 @@ fn parse_triage_output(raw: &str) -> Result<Vec<GmailMessage>, String> {
     if trimmed.is_empty() {
         return Err("empty stdout".to_string());
     }
-    let response: TriageResponse =
-        serde_json::from_str(trimmed).map_err(|err| err.to_string())?;
+    let response: TriageResponse = serde_json::from_str(trimmed).map_err(|err| err.to_string())?;
     Ok(response
         .messages
         .into_iter()

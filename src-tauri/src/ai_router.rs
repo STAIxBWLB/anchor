@@ -19,6 +19,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use crate::cli_path::{augmented_path, resolve_program};
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiOutputEvent {
@@ -59,7 +61,11 @@ pub fn start_claude_cli_invocation(
 
     let invocation_id = format!("ai-{}", Uuid::new_v4());
 
-    let mut cmd = Command::new("claude");
+    let claude_bin = resolve_program("claude").ok_or_else(|| {
+        "cli_missing: claude CLI not found in PATH or common install locations".to_string()
+    })?;
+
+    let mut cmd = Command::new(claude_bin);
     cmd.arg("-p").arg(&prompt);
     if let Some(args) = extra_args {
         cmd.args(args);
@@ -67,7 +73,8 @@ pub fn start_claude_cli_invocation(
     if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
-    cmd.stdin(Stdio::null())
+    cmd.env("PATH", augmented_path())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -78,17 +85,25 @@ pub fn start_claude_cli_invocation(
         }
     };
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "stdout_capture_failed: claude subprocess produced no stdout handle".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "stderr_capture_failed: claude subprocess produced no stderr handle".to_string())?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        "stdout_capture_failed: claude subprocess produced no stdout handle".to_string()
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        "stderr_capture_failed: claude subprocess produced no stderr handle".to_string()
+    })?;
 
-    spawn_line_pump(app.clone(), invocation_id.clone(), "stdout".to_string(), stdout);
-    spawn_line_pump(app.clone(), invocation_id.clone(), "stderr".to_string(), stderr);
+    spawn_line_pump(
+        app.clone(),
+        invocation_id.clone(),
+        "stdout".to_string(),
+        stdout,
+    );
+    spawn_line_pump(
+        app.clone(),
+        invocation_id.clone(),
+        "stderr".to_string(),
+        stderr,
+    );
 
     // Reaper thread: wait for exit, then emit `ai://done` or `ai://error`.
     let app_done = app.clone();

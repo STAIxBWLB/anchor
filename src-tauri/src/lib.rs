@@ -1,6 +1,7 @@
 mod ai_router;
 mod anchor_dir;
 mod app_menu;
+mod cli_path;
 mod document;
 mod file_manager;
 mod filename_rules;
@@ -64,6 +65,11 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .menu(app_menu::build_app_menu)
         .on_menu_event(app_menu::handle_menu_event)
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                let _ = window.destroy();
+            }
+        })
         .manage(InboxWatcherState::default())
         .manage(TerminalState::default())
         .invoke_handler(tauri::generate_handler![

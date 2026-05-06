@@ -24,10 +24,12 @@ import type { AnchorSettings } from "../lib/settings";
 import {
   createTerminalTab,
   EMPTY_TERMINAL_STATE,
+  getTerminalSplitPaneTabs,
   TERMINAL_LAUNCHERS,
   terminalCommandPreview,
   terminalTabsReducer,
   selectTerminalSplitLeftTabId,
+  shouldCloseTerminalSplitAfterTabClose,
   shouldAutoLaunchTerminal,
   type TerminalKind,
 } from "../lib/terminal";
@@ -407,23 +409,27 @@ export const TerminalPanel = memo(function TerminalPanel({
     state.tabs,
   ]);
 
-  const closeTab = useCallback((tabId: string) => {
-    const sessionId = sessionByTabRef.current.get(tabId);
-    if (sessionId) {
-      void terminalKill(sessionId);
-      sessionByTabRef.current.delete(tabId);
-      tabBySessionRef.current.delete(sessionId);
-    }
-    handlesRef.current.get(tabId)?.terminal.dispose();
-    handlesRef.current.delete(tabId);
-    hostRef.current.delete(tabId);
-    if (rightTabId === tabId) {
-      setRightTabId(null);
-      onSplitOpenChange(false);
-      setFocusedGroup("left");
-    }
-    dispatch({ type: "close", tabId });
-  }, [onSplitOpenChange, rightTabId]);
+  const closeTab = useCallback(
+    (tabId: string) => {
+      const sessionId = sessionByTabRef.current.get(tabId);
+      if (sessionId) {
+        void terminalKill(sessionId);
+        sessionByTabRef.current.delete(tabId);
+        tabBySessionRef.current.delete(sessionId);
+      }
+      handlesRef.current.get(tabId)?.terminal.dispose();
+      handlesRef.current.delete(tabId);
+      hostRef.current.delete(tabId);
+
+      if (shouldCloseTerminalSplitAfterTabClose(state, splitOpen, rightTabId, tabId)) {
+        setRightTabId(null);
+        onSplitOpenChange(false);
+        setFocusedGroup("left");
+      }
+      dispatch({ type: "close", tabId });
+    },
+    [onSplitOpenChange, rightTabId, splitOpen, state.tabs],
+  );
 
   const toggleOpen = useCallback(() => {
     onOpenChange(!open);
@@ -513,15 +519,106 @@ export const TerminalPanel = memo(function TerminalPanel({
   // toggles, React would remount the div, and xterm.Terminal.open() would
   // refuse to re-attach (its element.parentElement guard) — leaving the left
   // pane blank and unable to receive input.
-  const splitBodyStyle = splitMode
-    ? ({ "--terminal-split-ratio": String(splitRatio) } as React.CSSProperties)
+  const splitLayoutStyle = splitMode
+    ? ({
+        "--terminal-split-ratio": String(splitRatio),
+        "--terminal-split-left": `${splitRatio * 100}%`,
+        "--terminal-split-right": `${(1 - splitRatio) * 100}%`,
+      } as React.CSSProperties)
     : undefined;
+  const splitPaneTabs = getTerminalSplitPaneTabs(state, rightTabId);
   const focusedTabId =
     focusedGroup === "right" && rightTab
       ? rightTab.id
       : splitMode
         ? splitLeftTabId
         : state.activeTabId;
+
+  const handleTerminalKeyDownCapture = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const mod = isMac ? event.metaKey : event.ctrlKey;
+      if (!mod || event.shiftKey || event.altKey || event.key.toLowerCase() !== "w") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (focusedTabId) closeTab(focusedTabId);
+    },
+    [closeTab, focusedTabId],
+  );
+
+  const renderTerminalTab = (tab: (typeof state.tabs)[number], pane: "left" | "right") => {
+    const paneActiveTabId = splitMode
+      ? pane === "right"
+        ? splitPaneTabs.rightActiveTabId
+        : splitPaneTabs.leftActiveTabId
+      : state.activeTabId;
+    const className = [
+      "terminal-tab",
+      tab.id === paneActiveTabId ? "selected" : null,
+      tab.id === focusedTabId ? "active" : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return (
+      <div key={tab.id} className={className}>
+        <button
+          type="button"
+          className="terminal-tab-main"
+          onClick={() => {
+            if (pane === "right" && splitOpen && rightTab?.id === tab.id) {
+              setFocusedGroup("right");
+              return;
+            }
+            dispatch({ type: "switch", tabId: tab.id });
+            setFocusedGroup("left");
+          }}
+          title={tab.title}
+        >
+          <span className={tab.running ? "terminal-dot running" : "terminal-dot"} />
+          <span>{tab.title}</span>
+        </button>
+        <button
+          type="button"
+          className="terminal-tab-close"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeTab(tab.id);
+          }}
+          aria-label={t("terminal.tab.close", { title: tab.title })}
+          title={t("terminal.tab.close", { title: tab.title })}
+        >
+          <X size={13} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderTerminalTabGroup = (
+    pane: "left" | "right",
+    tabs: typeof state.tabs,
+  ) => (
+    <div
+      className={[
+        "terminal-tab-group",
+        pane === "right" ? "pane-right" : "pane-left",
+        focusedGroup === pane ? "focused" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      role="group"
+      aria-label={t(pane === "right" ? "terminal.tabs.right" : "terminal.tabs.left")}
+      onPointerDown={() => setFocusedGroup(pane)}
+    >
+      <span className="terminal-tab-group-label">
+        {t(pane === "right" ? "terminal.pane.right" : "terminal.pane.left")}
+      </span>
+      <div className="terminal-tab-list">
+        {tabs.map((tab) => renderTerminalTab(tab, pane))}
+      </div>
+    </div>
+  );
 
   return (
     <section
@@ -533,6 +630,7 @@ export const TerminalPanel = memo(function TerminalPanel({
           : "terminal-panel collapsed"
       }
       style={panelStyle}
+      onKeyDownCapture={handleTerminalKeyDownCapture}
     >
       <div className="terminal-resize-handle" onPointerDown={startResize} />
       <header className="terminal-header">
@@ -586,46 +684,27 @@ export const TerminalPanel = memo(function TerminalPanel({
 
       {/* Tabs and body stay mounted across collapse so xterm DOM keeps its
           parent. Visibility is controlled via CSS on .terminal-panel.collapsed. */}
-      <div className="terminal-tabs" role="tablist" aria-label={t("terminal.tabs")} hidden={!open}>
+      <div
+        className={splitMode ? "terminal-tabs split" : "terminal-tabs"}
+        role="tablist"
+        aria-label={t("terminal.tabs")}
+        style={splitLayoutStyle}
+        hidden={!open}
+      >
         {state.tabs.length === 0 ? (
           <span className="terminal-tab-placeholder">{t("terminal.empty")}</span>
-        ) : null}
-        {state.tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={tab.id === focusedTabId ? "terminal-tab active" : "terminal-tab"}
-          >
-            <button
-              type="button"
-              className="terminal-tab-main"
-              onClick={() => {
-                if (splitOpen && rightTab?.id === tab.id) {
-                  setFocusedGroup("right");
-                  return;
-                }
-                dispatch({ type: "switch", tabId: tab.id });
-                setFocusedGroup("left");
-              }}
-              title={tab.title}
-            >
-              <span className={tab.running ? "terminal-dot running" : "terminal-dot"} />
-              <span>{tab.title}</span>
-            </button>
-            <button
-              type="button"
-              className="terminal-tab-close"
-              onClick={() => closeTab(tab.id)}
-              aria-label={t("terminal.tab.close", { title: tab.title })}
-              title={t("terminal.tab.close", { title: tab.title })}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        ))}
+        ) : splitMode ? (
+          <>
+            {renderTerminalTabGroup("left", splitPaneTabs.leftTabs)}
+            {renderTerminalTabGroup("right", splitPaneTabs.rightTabs)}
+          </>
+        ) : (
+          state.tabs.map((tab) => renderTerminalTab(tab, "left"))
+        )}
       </div>
       <div
         className={splitMode ? "terminal-body split" : "terminal-body"}
-        style={splitBodyStyle}
+        style={splitLayoutStyle}
         ref={terminalBodyRef}
         hidden={!open}
       >
@@ -666,7 +745,11 @@ export const TerminalPanel = memo(function TerminalPanel({
                       type="button"
                       className="terminal-pane-close"
                       onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => closeTab(tab.id)}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        closeTab(tab.id);
+                      }}
                       title={t("terminal.tab.close", { title: tab.title })}
                       aria-label={t("terminal.tab.close", { title: tab.title })}
                     >

@@ -16,6 +16,13 @@ export interface TerminalTabsState {
   activeTabId: string | null;
 }
 
+export interface TerminalSplitPaneTabs {
+  leftTabs: TerminalTab[];
+  rightTabs: TerminalTab[];
+  leftActiveTabId: string | null;
+  rightActiveTabId: string | null;
+}
+
 export type TerminalTabsAction =
   | { type: "create"; tab: TerminalTab; activate?: boolean }
   | { type: "switch"; tabId: string }
@@ -110,6 +117,31 @@ export function selectTerminalSplitLeftTabId(
     if (active) return active.id;
   }
   return state.tabs.find((tab) => tab.id !== rightTabId)?.id ?? null;
+}
+
+export function getTerminalSplitPaneTabs(
+  state: TerminalTabsState,
+  rightTabId: string | null,
+): TerminalSplitPaneTabs {
+  const rightTab = rightTabId ? state.tabs.find((tab) => tab.id === rightTabId) ?? null : null;
+  const leftActiveTabId = selectTerminalSplitLeftTabId(state, rightTab?.id ?? null);
+  return {
+    leftTabs: rightTab ? state.tabs.filter((tab) => tab.id !== rightTab.id) : state.tabs,
+    rightTabs: rightTab ? [rightTab] : [],
+    leftActiveTabId,
+    rightActiveTabId: rightTab?.id ?? null,
+  };
+}
+
+export function shouldCloseTerminalSplitAfterTabClose(
+  state: TerminalTabsState,
+  splitOpen: boolean,
+  rightTabId: string | null,
+  closingTabId: string,
+): boolean {
+  if (!splitOpen) return false;
+  const remainingTabs = state.tabs.filter((tab) => tab.id !== closingTabId);
+  return rightTabId === closingTabId || remainingTabs.length < 2;
 }
 
 export function terminalCommandPreview(kind: TerminalKind, cwd: string): string {

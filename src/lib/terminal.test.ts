@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   createTerminalTab,
   EMPTY_TERMINAL_STATE,
+  getTerminalSplitPaneTabs,
   selectTerminalSplitLeftTabId,
+  shouldCloseTerminalSplitAfterTabClose,
   shouldAutoLaunchTerminal,
   terminalCommandPreview,
   terminalTabsReducer,
@@ -74,6 +76,49 @@ describe("terminal tab reducer", () => {
       activate: false,
     });
     expect(selectTerminalSplitLeftTabId(rightOnly, "tab-1")).toBeNull();
+  });
+
+  it("groups split terminal tabs by pane", () => {
+    const shell = createTerminalTab("tab-1", "shell", "Shell");
+    const codex = createTerminalTab("tab-2", "codex", "Codex");
+    const claude = createTerminalTab("tab-3", "claude", "Claude");
+    let state = terminalTabsReducer(EMPTY_TERMINAL_STATE, {
+      type: "create",
+      tab: shell,
+    });
+    state = terminalTabsReducer(state, {
+      type: "create",
+      tab: codex,
+    });
+    state = terminalTabsReducer(state, {
+      type: "create",
+      tab: claude,
+      activate: false,
+    });
+
+    const groups = getTerminalSplitPaneTabs(state, "tab-2");
+    expect(groups.leftTabs.map((tab) => tab.id)).toEqual(["tab-1", "tab-3"]);
+    expect(groups.rightTabs.map((tab) => tab.id)).toEqual(["tab-2"]);
+    expect(groups.leftActiveTabId).toBe("tab-1");
+    expect(groups.rightActiveTabId).toBe("tab-2");
+  });
+
+  it("closes split mode instead of auto-replacing the last remaining pane", () => {
+    const shell = createTerminalTab("tab-1", "shell", "Shell");
+    const codex = createTerminalTab("tab-2", "codex", "Codex");
+    let state = terminalTabsReducer(EMPTY_TERMINAL_STATE, {
+      type: "create",
+      tab: shell,
+    });
+    state = terminalTabsReducer(state, {
+      type: "create",
+      tab: codex,
+      activate: false,
+    });
+
+    expect(shouldCloseTerminalSplitAfterTabClose(state, true, "tab-2", "tab-1")).toBe(true);
+    expect(shouldCloseTerminalSplitAfterTabClose(state, true, "tab-2", "tab-2")).toBe(true);
+    expect(shouldCloseTerminalSplitAfterTabClose(state, false, "tab-2", "tab-1")).toBe(false);
   });
 
   it("auto-launches only when open, empty, and enabled", () => {

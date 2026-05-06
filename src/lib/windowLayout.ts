@@ -102,16 +102,10 @@ export async function subscribeMainWindowLayout(
 
   const offResize = await appWindow.onResized(capture);
   const offMove = await appWindow.onMoved(capture);
-  const offClose = await appWindow.onCloseRequested(() => {
-    if (timer) window.clearTimeout(timer);
-    timer = 0;
-    void captureNow();
-  });
   return () => {
     if (timer) window.clearTimeout(timer);
     offResize();
     offMove();
-    offClose();
   };
 }
 

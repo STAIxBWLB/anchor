@@ -197,6 +197,25 @@ test("restores a dense shell with tabbed explorer and collapsed terminal", async
   await expect(page.locator(".document-list")).toBeVisible();
 });
 
+test("keeps close shortcut scoped to the focused terminal panel", async ({ page }) => {
+  await page.goto("/");
+
+  const documentTabs = page.locator(".document-tab");
+  const tabCount = await documentTabs.count();
+  expect(tabCount).toBeGreaterThan(0);
+
+  const terminalTitle = page.locator(".terminal-title");
+  await terminalTitle.click();
+  await expect(page.locator(".terminal-panel")).not.toHaveClass(/collapsed/);
+  await terminalTitle.focus();
+
+  const mod = process.platform === "darwin" ? "Meta" : "Control";
+  await page.keyboard.press(`${mod}+W`);
+
+  await expect(documentTabs).toHaveCount(tabCount);
+  await expect(page.locator(".document-tab.active")).toBeVisible();
+});
+
 test("restores the previous app state on startup", async ({ page }) => {
   await page.goto("/");
 
@@ -400,6 +419,18 @@ test("suppresses native context menus outside document surfaces", async ({ page 
     return !node.dispatchEvent(event);
   });
   expect(editorPrevented).toBe(false);
+});
+
+test("keeps macOS window controls outside custom drag regions", async ({ page }) => {
+  await page.goto("/");
+
+  const topbarDragRegion = await page.locator(".topbar").evaluate((node) => ({
+    hasTauriDragRegion: node.hasAttribute("data-tauri-drag-region"),
+    webkitAppRegion: window.getComputedStyle(node).getPropertyValue("-webkit-app-region"),
+  }));
+
+  expect(topbarDragRegion.hasTauriDragRegion).toBe(false);
+  expect(topbarDragRegion.webkitAppRegion).not.toBe("drag");
 });
 
 test("switches between Documents and Files explorer modes", async ({ page }) => {

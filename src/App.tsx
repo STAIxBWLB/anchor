@@ -3941,6 +3941,13 @@ function MainApp() {
     ) {
       return;
     }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+    const withinTrafficLightZone =
+      event.clientX - rect.left < 112 && event.clientY - rect.top < 44;
+    if (isMac && withinTrafficLightZone) return;
+
     void startWindowDrag().catch(() => {});
   }, []);
 
@@ -3949,7 +3956,6 @@ function MainApp() {
       <div className={shellClass} style={shellStyle} ref={appShellRef}>
         <header
           className="topbar"
-          data-tauri-drag-region
           onPointerDown={handleTopbarPointerDown}
         >
           <div className="brand-mark" aria-hidden="true">

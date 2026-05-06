@@ -20,7 +20,7 @@
         "minHeight": 720,
         "resizable": true,
         "fullscreen": false,
-        "titleBarStyle": "Overlay",
+        "titleBarStyle": "Transparent",
         "hiddenTitle": true,
         "backgroundColor": "#F4F1EA",
         "dragDropEnabled": true
