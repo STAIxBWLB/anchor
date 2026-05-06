@@ -24,7 +24,6 @@ import type { AnchorSettings } from "../lib/settings";
 import {
   createTerminalTab,
   EMPTY_TERMINAL_STATE,
-  getTerminalSplitPaneTabs,
   TERMINAL_LAUNCHERS,
   terminalCommandPreview,
   terminalTabsReducer,
@@ -526,7 +525,6 @@ export const TerminalPanel = memo(function TerminalPanel({
         "--terminal-split-right": `${(1 - splitRatio) * 100}%`,
       } as React.CSSProperties)
     : undefined;
-  const splitPaneTabs = getTerminalSplitPaneTabs(state, rightTabId);
   const focusedTabId =
     focusedGroup === "right" && rightTab
       ? rightTab.id
@@ -546,26 +544,15 @@ export const TerminalPanel = memo(function TerminalPanel({
     [closeTab, focusedTabId],
   );
 
-  const renderTerminalTab = (tab: (typeof state.tabs)[number], pane: "left" | "right") => {
-    const paneActiveTabId = splitMode
-      ? pane === "right"
-        ? splitPaneTabs.rightActiveTabId
-        : splitPaneTabs.leftActiveTabId
-      : state.activeTabId;
-    const className = [
-      "terminal-tab",
-      tab.id === paneActiveTabId ? "selected" : null,
-      tab.id === focusedTabId ? "active" : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
+  const renderTerminalTab = (tab: (typeof state.tabs)[number]) => {
+    const className = tab.id === focusedTabId ? "terminal-tab active" : "terminal-tab";
     return (
       <div key={tab.id} className={className}>
         <button
           type="button"
           className="terminal-tab-main"
           onClick={() => {
-            if (pane === "right" && splitOpen && rightTab?.id === tab.id) {
+            if (splitOpen && rightTab?.id === tab.id) {
               setFocusedGroup("right");
               return;
             }
@@ -594,31 +581,6 @@ export const TerminalPanel = memo(function TerminalPanel({
       </div>
     );
   };
-
-  const renderTerminalTabGroup = (
-    pane: "left" | "right",
-    tabs: typeof state.tabs,
-  ) => (
-    <div
-      className={[
-        "terminal-tab-group",
-        pane === "right" ? "pane-right" : "pane-left",
-        focusedGroup === pane ? "focused" : null,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      role="group"
-      aria-label={t(pane === "right" ? "terminal.tabs.right" : "terminal.tabs.left")}
-      onPointerDown={() => setFocusedGroup(pane)}
-    >
-      <span className="terminal-tab-group-label">
-        {t(pane === "right" ? "terminal.pane.right" : "terminal.pane.left")}
-      </span>
-      <div className="terminal-tab-list">
-        {tabs.map((tab) => renderTerminalTab(tab, pane))}
-      </div>
-    </div>
-  );
 
   return (
     <section
@@ -685,7 +647,7 @@ export const TerminalPanel = memo(function TerminalPanel({
       {/* Tabs and body stay mounted across collapse so xterm DOM keeps its
           parent. Visibility is controlled via CSS on .terminal-panel.collapsed. */}
       <div
-        className={splitMode ? "terminal-tabs split" : "terminal-tabs"}
+        className="terminal-tabs"
         role="tablist"
         aria-label={t("terminal.tabs")}
         style={splitLayoutStyle}
@@ -693,13 +655,8 @@ export const TerminalPanel = memo(function TerminalPanel({
       >
         {state.tabs.length === 0 ? (
           <span className="terminal-tab-placeholder">{t("terminal.empty")}</span>
-        ) : splitMode ? (
-          <>
-            {renderTerminalTabGroup("left", splitPaneTabs.leftTabs)}
-            {renderTerminalTabGroup("right", splitPaneTabs.rightTabs)}
-          </>
         ) : (
-          state.tabs.map((tab) => renderTerminalTab(tab, "left"))
+          state.tabs.map((tab) => renderTerminalTab(tab))
         )}
       </div>
       <div

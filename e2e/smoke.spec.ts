@@ -424,13 +424,24 @@ test("suppresses native context menus outside document surfaces", async ({ page 
 test("keeps macOS window controls outside custom drag regions", async ({ page }) => {
   await page.goto("/");
 
-  const topbarDragRegion = await page.locator(".topbar").evaluate((node) => ({
-    hasTauriDragRegion: node.hasAttribute("data-tauri-drag-region"),
-    webkitAppRegion: window.getComputedStyle(node).getPropertyValue("-webkit-app-region"),
-  }));
+  const dragRegion = await page.locator(".topbar").evaluate((node) => {
+    const guard = node.querySelector(".topbar-window-controls-guard");
+    if (!(guard instanceof HTMLElement)) {
+      throw new Error("Missing topbar window-controls guard");
+    }
+    const guardBox = guard.getBoundingClientRect();
+    return {
+      hasTauriDragRegion: node.hasAttribute("data-tauri-drag-region"),
+      topbarAppRegion: window.getComputedStyle(node).getPropertyValue("-webkit-app-region"),
+      guardAppRegion: window.getComputedStyle(guard).getPropertyValue("-webkit-app-region"),
+      guardWidth: guardBox.width,
+    };
+  });
 
-  expect(topbarDragRegion.hasTauriDragRegion).toBe(false);
-  expect(topbarDragRegion.webkitAppRegion).not.toBe("drag");
+  expect(dragRegion.hasTauriDragRegion).toBe(true);
+  expect(dragRegion.topbarAppRegion).toBe("drag");
+  expect(dragRegion.guardAppRegion).toBe("no-drag");
+  expect(dragRegion.guardWidth).toBeGreaterThanOrEqual(70);
 });
 
 test("switches between Documents and Files explorer modes", async ({ page }) => {

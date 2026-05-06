@@ -3956,8 +3956,10 @@ function MainApp() {
       <div className={shellClass} style={shellStyle} ref={appShellRef}>
         <header
           className="topbar"
+          data-tauri-drag-region
           onPointerDown={handleTopbarPointerDown}
         >
+          <div className="topbar-window-controls-guard" data-no-drag="true" aria-hidden="true" />
           <div className="brand-mark" aria-hidden="true">
             A
           </div>
