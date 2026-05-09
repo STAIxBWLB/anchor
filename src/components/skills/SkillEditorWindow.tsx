@@ -123,7 +123,6 @@ function SkillEditorWindow({ initialWorkPath, initialSkillId }: SkillEditorWindo
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const closingAllowedRef = useRef(false);
   const dirtyRef = useRef(false);
   const skillIdRef = useRef<string | null>(initialSkillId);
   const workPathRef = useRef<string | null>(initialWorkPath);
@@ -204,6 +203,7 @@ function SkillEditorWindow({ initialWorkPath, initialSkillId }: SkillEditorWindo
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
         listen<SkillEditorOpenPayload>(SKILL_EDITOR_OPEN_EVENT, (event) => {
+          if (disposed) return;
           void switchSkill(event.payload);
         }),
       )
@@ -224,7 +224,8 @@ function SkillEditorWindow({ initialWorkPath, initialSkillId }: SkillEditorWindo
     void import("@tauri-apps/api/window")
       .then(({ getCurrentWindow }) =>
         getCurrentWindow().onCloseRequested((event) => {
-          if (closingAllowedRef.current || !dirtyRef.current) return;
+          if (disposed) return;
+          if (!dirtyRef.current) return;
           if (!window.confirm(t("skillEditor.closeConfirm"))) event.preventDefault();
         }),
       )
@@ -287,12 +288,10 @@ function SkillEditorWindow({ initialWorkPath, initialSkillId }: SkillEditorWindo
   }, [emitUpdated, skill, t, text, workPath]);
 
   const closeWindow = useCallback(async () => {
-    if (dirty && !window.confirm(t("skillEditor.closeConfirm"))) return;
-    closingAllowedRef.current = true;
     await import("@tauri-apps/api/window")
       .then(({ getCurrentWindow }) => getCurrentWindow().close())
       .catch(() => {});
-  }, [dirty, t]);
+  }, []);
 
   const persistedDirtyLabel = skill?.dirty
     ? source?.kind === "builtin"

@@ -1005,9 +1005,12 @@ const EMPTY_SKILL_OPERATION: SkillOperationState = {
   log: [],
 };
 
-function skillTargetLabel(target: SkillBulkTarget): string {
-  if (target === "both") return "Claude + Codex";
-  return target === "claude" ? "Claude" : "Codex";
+function skillTargetLabel(
+  target: SkillBulkTarget,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (target === "both") return t("system.skills.targetBoth");
+  return target === "claude" ? t("system.skills.targetClaude") : t("system.skills.targetCodex");
 }
 
 function skillTargetsFor(target: SkillBulkTarget): SkillInstallTarget[] {
@@ -1571,7 +1574,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
           .filter((nextTarget) => !installKey.has(`${skill.id}:${nextTarget}`))
           .map((nextTarget) => ({ skill, target: nextTarget })),
       );
-      const targetLabel = skillTargetLabel(target);
+      const targetLabel = skillTargetLabel(target, t);
       if (tasks.length === 0) {
         setOperation({
           ...EMPTY_SKILL_OPERATION,
@@ -1605,7 +1608,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
           appendOperationLog(
             t("system.skills.log.installStart", {
               name: task.skill.name,
-              target: skillTargetLabel(task.target),
+              target: skillTargetLabel(task.target, t),
             }),
           );
           try {
@@ -1614,7 +1617,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
             appendOperationLog(
               t("system.skills.log.installDone", {
                 name: task.skill.name,
-                target: skillTargetLabel(task.target),
+                target: skillTargetLabel(task.target, t),
               }),
             );
           } catch (err) {
@@ -1626,7 +1629,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
             appendOperationLog(
               t("system.skills.log.installFailed", {
                 name: task.skill.name,
-                target: skillTargetLabel(task.target),
+                target: skillTargetLabel(task.target, t),
               }),
             );
           } finally {
@@ -1691,7 +1694,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
           appendOperationLog(
             t("system.skills.log.uninstallStart", {
               name: item.installedAs,
-              target: skillTargetLabel(item.target),
+              target: skillTargetLabel(item.target, t),
             }),
           );
           try {
@@ -1700,7 +1703,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
             appendOperationLog(
               t("system.skills.log.uninstallDone", {
                 name: item.installedAs,
-                target: skillTargetLabel(item.target),
+                target: skillTargetLabel(item.target, t),
               }),
             );
           } catch (err) {
@@ -1712,7 +1715,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
             appendOperationLog(
               t("system.skills.log.uninstallFailed", {
                 name: item.installedAs,
-                target: skillTargetLabel(item.target),
+                target: skillTargetLabel(item.target, t),
               }),
             );
           } finally {
@@ -2228,7 +2231,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
                 onClick={() => void installSkills(selectedSkills, "both")}
                 disabled={busy || selectedSkillIds.size === 0}
               >
-                {t("system.skills.installSelectedTarget", { target: skillTargetLabel("both") })}
+                {t("system.skills.installSelectedTarget", { target: skillTargetLabel("both", t) })}
               </Button>
               <Button
                 variant="ghost"
@@ -2260,7 +2263,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
                 onClick={() => void installSkills(skills, "both")}
                 disabled={busy || skills.length === 0}
               >
-                {t("system.skills.installAllTarget", { target: skillTargetLabel("both") })}
+                {t("system.skills.installAllTarget", { target: skillTargetLabel("both", t) })}
               </Button>
             </div>
           </div>

@@ -496,6 +496,9 @@ const ko: Record<string, string> = {
   "system.skills.edit": "편집",
   "system.skills.installTarget": "{target} 설치",
   "system.skills.removeTarget": "{target} 제거",
+  "system.skills.targetClaude": "Claude",
+  "system.skills.targetCodex": "Codex",
+  "system.skills.targetBoth": "Claude·Codex",
   "system.skills.linkedSourceDirty": "linked source dirty",
   "system.skills.builtinSourceDirty": "built-in customized",
   "system.skills.saveAs": "Save As",
@@ -1138,6 +1141,9 @@ const en: Record<string, string> = {
   "system.skills.edit": "Edit",
   "system.skills.installTarget": "Install {target}",
   "system.skills.removeTarget": "Remove {target}",
+  "system.skills.targetClaude": "Claude",
+  "system.skills.targetCodex": "Codex",
+  "system.skills.targetBoth": "Claude + Codex",
   "system.skills.linkedSourceDirty": "linked source dirty",
   "system.skills.builtinSourceDirty": "built-in customized",
   "system.skills.saveAs": "Save As",
@@ -1317,7 +1323,7 @@ export function t(
     return key;
   }
   for (const [name, value] of Object.entries(vars)) {
-    template = template.replace(new RegExp(`\\{${name}\\}`, "g"), String(value));
+    template = template.split(`{${name}}`).join(String(value));
   }
   return template;
 }
