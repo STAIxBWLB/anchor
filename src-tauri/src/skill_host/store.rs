@@ -577,7 +577,13 @@ pub fn skills_reset_registry(work_path: Option<String>) -> Result<ResetOutcome, 
     } else {
         None
     };
-    let mut registry = SkillsRegistry::default();
+    let preserved_installs = load_registry_unlocked()
+        .map(preserved_installs_from_registry)
+        .unwrap_or_default();
+    let mut registry = SkillsRegistry {
+        installs: preserved_installs,
+        ..SkillsRegistry::default()
+    };
     ensure_default_sources(&mut registry, work_path.as_deref())?;
     let source_ids: Vec<String> = registry
         .sources
@@ -594,6 +600,20 @@ pub fn skills_reset_registry(work_path: Option<String>) -> Result<ResetOutcome, 
     };
     save_registry_unlocked(&registry)?;
     Ok(outcome)
+}
+
+fn preserved_installs_from_registry(registry: SkillsRegistry) -> Vec<SkillInstall> {
+    registry
+        .installs
+        .into_iter()
+        .filter(install_links_are_intact)
+        .collect()
+}
+
+fn install_links_are_intact(install: &SkillInstall) -> bool {
+    let target_path = PathBuf::from(&install.target_path);
+    let entrypoint_path = PathBuf::from(&install.entrypoint_path);
+    host_fs::read_link_target(&target_path).as_deref() == Some(entrypoint_path.as_path())
 }
 
 fn registry_guard() -> Result<MutexGuard<'static, ()>, String> {
@@ -1294,6 +1314,51 @@ mod tests {
         let refreshed = skills_list_sources(Some(work_path)).unwrap();
         assert!(has_source(&refreshed, "stai-public"));
         assert!(load_registry().unwrap().removed_source_ids.is_empty());
+    }
+
+    #[test]
+    fn reset_registry_preserves_intact_installs() {
+        let _home = test_home();
+        let work = TempDir::new().unwrap();
+        let public_root = TempDir::new().unwrap();
+        let private_root = TempDir::new().unwrap();
+        let links = TempDir::new().unwrap();
+        write_workspace_config(work.path(), public_root.path(), private_root.path());
+        let work_path = path_string(work.path());
+        let skill_target = links.path().join("skill-alpha");
+        let anchor_entry = links.path().join("anchor-alpha");
+        let tool_target = links.path().join("tool-alpha");
+        fs::create_dir_all(&skill_target).unwrap();
+        host_fs::create_symlink_no_clobber(&anchor_entry, &skill_target).unwrap();
+        host_fs::create_symlink_no_clobber(&tool_target, &anchor_entry).unwrap();
+
+        let mut registry = SkillsRegistry::default();
+        registry.installs.push(SkillInstall {
+            skill_id: "stai-public:alpha".to_string(),
+            target: "claude".to_string(),
+            installed_as: "alpha".to_string(),
+            managed_by: "anchor".to_string(),
+            entrypoint_path: path_string(&anchor_entry),
+            target_path: path_string(&tool_target),
+            created_at: None,
+        });
+        registry.installs.push(SkillInstall {
+            skill_id: "stai-public:stale".to_string(),
+            target: "codex".to_string(),
+            installed_as: "stale".to_string(),
+            managed_by: "anchor".to_string(),
+            entrypoint_path: path_string(&links.path().join("missing-anchor")),
+            target_path: path_string(&links.path().join("missing-tool")),
+            created_at: None,
+        });
+        save_registry_unlocked(&registry).unwrap();
+
+        skills_reset_registry(Some(work_path)).unwrap();
+
+        let registry = load_registry().unwrap();
+        assert_eq!(registry.installs.len(), 1);
+        assert_eq!(registry.installs[0].installed_as, "alpha");
+        assert_eq!(registry.installs[0].managed_by, "anchor");
     }
 
     #[test]

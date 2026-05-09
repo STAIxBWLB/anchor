@@ -19,7 +19,7 @@ import {
   Wrench,
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applySysImport,
   deleteAnchorRule,
@@ -989,7 +989,6 @@ interface SkillConfirmState {
   message: string;
   confirmLabel: string;
   variant: "primary" | "danger";
-  resolve: (confirmed: boolean) => void;
 }
 
 const EMPTY_SKILL_OPERATION: SkillOperationState = {
@@ -1029,6 +1028,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(() => new Set());
   const [operation, setOperation] = useState<SkillOperationState>(EMPTY_SKILL_OPERATION);
   const [confirmState, setConfirmState] = useState<SkillConfirmState | null>(null);
+  const confirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1193,10 +1193,10 @@ function SkillsTab({ workPath }: { workPath: string }) {
   );
 
   const closeConfirmation = useCallback((confirmed: boolean) => {
-    setConfirmState((current) => {
-      current?.resolve(confirmed);
-      return null;
-    });
+    const resolve = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmState(null);
+    resolve?.(confirmed);
   }, []);
 
   const confirmAction = useCallback(
@@ -1209,12 +1209,12 @@ function SkillsTab({ workPath }: { workPath: string }) {
       } = {},
     ) =>
       new Promise<boolean>((resolve) => {
+        confirmResolverRef.current = resolve;
         setConfirmState({
           title: options.title ?? t("system.skills.confirmTitle"),
           message,
           confirmLabel: options.confirmLabel ?? t("system.skills.confirmProceed"),
           variant: options.variant ?? "primary",
-          resolve,
         });
       }),
     [t],
