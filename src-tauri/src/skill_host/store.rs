@@ -573,7 +573,7 @@ pub fn skills_reset_registry(work_path: Option<String>) -> Result<ResetOutcome, 
     let backup_path = if path.is_file() {
         let backup = path.with_file_name(format!(
             "registry-{}.json.bak",
-            Utc::now().format("%Y%m%d%H%M%S")
+            Utc::now().format("%Y%m%d%H%M%S%.9f")
         ));
         fs::copy(&path, &backup).map_err(|err| {
             format!(

@@ -1207,13 +1207,15 @@ function SkillsTab({ workPath }: { workPath: string }) {
       );
       const targetLabel = skillTargetLabel(target);
       if (tasks.length === 0) {
-        finishOperation(
-          t("system.skills.installComplete", {
+        setOperation({
+          ...EMPTY_SKILL_OPERATION,
+          label: t("system.skills.installing", { target: targetLabel }),
+          message: t("system.skills.installComplete", {
             claude: 0,
             codex: 0,
             failed: 0,
           }),
-        );
+        });
         return;
       }
       if (
@@ -1268,7 +1270,11 @@ function SkillsTab({ workPath }: { workPath: string }) {
   const uninstallInstalls = useCallback(
     async (items: SkillInstall[]) => {
       if (items.length === 0) {
-        finishOperation(t("system.skills.uninstallComplete", { count: 0, failed: 0 }));
+        setOperation({
+          ...EMPTY_SKILL_OPERATION,
+          label: t("system.skills.uninstalling"),
+          message: t("system.skills.uninstallComplete", { count: 0, failed: 0 }),
+        });
         return;
       }
       if (!window.confirm(t("system.skills.uninstallConfirm", { count: items.length }))) {
@@ -1371,17 +1377,26 @@ function SkillsTab({ workPath }: { workPath: string }) {
         success: boolean;
         exitCode: number | null;
       };
-      const pendingDone: SkillsEnvDonePayload[] = [];
-      unlistenOutput = await listen<{
+      type SkillsEnvOutputPayload = {
         invocationId: string;
         stream: string;
         line: string;
-      }>("skills-env://output", (event) => {
-        if (event.payload.invocationId !== invocationId) return;
+      };
+      const pendingDone: SkillsEnvDonePayload[] = [];
+      const pendingOutput: SkillsEnvOutputPayload[] = [];
+      const handleOutput = (payload: SkillsEnvOutputPayload) => {
         setOperation((prev) => ({
           ...prev,
-          log: [...prev.log.slice(-11), `[${event.payload.stream}] ${event.payload.line}`],
+          log: [...prev.log.slice(-11), `[${payload.stream}] ${payload.line}`],
         }));
+      };
+      unlistenOutput = await listen<SkillsEnvOutputPayload>("skills-env://output", (event) => {
+        if (invocationId === null) {
+          pendingOutput.push(event.payload);
+          return;
+        }
+        if (event.payload.invocationId !== invocationId) return;
+        handleOutput(event.payload);
       });
       let resolveDone: () => void = () => {};
       const donePromise = new Promise<void>((resolve) => {
@@ -1409,6 +1424,9 @@ function SkillsTab({ workPath }: { workPath: string }) {
         handleDone(event.payload);
       });
       invocationId = await skillsEnvBootstrap(workPath);
+      pendingOutput
+        .filter((payload) => payload.invocationId === invocationId)
+        .forEach(handleOutput);
       const earlyDone = pendingDone.find((payload) => payload.invocationId === invocationId);
       if (earlyDone) {
         handleDone(earlyDone);
@@ -1796,7 +1814,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
                 onClick={() => void installSkills(selectedSkills, "both")}
                 disabled={busy || selectedSkillIds.size === 0}
               >
-                {t("system.skills.installSelectedTarget", { target: "Both" })}
+                {t("system.skills.installSelectedTarget", { target: skillTargetLabel("both") })}
               </Button>
               <Button
                 variant="ghost"
@@ -1828,7 +1846,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
                 onClick={() => void installSkills(skills, "both")}
                 disabled={busy || skills.length === 0}
               >
-                {t("system.skills.installAllTarget", { target: "Both" })}
+                {t("system.skills.installAllTarget", { target: skillTargetLabel("both") })}
               </Button>
             </div>
           </div>
