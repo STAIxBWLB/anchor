@@ -111,21 +111,46 @@ impl Default for InboxFileDropConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InboxGmailConfig {
+    #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default = "default_gmail_scan_window_days")]
     pub scan_window_days: u32,
+    #[serde(default = "default_gmail_max_results")]
     pub max_results: u32,
+    #[serde(default = "default_gmail_auto_refresh_ttl_seconds")]
+    pub auto_refresh_ttl_seconds: u32,
+    #[serde(default = "default_true")]
     pub unread_only: bool,
+    #[serde(default)]
     pub query: String,
+    #[serde(default)]
     pub gws_path: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_gmail_scan_window_days() -> u32 {
+    14
+}
+
+fn default_gmail_max_results() -> u32 {
+    20
+}
+
+fn default_gmail_auto_refresh_ttl_seconds() -> u32 {
+    300
 }
 
 impl Default for InboxGmailConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
-            scan_window_days: 14,
-            max_results: 20,
-            unread_only: true,
+            enabled: default_true(),
+            scan_window_days: default_gmail_scan_window_days(),
+            max_results: default_gmail_max_results(),
+            auto_refresh_ttl_seconds: default_gmail_auto_refresh_ttl_seconds(),
+            unread_only: default_true(),
             query: String::new(),
             gws_path: None,
         }
@@ -402,6 +427,9 @@ pub fn validate_inbox_runtime_config(
     }
     if config.gmail.scan_window_days > 3650 {
         return Err("gmail_scan_window_out_of_range".to_string());
+    }
+    if config.gmail.auto_refresh_ttl_seconds > 86_400 {
+        return Err("gmail_auto_refresh_ttl_out_of_range".to_string());
     }
     for (key, channel) in &config.channels {
         validate_channel_key(key)?;
@@ -720,6 +748,7 @@ inbox:
     enabled: true
     scan_window_days: 30
     max_results: 50
+    auto_refresh_ttl_seconds: 120
     unread_only: true
     query: ""
     gws_path: /opt/homebrew/bin/gws
@@ -741,6 +770,7 @@ inbox:
         assert_eq!(config.naming.summary_file, "custom-summary.md");
         assert_eq!(config.gmail.scan_window_days, 30);
         assert_eq!(config.gmail.max_results, 50);
+        assert_eq!(config.gmail.auto_refresh_ttl_seconds, 120);
         assert_eq!(
             config.gmail.gws_path.as_deref(),
             Some("/opt/homebrew/bin/gws")
@@ -810,6 +840,13 @@ projects:
         assert_eq!(
             validate_inbox_runtime_config(tmp.path(), &config).unwrap_err(),
             "gmail_scan_window_out_of_range"
+        );
+
+        config.gmail.scan_window_days = 14;
+        config.gmail.auto_refresh_ttl_seconds = 86_401;
+        assert_eq!(
+            validate_inbox_runtime_config(tmp.path(), &config).unwrap_err(),
+            "gmail_auto_refresh_ttl_out_of_range"
         );
     }
 

@@ -877,6 +877,23 @@ function InboxRuntimeConfigTab({
                 }
               />
             </label>
+            <label className="field">
+              <span>Auto refresh TTL (seconds)</span>
+              <input
+                type="number"
+                min={0}
+                max={86400}
+                value={gmail.auto_refresh_ttl_seconds}
+                onChange={(event) =>
+                  updateGmail({
+                    auto_refresh_ttl_seconds: Math.max(
+                      0,
+                      Math.floor(Number(event.target.value) || 0),
+                    ),
+                  })
+                }
+              />
+            </label>
             <label className="field checkbox-field">
               <input
                 type="checkbox"

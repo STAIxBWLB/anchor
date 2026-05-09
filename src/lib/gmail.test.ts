@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildGmailMessageStates,
   buildGmailScanQuery,
+  gmailRefreshPolicy,
+  normalizeGmailRefreshTtl,
   normalizeGmailScanLimit,
+  shouldApplyGmailRefreshResult,
   shortFrom,
 } from "./gmail";
 
@@ -61,6 +64,7 @@ describe("buildGmailScanQuery", () => {
         enabled: true,
         scan_window_days: 14,
         max_results: 20,
+        auto_refresh_ttl_seconds: 300,
         unread_only: true,
         query: "label:work newer_than:7d",
         gws_path: null,
@@ -74,6 +78,7 @@ describe("buildGmailScanQuery", () => {
         enabled: true,
         scan_window_days: 30,
         max_results: 20,
+        auto_refresh_ttl_seconds: 300,
         unread_only: true,
         query: "",
         gws_path: null,
@@ -85,5 +90,46 @@ describe("buildGmailScanQuery", () => {
     expect(normalizeGmailScanLimit(0)).toBe(1);
     expect(normalizeGmailScanLimit(250)).toBe(200);
     expect(normalizeGmailScanLimit(42.8)).toBe(42);
+    expect(normalizeGmailRefreshTtl(Number.NaN)).toBe(300);
+    expect(normalizeGmailRefreshTtl(90000)).toBe(86400);
+  });
+});
+
+describe("gmailRefreshPolicy", () => {
+  const base = {
+    enabled: true,
+    force: false,
+    loading: false,
+    now: 1_000_000,
+    lastFetchedAt: 900_000,
+    ttlSeconds: 300,
+    query: "is:unread newer_than:14d",
+    previousQuery: "is:unread newer_than:14d",
+    max: 20,
+    previousMax: 20,
+  };
+
+  it("skips automatic refresh inside ttl", () => {
+    expect(gmailRefreshPolicy(base)).toBe("ttl");
+  });
+
+  it("starts when ttl expired or force is requested", () => {
+    expect(gmailRefreshPolicy({ ...base, now: 1_300_001 })).toBe("start");
+    expect(gmailRefreshPolicy({ ...base, force: true, loading: true })).toBe("start");
+  });
+
+  it("skips duplicate automatic refresh while loading", () => {
+    expect(gmailRefreshPolicy({ ...base, loading: true })).toBe("loading");
+  });
+
+  it("starts when query or max changed and clears when disabled", () => {
+    expect(gmailRefreshPolicy({ ...base, query: "is:unread newer_than:7d" })).toBe("start");
+    expect(gmailRefreshPolicy({ ...base, max: 50 })).toBe("start");
+    expect(gmailRefreshPolicy({ ...base, enabled: false })).toBe("disabled");
+  });
+
+  it("ignores stale request results", () => {
+    expect(shouldApplyGmailRefreshResult(3, 3)).toBe(true);
+    expect(shouldApplyGmailRefreshResult(2, 3)).toBe(false);
   });
 });

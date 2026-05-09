@@ -3113,87 +3113,39 @@ button.git-badge:hover {
 .inbox-section {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  background: var(--panel);
-  overflow: hidden;
-}
-
-.inbox-section.collapsed {
-  gap: 0;
+  gap: 8px;
+  background: transparent;
+  overflow: visible;
 }
 
 .inbox-section-header {
-  min-height: 42px;
+  min-height: 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--panel);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-.inbox-section.collapsed .inbox-section-header {
-  border-bottom: 0;
-}
-
-.inbox-section-toggle {
+.inbox-section-title {
   min-width: 0;
   flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border: 0;
-  background: transparent;
+  gap: 0;
   color: var(--ink);
-  font: inherit;
   font-size: 12.5px;
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  cursor: pointer;
-  padding: 4px 2px;
-  text-align: left;
 }
 
-.inbox-section-toggle svg {
-  flex: none;
-}
-
-.inbox-section-toggle span {
+.inbox-section-title span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.inbox-section-toggle em {
-  min-width: 22px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--panel-2);
-  color: var(--muted);
-  font-style: normal;
-  font-size: 11px;
-  text-align: center;
-}
-
-.inbox-section-status {
-  flex: 0 1 auto;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-
-.inbox-section-action {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
 }
 
 .inbox-list {
@@ -3201,40 +3153,7 @@ button.git-badge:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px 12px;
-}
-
-.inbox-channel-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.inbox-channel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
-}
-
-.inbox-channel-header > div {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.inbox-channel-header strong {
-  font-size: 12px;
-}
-
-.inbox-channel-header span {
-  color: var(--muted);
-  font-size: 11px;
+  padding: 0;
 }
 
 .gmail-item .gmail-from {

@@ -43,3 +43,56 @@ export function normalizeGmailScanLimit(value: number): number {
   if (!Number.isFinite(value)) return 20;
   return Math.max(1, Math.min(200, Math.floor(value)));
 }
+
+export function normalizeGmailRefreshTtl(value: number): number {
+  if (!Number.isFinite(value)) return 300;
+  return Math.max(0, Math.min(86400, Math.floor(value)));
+}
+
+export interface GmailRefreshPolicyInput {
+  enabled: boolean;
+  force: boolean;
+  loading: boolean;
+  now: number;
+  lastFetchedAt: number | null;
+  ttlSeconds: number;
+  query: string | null;
+  previousQuery: string | null;
+  max: number;
+  previousMax: number | null;
+}
+
+export type GmailRefreshPolicyDecision =
+  | "start"
+  | "disabled"
+  | "loading"
+  | "ttl";
+
+export function gmailRefreshPolicy({
+  enabled,
+  force,
+  loading,
+  now,
+  lastFetchedAt,
+  ttlSeconds,
+  query,
+  previousQuery,
+  max,
+  previousMax,
+}: GmailRefreshPolicyInput): GmailRefreshPolicyDecision {
+  if (!enabled) return "disabled";
+  if (force) return "start";
+  if (loading) return "loading";
+  if (lastFetchedAt === null) return "start";
+  if (query !== previousQuery || max !== previousMax) return "start";
+  const ttlMs = normalizeGmailRefreshTtl(ttlSeconds) * 1000;
+  if (ttlMs === 0) return "start";
+  return now - lastFetchedAt >= ttlMs ? "start" : "ttl";
+}
+
+export function shouldApplyGmailRefreshResult(
+  requestId: number,
+  latestRequestId: number,
+): boolean {
+  return requestId === latestRequestId;
+}

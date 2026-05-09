@@ -50,6 +50,32 @@ export function uniqueSources<T extends { item: { source: string } }>(items: T[]
   return [...seen].sort();
 }
 
+export function countInboxSources<T extends { item: { source: string } }>(
+  items: T[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of items) {
+    counts.set(entry.item.source, (counts.get(entry.item.source) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function buildInboxFeedRowKeys({
+  entries,
+  files,
+  gmail,
+}: {
+  entries: Array<{ id: string }>;
+  files: Array<{ item: { id: string } }>;
+  gmail: Array<{ message: { id: string } }>;
+}): string[] {
+  return [
+    ...entries.map((entry) => `entry:${entry.id}`),
+    ...files.map((entry) => `file:${entry.item.id}`),
+    ...gmail.map((entry) => `gmail:${entry.message.id}`),
+  ];
+}
+
 export function categoryLabel(category: string): string {
   switch (category) {
     case "task":

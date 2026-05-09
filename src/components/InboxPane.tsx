@@ -1,8 +1,6 @@
 import {
   Brain,
   Check,
-  ChevronDown,
-  ChevronRight,
   FilePlus2,
   HelpCircle,
   Inbox,
@@ -25,6 +23,7 @@ import {
 import { type GmailMessageState, shortFrom } from "../lib/gmail";
 import {
   categoryLabel,
+  countInboxSources,
   filterItemsBySource,
   uniqueSources,
   type InboxDecision,
@@ -32,7 +31,6 @@ import {
 } from "../lib/inbox";
 import { useTranslation } from "../lib/i18n";
 import type { InboxEntry, InboxFileDropConfig } from "../lib/types";
-import type { InboxSectionKey } from "../lib/settings";
 import { BulkActionBar } from "./BulkActionBar";
 
 interface InboxPaneProps {
@@ -42,10 +40,9 @@ interface InboxPaneProps {
   gmailMessages: GmailMessageState[];
   gmailLoading: boolean;
   gmailError: string | null;
+  gmailStatus: string;
   sourceFilter: string | null;
   onSourceFilter: (source: string | null) => void;
-  collapsedSections: InboxSectionKey[];
-  onCollapsedSectionsChange: (sections: InboxSectionKey[]) => void;
   fileDropTarget: InboxFileDropConfig;
   onRefresh: () => void;
   onOpenSettings: () => void;
@@ -58,7 +55,6 @@ interface InboxPaneProps {
   onBulkReject: (keys: string[]) => void | Promise<void>;
   onBulkMoveFiles: (keys: string[]) => void | Promise<void>;
   onProcessEntries: (keys: string[]) => void | Promise<void>;
-  onProcessChannel: (channel: string) => void | Promise<void>;
   onStageFiles: (paths: string[]) => void | Promise<void>;
 }
 
@@ -74,10 +70,9 @@ export function InboxPane({
   gmailMessages,
   gmailLoading,
   gmailError,
+  gmailStatus,
   sourceFilter,
   onSourceFilter,
-  collapsedSections,
-  onCollapsedSectionsChange,
   fileDropTarget,
   onRefresh,
   onOpenSettings,
@@ -90,7 +85,6 @@ export function InboxPane({
   onBulkReject,
   onBulkMoveFiles,
   onProcessEntries,
-  onProcessChannel,
   onStageFiles,
 }: InboxPaneProps) {
   const { t, locale } = useTranslation();
@@ -100,8 +94,8 @@ export function InboxPane({
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [dragOverDrop, setDragOverDrop] = useState(false);
-  const collapsed = useMemo(() => new Set(collapsedSections), [collapsedSections]);
   const sources = useMemo(() => uniqueSources(items), [items]);
+  const sourceCounts = useMemo(() => countInboxSources(items), [items]);
   const visibleItems = useMemo(
     () => filterItemsBySource(items, sourceFilter),
     [items, sourceFilter],
@@ -109,32 +103,13 @@ export function InboxPane({
   const pending = visibleItems.filter((entry) => entry.decision === "pending").length;
   const entryPending = entries.filter((entry) => entry.status !== "done").length;
   const gmailPending = gmailMessages.filter((entry) => entry.decision === "pending").length;
-  const entriesByChannel = useMemo(() => {
-    const grouped = new Map<string, InboxEntry[]>();
-    for (const entry of entries) {
-      const group = grouped.get(entry.channel) ?? [];
-      group.push(entry);
-      grouped.set(entry.channel, group);
-    }
-    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [entries]);
-  const orderedEntries = useMemo(
-    () => entriesByChannel.flatMap(([, channelEntries]) => channelEntries),
-    [entriesByChannel],
-  );
   const rows = useMemo<InboxRow[]>(
     () => [
-      ...(collapsed.has("configuredInbox")
-        ? []
-        : orderedEntries.map((entry) => ({ key: `entry:${entry.id}`, kind: "entry" as const, entry }))),
-      ...(collapsed.has("files")
-        ? []
-        : visibleItems.map((entry) => ({ key: `file:${entry.item.id}`, kind: "file" as const, entry }))),
-      ...(collapsed.has("gmail")
-        ? []
-        : gmailMessages.map((entry) => ({ key: `gmail:${entry.message.id}`, kind: "gmail" as const, entry }))),
+      ...entries.map((entry) => ({ key: `entry:${entry.id}`, kind: "entry" as const, entry })),
+      ...visibleItems.map((entry) => ({ key: `file:${entry.item.id}`, kind: "file" as const, entry })),
+      ...gmailMessages.map((entry) => ({ key: `gmail:${entry.message.id}`, kind: "gmail" as const, entry })),
     ],
-    [collapsed, gmailMessages, orderedEntries, visibleItems],
+    [entries, gmailMessages, visibleItems],
   );
   const selected = useMemo(
     () => rows.filter((row) => selectedKeys.has(row.key)),
@@ -246,13 +221,6 @@ export function InboxPane({
     else setFocusedKey(key);
   };
 
-  const toggleSection = (section: InboxSectionKey) => {
-    const next = new Set(collapsedSections);
-    if (next.has(section)) next.delete(section);
-    else next.add(section);
-    onCollapsedSectionsChange([...next]);
-  };
-
   const pickDropFiles = async () => {
     const paths = await chooseFiles("Choose files for Inbox");
     if (paths.length > 0) await onStageFiles(paths);
@@ -318,6 +286,7 @@ export function InboxPane({
               gmail: gmailPending.toLocaleString(locale),
             })}
             {entryPending > 0 ? ` · process ${entryPending.toLocaleString(locale)}` : ""}
+            {gmailStatus ? ` · Gmail ${gmailStatus}` : ""}
           </p>
         </div>
         <div className="inbox-header-actions">
@@ -371,7 +340,7 @@ export function InboxPane({
             {t("inbox.filter.all")} <span className="count">{items.length}</span>
           </button>
           {sources.map((source) => {
-            const count = items.filter((entry) => entry.item.source === source).length;
+            const count = sourceCounts.get(source) ?? 0;
             const active = sourceFilter === source;
             return (
               <button
@@ -389,49 +358,17 @@ export function InboxPane({
 
       <div className="inbox-sections">
         <InboxSection
-          title="CONFIGURED INBOX"
-          count={entries.length}
-          status={`${entriesByChannel.length.toLocaleString(locale)} channels`}
-          collapsed={collapsed.has("configuredInbox")}
-          onToggle={() => toggleSection("configuredInbox")}
-          action={
-            <button
-              type="button"
-              className="button button-ghost button-sm"
-              onClick={() => void onProcessEntries(processActionKeys())}
-              disabled={actionBusy || entries.length === 0}
-            >
-              <Play size={14} />
-              <span>Process</span>
-            </button>
-          }
+          title="CONFIGURED ENTRIES"
         >
             <div className="inbox-list">
-              {entriesByChannel.length === 0 ? (
+              {entries.length === 0 ? (
                 <div className="inbox-empty">
                   <Inbox size={24} />
                   <strong>No configured inbox items</strong>
                   <span>Configured drop files and pending manifests will appear here.</span>
                 </div>
               ) : null}
-              {entriesByChannel.map(([channel, channelEntries]) => (
-                <div className="inbox-channel-group" key={channel}>
-                  <div className="inbox-channel-header">
-                    <div>
-                      <strong>{channel}</strong>
-                      <span>{channelEntries.length.toLocaleString(locale)} items</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="button button-ghost button-sm"
-                      onClick={() => void onProcessChannel(channel)}
-                      disabled={actionBusy}
-                    >
-                      <Play size={14} />
-                      <span>Process</span>
-                    </button>
-                  </div>
-                  {channelEntries.map((entry) => {
+              {entries.map((entry) => {
                     const key = `entry:${entry.id}`;
                     return (
                       <article
@@ -488,28 +425,11 @@ export function InboxPane({
                       </article>
                     );
                   })}
-                </div>
-              ))}
             </div>
         </InboxSection>
 
         <InboxSection
           title="FILES"
-          count={visibleItems.length}
-          status={fileDropLabel}
-          collapsed={collapsed.has("files")}
-          onToggle={() => toggleSection("files")}
-          action={
-            <button
-              type="button"
-              className="button button-ghost button-sm"
-              onClick={() => void pickDropFiles()}
-              disabled={actionBusy}
-            >
-              <FilePlus2 size={14} />
-              <span>Choose files</span>
-            </button>
-          }
         >
           <div className="inbox-list">
             <div
@@ -527,6 +447,15 @@ export function InboxPane({
               <Upload size={20} />
               <strong>Drop files for Inbox</strong>
               <span>{fileDropLabel}</span>
+              <button
+                type="button"
+                className="button button-ghost button-sm"
+                onClick={() => void pickDropFiles()}
+                disabled={actionBusy}
+              >
+                <FilePlus2 size={14} />
+                <span>Choose files</span>
+              </button>
             </div>
             {loading ? <div className="inbox-empty">{t("inbox.loading")}</div> : null}
             {!loading && visibleItems.length === 0 ? (
@@ -642,21 +571,6 @@ export function InboxPane({
 
         <InboxSection
           title="GMAIL"
-          count={gmailMessages.length}
-          status={gmailError ? "error" : gmailLoading ? "loading" : `${gmailPending.toLocaleString(locale)} pending`}
-          collapsed={collapsed.has("gmail")}
-          onToggle={() => toggleSection("gmail")}
-          action={
-            <button
-              type="button"
-              className="button button-ghost button-sm"
-              onClick={onRefresh}
-              disabled={gmailLoading}
-            >
-              <RefreshCcw size={14} />
-              <span>Refresh</span>
-            </button>
-          }
         >
           <div className="inbox-list">
             {gmailLoading ? <div className="inbox-empty">{t("inbox.gmail.loading")}</div> : null}
@@ -749,38 +663,19 @@ export function InboxPane({
 
 function InboxSection({
   title,
-  count,
-  status,
-  collapsed,
-  action,
-  onToggle,
   children,
 }: {
   title: string;
-  count: number;
-  status: string;
-  collapsed: boolean;
-  action?: React.ReactNode;
-  onToggle: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <section className={collapsed ? "inbox-section collapsed" : "inbox-section"}>
+    <section className="inbox-section">
       <div className="inbox-section-header">
-        <button
-          type="button"
-          className="inbox-section-toggle"
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-        >
-          {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+        <div className="inbox-section-title">
           <span>{title}</span>
-          <em>{count.toLocaleString()}</em>
-        </button>
-        <span className="inbox-section-status">{status}</span>
-        <div className="inbox-section-action">{action}</div>
+        </div>
       </div>
-      {!collapsed ? children : null}
+      {children}
     </section>
   );
 }

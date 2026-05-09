@@ -163,6 +163,7 @@ export interface InboxGmailConfig {
   enabled: boolean;
   scan_window_days: number;
   max_results: number;
+  auto_refresh_ttl_seconds: number;
   unread_only: boolean;
   query: string;
   gws_path: string | null;

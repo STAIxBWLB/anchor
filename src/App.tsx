@@ -103,7 +103,10 @@ import {
 import {
   buildGmailMessageStates,
   buildGmailScanQuery,
+  gmailRefreshPolicy,
+  normalizeGmailRefreshTtl,
   normalizeGmailScanLimit,
+  shouldApplyGmailRefreshResult,
   type GmailMessageState,
 } from "./lib/gmail";
 import { LocaleContext, assertParityOrThrow, useLocaleState } from "./lib/i18n";
@@ -274,6 +277,22 @@ interface InboxCarry {
   classifyError: string | null;
 }
 
+interface GmailScanStatus {
+  fetchedAt: number | null;
+  durationMs: number | null;
+  query: string | null;
+  max: number | null;
+  ttlSeconds: number;
+}
+
+const DEFAULT_GMAIL_SCAN_STATUS: GmailScanStatus = {
+  fetchedAt: null,
+  durationMs: null,
+  query: null,
+  max: null,
+  ttlSeconds: DEFAULT_INBOX_RUNTIME_CONFIG.gmail.auto_refresh_ttl_seconds,
+};
+
 type UpdateToast =
   | { kind: "checking" }
   | { kind: "available"; info: AppUpdateInfo }
@@ -317,6 +336,31 @@ function startupSettingsPath(registry: WorkspaceRegistry): string | null {
     registry.workspaces.find((workspace) => workspace.visibility === "public")?.path ??
     null
   );
+}
+
+function formatGmailScanStatus(
+  status: GmailScanStatus,
+  loading: boolean,
+  locale: string,
+): string {
+  const ttl = formatGmailTtl(status.ttlSeconds);
+  if (loading) return status.fetchedAt ? `scanning · TTL ${ttl}` : "scanning";
+  if (!status.fetchedAt) return `not scanned · TTL ${ttl}`;
+  const updated = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(status.fetchedAt));
+  const duration =
+    status.durationMs === null ? null : `${(status.durationMs / 1000).toFixed(1)}s`;
+  return [`updated ${updated}`, duration, `TTL ${ttl}`].filter(Boolean).join(" · ");
+}
+
+function formatGmailTtl(seconds: number): string {
+  const value = normalizeGmailRefreshTtl(seconds);
+  if (value < 60) return `${value}s`;
+  if (value < 3600) return `${Math.round(value / 60)}m`;
+  if (value % 3600 === 0) return `${value / 3600}h`;
+  return `${Math.round(value / 60)}m`;
 }
 
 function initialStartupVisibility(
@@ -621,6 +665,9 @@ function MainApp() {
   const installingUpdateRef = useRef(false);
   const collapsedTreeHydratedRef = useRef(false);
   const collapsedFileHydratedRef = useRef(false);
+  const gmailScanStatusRef = useRef<GmailScanStatus>(DEFAULT_GMAIL_SCAN_STATUS);
+  const gmailLoadingRef = useRef(false);
+  const gmailRequestSeqRef = useRef(0);
 
   // Monotonic counter so a slow readDocument from an earlier click cannot
   // overwrite the editor with stale content if the user clicked a later
@@ -671,6 +718,9 @@ function MainApp() {
   const [gmailMessages, setGmailMessages] = useState<GmailMessage[]>([]);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  const [gmailScanStatus, setGmailScanStatus] = useState<GmailScanStatus>(
+    DEFAULT_GMAIL_SCAN_STATUS,
+  );
   const [gmailDecisions, setGmailDecisions] = useState<Map<string, InboxDecision>>(
     () => new Map(),
   );
@@ -1582,30 +1632,100 @@ function MainApp() {
     [gmailMessages, gmailDecisions],
   );
 
-  const refreshGmail = useCallback(async (runtimeOverride?: InboxRuntimeConfig) => {
+  const gmailStatus = useMemo(
+    () => formatGmailScanStatus(gmailScanStatus, gmailLoading, locale),
+    [gmailLoading, gmailScanStatus, locale],
+  );
+
+  const updateGmailScanStatus = useCallback((status: GmailScanStatus) => {
+    gmailScanStatusRef.current = status;
+    setGmailScanStatus(status);
+  }, []);
+
+  const refreshGmail = useCallback(async ({
+    force = false,
+    runtimeOverride,
+  }: {
+    force?: boolean;
+    runtimeOverride?: InboxRuntimeConfig;
+  } = {}) => {
     const runtime = runtimeOverride ?? inboxRuntimeConfig;
     const gmailConfig = runtime.gmail ?? DEFAULT_INBOX_RUNTIME_CONFIG.gmail;
-    if (!gmailConfig.enabled) {
+    const ttlSeconds = normalizeGmailRefreshTtl(gmailConfig.auto_refresh_ttl_seconds);
+    const max = normalizeGmailScanLimit(gmailConfig.max_results);
+    const query = buildGmailScanQuery(gmailConfig);
+    const previous = gmailScanStatusRef.current;
+    const decision = gmailRefreshPolicy({
+      enabled: gmailConfig.enabled && Boolean(inboxWorkspacePath),
+      force,
+      loading: gmailLoadingRef.current,
+      now: Date.now(),
+      lastFetchedAt: previous.fetchedAt,
+      ttlSeconds,
+      query,
+      previousQuery: previous.query,
+      max,
+      previousMax: previous.max,
+    });
+    if (decision === "disabled") {
+      gmailRequestSeqRef.current += 1;
+      gmailLoadingRef.current = false;
       setGmailMessages([]);
       setGmailError(null);
       setGmailLoading(false);
+      updateGmailScanStatus({
+        fetchedAt: null,
+        durationMs: null,
+        query,
+        max,
+        ttlSeconds,
+      });
       return;
     }
+    if (decision !== "start") {
+      if (
+        previous.query !== query ||
+        previous.max !== max ||
+        previous.ttlSeconds !== ttlSeconds
+      ) {
+        updateGmailScanStatus({
+          ...previous,
+          query,
+          max,
+          ttlSeconds,
+        });
+      }
+      return;
+    }
+    const requestId = ++gmailRequestSeqRef.current;
+    gmailLoadingRef.current = true;
     setGmailLoading(true);
     setGmailError(null);
+    const wallStartedAt = Date.now();
+    const perfStartedAt = globalThis.performance?.now() ?? wallStartedAt;
     try {
-      const messages = await fetchGmailUnread(
-        inboxWorkspacePath,
-        normalizeGmailScanLimit(gmailConfig.max_results),
-        buildGmailScanQuery(gmailConfig),
-      );
+      const messages = await fetchGmailUnread(inboxWorkspacePath, max, query);
+      if (!shouldApplyGmailRefreshResult(requestId, gmailRequestSeqRef.current)) return;
+      const wallFinishedAt = Date.now();
+      const perfFinishedAt = globalThis.performance?.now() ?? wallFinishedAt;
       setGmailMessages(messages);
+      updateGmailScanStatus({
+        fetchedAt: wallFinishedAt,
+        durationMs: Math.max(0, perfFinishedAt - perfStartedAt),
+        query,
+        max,
+        ttlSeconds,
+      });
     } catch (err) {
+      if (!shouldApplyGmailRefreshResult(requestId, gmailRequestSeqRef.current)) return;
       setGmailError(err instanceof Error ? err.message : String(err));
     } finally {
-      setGmailLoading(false);
+      if (shouldApplyGmailRefreshResult(requestId, gmailRequestSeqRef.current)) {
+        gmailLoadingRef.current = false;
+        setGmailLoading(false);
+      }
     }
-  }, [inboxRuntimeConfig, inboxWorkspacePath]);
+  }, [inboxRuntimeConfig, inboxWorkspacePath, updateGmailScanStatus]);
 
   const refreshInbox = useCallback(async () => {
     if (!inboxWorkspacePath) {
@@ -1933,21 +2053,6 @@ function MainApp() {
       }
     },
     [inboxWorkspacePath, refreshInbox],
-  );
-
-  const setInboxCollapsedSections = useCallback(
-    (sections: AnchorSettings["ui"]["inboxCollapsedSections"]) => {
-      updateSettings((current) =>
-        normalizeAnchorSettings({
-          ...current,
-          ui: {
-            ...current.ui,
-            inboxCollapsedSections: sections,
-          },
-        }),
-      );
-    },
-    [updateSettings],
   );
 
   const classifyItem = useCallback(
@@ -3307,7 +3412,7 @@ function MainApp() {
   const refreshActiveSurface = useCallback(() => {
     if (appMode === "inbox") {
       void refreshInbox();
-      void refreshGmail();
+      void refreshGmail({ force: true });
     } else if (anchorSettings.ui.explorerPaneMode === "files" && explorerWorkspacePath) {
       void refreshWorkspaceFiles(explorerWorkspacePath);
     } else {
@@ -4680,16 +4785,15 @@ function MainApp() {
             gmailMessages={gmailItems}
             gmailLoading={gmailLoading}
             gmailError={gmailError}
+            gmailStatus={gmailStatus}
             sourceFilter={inboxSourceFilter}
             onSourceFilter={setInboxSourceFilter}
-            collapsedSections={anchorSettings.ui.inboxCollapsedSections}
-            onCollapsedSectionsChange={setInboxCollapsedSections}
             fileDropTarget={inboxRuntimeConfig.file_drop}
             focusRequest={inboxFocusTick}
             actionBusy={inboxActionBusy}
             onRefresh={() => {
               void refreshInbox();
-              void refreshGmail();
+              void refreshGmail({ force: true });
             }}
             onOpenSettings={openInboxSettings}
             onClassify={(id) => void classifyItem(id)}
@@ -4699,7 +4803,6 @@ function MainApp() {
             onBulkReject={bulkRejectInboxKeys}
             onBulkMoveFiles={bulkMoveInboxFiles}
             onProcessEntries={(keys) => void processInboxKeys(keys)}
-            onProcessChannel={(channel) => void processInboxKeys([], channel)}
             onStageFiles={(paths) => void stageInboxFiles(paths)}
           />
         ) : (

@@ -97,6 +97,7 @@ export const DEFAULT_INBOX_RUNTIME_CONFIG: InboxRuntimeConfig = {
     enabled: true,
     scan_window_days: 14,
     max_results: 20,
+    auto_refresh_ttl_seconds: 300,
     unread_only: true,
     query: "",
     gws_path: null,

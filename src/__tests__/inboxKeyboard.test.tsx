@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildInboxFeedRowKeys,
   buildInboxProcessPrompt,
+  countInboxSources,
   firstPendingInboxKey,
   inboxEntryProcessPath,
   nextInboxFocusKey,
@@ -42,6 +44,26 @@ describe("inbox keyboard helpers", () => {
       true,
     );
     expect([...selected]).toEqual(["file:a", "file:b", "gmail:c", "gmail:d"]);
+  });
+
+  it("keeps configured, file, gmail row order without collapse filtering", () => {
+    expect(
+      buildInboxFeedRowKeys({
+        entries: [{ id: "configured-a" }, { id: "configured-b" }],
+        files: [{ item: { id: "file-a" } }],
+        gmail: [{ message: { id: "gmail-a" } }],
+      }),
+    ).toEqual(["entry:configured-a", "entry:configured-b", "file:file-a", "gmail:gmail-a"]);
+  });
+
+  it("counts inbox sources in one pass for filter chips", () => {
+    const counts = countInboxSources([
+      { item: { source: "gmail" } },
+      { item: { source: "gmail" } },
+      { item: { source: "kakao" } },
+    ]);
+    expect(counts.get("gmail")).toBe(2);
+    expect(counts.get("kakao")).toBe(1);
   });
 
   it("uses manifest paths for pending item process context", () => {
@@ -121,6 +143,7 @@ function runtimeConfig(): InboxRuntimeConfig {
       enabled: true,
       scan_window_days: 14,
       max_results: 20,
+      auto_refresh_ttl_seconds: 300,
       unread_only: true,
       query: "",
       gws_path: null,
