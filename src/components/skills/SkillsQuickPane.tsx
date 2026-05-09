@@ -34,7 +34,7 @@ export function SkillsQuickPane({
       <div className="list-header compact">
         <div>
           <h2>Skills</h2>
-          <span className="workspace-caption">{skills.length} installed catalog item(s)</span>
+          <span className="workspace-caption">{skills.length} catalog item(s)</span>
         </div>
         <button
           type="button"
@@ -59,7 +59,6 @@ export function SkillsQuickPane({
         {filtered.length === 0 ? (
           <div className="empty-state compact">
             <strong>No skills</strong>
-            <p>Open Settings → Skills to add sources or create a managed skill.</p>
           </div>
         ) : (
           filtered.map((skill) => (
@@ -71,8 +70,11 @@ export function SkillsQuickPane({
               title={skill.absPath}
             >
               <span>
-                <strong>{skill.name}</strong>
-                <small>{skill.description || skill.sourceId}</small>
+                <strong>
+                  {skill.name}
+                  <small>{skill.sourceId}</small>
+                </strong>
+                <small>{skill.description || skill.relPath}</small>
               </span>
               <Play size={13} />
             </button>

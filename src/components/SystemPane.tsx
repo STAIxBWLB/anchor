@@ -4,7 +4,20 @@
 // JSON stays under `<work>/.anchor/`; skill management also talks to the
 // global `~/.anchor/skills` registry.
 
-import { AlertTriangle, Check, Plus, RefreshCcw, Save, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Code2,
+  PackageCheck,
+  Plus,
+  RefreshCcw,
+  Save,
+  Search,
+  ShieldCheck,
+  SquareTerminal,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applySysImport,
@@ -60,6 +73,7 @@ import {
   skillsSyncSource,
   skillsUninstallSkill,
   type SkillInstall,
+  type SkillInstallTarget,
   type SkillRecord,
   type SkillSource,
   type SkillsEnvStatus,
@@ -968,6 +982,8 @@ function SkillsTab({ workPath }: { workPath: string }) {
   const [newSourceId, setNewSourceId] = useState("");
   const [newSourcePath, setNewSourcePath] = useState("");
   const [newSourceKind, setNewSourceKind] = useState<"linked" | "cloned">("linked");
+  const [skillQuery, setSkillQuery] = useState("");
+  const [installFilter, setInstallFilter] = useState<"all" | "installed" | "uninstalled" | "dirty">("all");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -1000,6 +1016,52 @@ function SkillsTab({ workPath }: { workPath: string }) {
     installs.forEach((install) => set.add(`${install.skillId}:${install.target}`));
     return set;
   }, [installs]);
+  const installTargetsBySkill = useMemo(() => {
+    const map = new Map<string, Set<SkillInstallTarget>>();
+    installs.forEach((install) => {
+      const targets = map.get(install.skillId) ?? new Set<SkillInstallTarget>();
+      targets.add(install.target);
+      map.set(install.skillId, targets);
+    });
+    return map;
+  }, [installs]);
+  const installedSkillCount = useMemo(
+    () => skills.filter((skill) => installTargetsBySkill.has(skill.id)).length,
+    [installTargetsBySkill, skills],
+  );
+  const claudeInstallCount = useMemo(
+    () => installs.filter((install) => install.target === "claude").length,
+    [installs],
+  );
+  const codexInstallCount = useMemo(
+    () => installs.filter((install) => install.target === "codex").length,
+    [installs],
+  );
+  const filteredSkills = useMemo(() => {
+    const q = skillQuery.trim().toLowerCase();
+    return skills.filter((skill) => {
+      const targets = installTargetsBySkill.get(skill.id);
+      const installed = Boolean(targets?.size);
+      if (installFilter === "installed" && !installed) return false;
+      if (installFilter === "uninstalled" && installed) return false;
+      if (installFilter === "dirty" && !skill.dirty) return false;
+      if (!q) return true;
+      return [skill.name, skill.title, skill.description ?? "", skill.sourceId, skill.relPath]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [installFilter, installTargetsBySkill, skillQuery, skills]);
+  const skillFilterOptions: Array<[
+    typeof installFilter,
+    string,
+    number,
+  ]> = [
+    ["all", "All", skills.length],
+    ["installed", "Installed", installedSkillCount],
+    ["uninstalled", "Open", Math.max(skills.length - installedSkillCount, 0)],
+    ["dirty", "Dirty", skills.filter((skill) => skill.dirty).length],
+  ];
 
   const loadEditor = useCallback(async (skill: SkillRecord) => {
     setError(null);
@@ -1065,36 +1127,95 @@ function SkillsTab({ workPath }: { workPath: string }) {
   );
 
   return (
-    <div className="system-detail" style={{ width: "100%" }}>
-      <div className="system-detail-actions">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void refresh()}
-          icon={<RefreshCcw size={14} />}
-        >
-          Refresh
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void skillsAdoptExternalLinks().then(refresh).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
-        >
-          Adopt links
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => void skillsEnvBootstrap(workPath).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
-        >
-          Bootstrap env
-        </Button>
+    <div className="system-detail skills-system-detail" style={{ width: "100%" }}>
+      <div className="skills-overview">
+        <div className="skills-overview-title">
+          <PackageCheck size={18} />
+          <div>
+            <h3>Skill catalog</h3>
+            <p>Global store: ~/.anchor/skills</p>
+          </div>
+        </div>
+        <div className="skills-metrics" aria-label="Skill manager summary">
+          <span className="skills-metric">
+            <strong>{sources.length}</strong>
+            <span>Sources</span>
+          </span>
+          <span className="skills-metric">
+            <strong>{skills.length}</strong>
+            <span>Skills</span>
+          </span>
+          <span className="skills-metric">
+            <strong>{claudeInstallCount}</strong>
+            <span>Claude</span>
+          </span>
+          <span className="skills-metric">
+            <strong>{codexInstallCount}</strong>
+            <span>Codex</span>
+          </span>
+        </div>
+        <div className="skills-overview-actions">
+          <span className={envStatus?.healthy ? "skill-status-pill installed" : "skill-status-pill warn"}>
+            <ShieldCheck size={12} />
+            {envStatus?.healthy ? "Env ready" : "Env setup"}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void refresh()}
+            icon={<RefreshCcw size={14} className={busy ? "spin" : ""} />}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              void skillsAdoptExternalLinks()
+                .then(refresh)
+                .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+            }
+          >
+            Adopt
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              void skillsEnvBootstrap(workPath)
+                .then(() => refresh())
+                .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+            }
+            icon={<Wrench size={14} />}
+          >
+            Bootstrap
+          </Button>
+        </div>
       </div>
 
       <div className="skills-manager-grid">
-        <section className="skills-manager-section">
-          <h3>Sources</h3>
+        <section className="skills-manager-section sources">
+          <div className="skills-section-heading">
+            <h3>Sources</h3>
+            <span>{sources.length}</span>
+          </div>
           <div className="system-card source-add-card">
+            <div className="skills-source-kind">
+              <button
+                type="button"
+                className={newSourceKind === "linked" ? "active" : ""}
+                onClick={() => setNewSourceKind("linked")}
+              >
+                linked
+              </button>
+              <button
+                type="button"
+                className={newSourceKind === "cloned" ? "active" : ""}
+                onClick={() => setNewSourceKind("cloned")}
+              >
+                cloned
+              </button>
+            </div>
             <label className="field">
               <span>Source id</span>
               <input
@@ -1108,78 +1229,102 @@ function SkillsTab({ workPath }: { workPath: string }) {
               <input
                 value={newSourcePath}
                 onChange={(event) => setNewSourcePath(event.target.value)}
-                placeholder={newSourceKind === "linked" ? "~/path/to/skills-repo" : "https://github.com/org/skills"}
+                placeholder={
+                  newSourceKind === "linked"
+                    ? "~/path/to/skills-repo"
+                    : "https://github.com/org/skills"
+                }
               />
             </label>
-            <div className="system-detail-actions inline">
-              <select
-                value={newSourceKind}
-                onChange={(event) => setNewSourceKind(event.target.value as "linked" | "cloned")}
-              >
-                <option value="linked">linked</option>
-                <option value="cloned">cloned</option>
-              </select>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!newSourceId.trim() || !newSourcePath.trim() || busy}
-                onClick={() => {
-                  setBusy(true);
-                  void skillsAddSource({
-                    id: newSourceId.trim(),
-                    kind: newSourceKind,
-                    path: newSourceKind === "linked" ? newSourcePath.trim() : null,
-                    repoUrl: newSourceKind === "cloned" ? newSourcePath.trim() : null,
-                    skillsSubdir: "skills",
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!newSourceId.trim() || !newSourcePath.trim() || busy}
+              onClick={() => {
+                setBusy(true);
+                void skillsAddSource({
+                  id: newSourceId.trim(),
+                  kind: newSourceKind,
+                  path: newSourceKind === "linked" ? newSourcePath.trim() : null,
+                  repoUrl: newSourceKind === "cloned" ? newSourcePath.trim() : null,
+                  skillsSubdir: "skills",
+                })
+                  .then(() => {
+                    setNewSourceId("");
+                    setNewSourcePath("");
+                    return refresh();
                   })
-                    .then(() => {
-                      setNewSourceId("");
-                      setNewSourcePath("");
-                      return refresh();
-                    })
-                    .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Add source
-              </Button>
-            </div>
+                  .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Add source
+            </Button>
           </div>
           <ul className="system-skill-list compact">
             {sources.map((source) => (
-              <li className="system-skill-card" key={source.id}>
-                <div className="system-skill-name">{source.id}</div>
-                <div className="system-skill-meta">
-                  <span>{source.kind}</span>
-                  <span><code>{source.skillsSubdir}</code></span>
+              <li className="system-skill-card source-card" key={source.id}>
+                <div className="source-card-top">
+                  <div>
+                    <div className="system-skill-name">{source.id}</div>
+                    <div className="system-skill-meta">
+                      <span className="skill-status-pill subtle">{source.kind}</span>
+                      <span>
+                        <code>{source.skillsSubdir}</code>
+                      </span>
+                    </div>
+                  </div>
+                  <div className="source-card-actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        void skillsRescanSource(source.id)
+                          .then(refresh)
+                          .catch((err) =>
+                            setError(err instanceof Error ? err.message : String(err)),
+                          )
+                      }
+                    >
+                      Rescan
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        void skillsSyncSource(source.id)
+                          .then(refresh)
+                          .catch((err) =>
+                            setError(err instanceof Error ? err.message : String(err)),
+                          )
+                      }
+                    >
+                      Sync
+                    </Button>
+                  </div>
                 </div>
-                <div className="muted" title={source.path ?? ""}>{source.path}</div>
-                <div className="system-detail-actions inline">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void skillsRescanSource(source.id).then(refresh).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
-                  >
-                    Rescan
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void skillsSyncSource(source.id).then(refresh).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
-                  >
-                    Sync
-                  </Button>
+                <div className="skill-path" title={source.path ?? source.repoUrl ?? ""}>
+                  {source.path ?? source.repoUrl ?? "managed source"}
                 </div>
               </li>
             ))}
           </ul>
-          <div className="system-card">
-            <h3>Env</h3>
+          <div className="system-card skill-env-card">
+            <div className="skills-section-heading">
+              <h3>Env</h3>
+              <span className={envStatus?.healthy ? "skill-status-pill installed" : "skill-status-pill warn"}>
+                {envStatus?.healthy ? "healthy" : "setup"}
+              </span>
+            </div>
             {envStatus ? (
-              <div className="system-skill-meta">
-                <span>{envStatus.healthy ? "healthy" : "needs setup"}</span>
-                <span><code>{envStatus.root}</code></span>
-              </div>
+              <>
+                <div className="skill-path" title={envStatus.root}>{envStatus.root}</div>
+                <div className="system-skill-meta">
+                  <span>{envStatus.venvExists ? ".venv ready" : ".venv missing"}</span>
+                  <span>{envStatus.nodeModulesExists ? "node ready" : "node missing"}</span>
+                </div>
+                {envStatus.lastError ? <p className="inline-error">{envStatus.lastError}</p> : null}
+              </>
             ) : (
               <p className="muted">Env status unavailable.</p>
             )}
@@ -1187,79 +1332,149 @@ function SkillsTab({ workPath }: { workPath: string }) {
         </section>
 
         <section className="skills-manager-section wide">
-          <div className="skills-create-row">
-            <label className="field">
-              <span>New managed skill</span>
-              <input
-                value={newSkillName}
-                onChange={(event) => setNewSkillName(event.target.value)}
-                placeholder="skill-name"
-              />
-            </label>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Plus size={14} />}
-              disabled={!newSkillName.trim() || busy}
-              onClick={() =>
-                void skillsCreateSkill(newSkillName.trim(), null)
-                  .then((skill) => {
-                    setNewSkillName("");
-                    void refresh().then(() => loadEditor(skill));
-                  })
-                  .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-              }
-            >
-              Create
-            </Button>
+          <div className="skills-catalog-head">
+            <div className="skills-section-heading">
+              <h3>Skills</h3>
+              <span>{filteredSkills.length}/{skills.length}</span>
+            </div>
+            <div className="skills-create-row">
+              <label className="field">
+                <span>New managed skill</span>
+                <input
+                  value={newSkillName}
+                  onChange={(event) => setNewSkillName(event.target.value)}
+                  placeholder="skill-name"
+                />
+              </label>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Plus size={14} />}
+                disabled={!newSkillName.trim() || busy}
+                onClick={() =>
+                  void skillsCreateSkill(newSkillName.trim(), null)
+                    .then((skill) => {
+                      setNewSkillName("");
+                      void refresh().then(() => loadEditor(skill));
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+                }
+              >
+                Create
+              </Button>
+            </div>
+            <div className="skills-list-controls">
+              <label className="search-box skills-search" title="Search skills">
+                <Search size={14} />
+                <input
+                  value={skillQuery}
+                  onChange={(event) => setSkillQuery(event.target.value)}
+                  placeholder="Search name, source, path"
+                />
+              </label>
+              <div className="segmented-control compact skills-filter" role="group" aria-label="Skill install filter">
+                {skillFilterOptions.map(([id, label, count]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={installFilter === id ? "active" : ""}
+                    onClick={() => setInstallFilter(id)}
+                  >
+                    <span>{label}</span>
+                    <strong>{count}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {skills.length === 0 ? (
-            <p className="muted">{t("system.skills.empty")}</p>
+            <div className="empty-state compact">
+              <strong>{t("system.skills.empty")}</strong>
+            </div>
+          ) : filteredSkills.length === 0 ? (
+            <div className="empty-state compact">
+              <strong>No matching skills</strong>
+            </div>
           ) : (
             <ul className="system-skill-list">
-              {skills.map((skill) => {
+              {filteredSkills.map((skill) => {
                 const claudeInstalled = installKey.has(`${skill.id}:claude`);
                 const codexInstalled = installKey.has(`${skill.id}:codex`);
                 return (
-                  <li className="system-skill-card" key={skill.id}>
-                    <div className="system-skill-name">
-                      {skill.name}
-                      {skill.dirty ? <span className="dirty-pill">dirty</span> : null}
+                  <li
+                    className={
+                      selectedSkillId === skill.id
+                        ? "system-skill-card skill-card selected"
+                        : "system-skill-card skill-card"
+                    }
+                    key={skill.id}
+                  >
+                    <div className="skill-card-top">
+                      <button
+                        type="button"
+                        className="skill-card-title"
+                        onClick={() => void loadEditor(skill)}
+                      >
+                        <span>
+                          {skill.name}
+                          {skill.dirty ? <span className="dirty-pill">dirty</span> : null}
+                        </span>
+                        <small>{skill.description || skill.title || skill.sourceId}</small>
+                      </button>
+                      <div className="skill-card-badges">
+                        <span
+                          className={claudeInstalled ? "skill-status-pill installed" : "skill-status-pill"}
+                        >
+                          <SquareTerminal size={12} />
+                          Claude
+                        </span>
+                        <span
+                          className={codexInstalled ? "skill-status-pill installed" : "skill-status-pill"}
+                        >
+                          <Code2 size={12} />
+                          Codex
+                        </span>
+                      </div>
                     </div>
-                    {skill.description ? <div className="muted">{skill.description}</div> : null}
                     <div className="system-skill-meta">
-                      <span>
-                        {t("system.skills.runtime")}: <code>{skill.runtime ?? "—"}</code>
-                      </span>
                       <span>
                         {t("system.skills.source")}: <code>{skill.sourceId}</code>
                       </span>
-                      <span title={skill.absPath}><code>{skill.relPath}</code></span>
+                      <span>
+                        {t("system.skills.runtime")}: <code>{skill.runtime ?? "none"}</code>
+                      </span>
+                      <span title={skill.absPath}>
+                        <code>{skill.relPath}</code>
+                      </span>
                     </div>
-                    <div className="system-detail-actions inline">
+                    <div className="skill-card-actions">
                       <Button variant="secondary" size="sm" onClick={() => void loadEditor(skill)}>
                         Edit
                       </Button>
                       <Button
-                        variant={claudeInstalled ? "secondary" : "primary"}
+                        variant={claudeInstalled ? "ghost" : "primary"}
                         size="sm"
                         onClick={() =>
-                          claudeInstalled ? void uninstall(skill, "claude") : void install(skill, "claude")
+                          claudeInstalled
+                            ? void uninstall(skill, "claude")
+                            : void install(skill, "claude")
                         }
                         disabled={busy}
                       >
-                        {claudeInstalled ? "Uninstall Claude" : "Install Claude"}
+                        {claudeInstalled ? "Remove Claude" : "Install Claude"}
                       </Button>
                       <Button
-                        variant={codexInstalled ? "secondary" : "primary"}
+                        variant={codexInstalled ? "ghost" : "primary"}
                         size="sm"
                         onClick={() =>
-                          codexInstalled ? void uninstall(skill, "codex") : void install(skill, "codex")
+                          codexInstalled
+                            ? void uninstall(skill, "codex")
+                            : void install(skill, "codex")
                         }
                         disabled={busy}
                       >
-                        {codexInstalled ? "Uninstall Codex" : "Install Codex"}
+                        {codexInstalled ? "Remove Codex" : "Install Codex"}
                       </Button>
                     </div>
                   </li>
@@ -1271,13 +1486,12 @@ function SkillsTab({ workPath }: { workPath: string }) {
 
         {selectedSkill ? (
           <section className="skills-manager-section editor">
-            <div className="system-detail-actions">
+            <div className="skills-editor-header">
               <div>
                 <h3>{selectedSkill.name}</h3>
-                {selectedSkill.dirty ? (
-                  <p className="muted">Linked source has git changes.</p>
-                ) : null}
+                <p className="muted" title={selectedSkill.absPath}>{selectedSkill.relPath}</p>
               </div>
+              {selectedSkill.dirty ? <span className="dirty-pill">linked source dirty</span> : null}
               <span className={editorText !== editorBase ? "save-state dirty" : "save-state saved"}>
                 {editorText !== editorBase ? t("system.rules.dirty") : t("system.rules.saved")}
               </span>
@@ -1292,7 +1506,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
               </Button>
             </div>
             <textarea
-              className="source-editor"
+              className="source-editor skill-editor"
               value={editorText}
               onChange={(event) => setEditorText(event.target.value)}
               spellCheck={false}

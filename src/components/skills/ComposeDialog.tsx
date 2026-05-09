@@ -1,4 +1,4 @@
-import { Code2, FileText, Play, SquareTerminal, X } from "lucide-react";
+import { Code2, FileText, Play, Search, SquareTerminal, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
   DispatchComposition,
@@ -42,6 +42,7 @@ export function ComposeDialog({
 }: ComposeDialogProps) {
   const [skillId, setSkillId] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [skillQuery, setSkillQuery] = useState("");
   const [runtime, setRuntime] = useState<SkillDispatchRuntime>("claude");
   const [mode, setMode] = useState<"terminal" | "background">("terminal");
   const [preview, setPreview] = useState<DispatchComposition | null>(null);
@@ -51,6 +52,7 @@ export function ComposeDialog({
     if (!open) return;
     setSkillId(seed?.skill?.id ?? skills[0]?.id ?? "");
     setPrompt(seed?.prompt ?? "");
+    setSkillQuery("");
     setRuntime("claude");
     setMode("terminal");
     setPreview(null);
@@ -60,6 +62,21 @@ export function ComposeDialog({
     () => skills.find((skill) => skill.id === skillId) ?? null,
     [skillId, skills],
   );
+  const visibleSkills = useMemo(() => {
+    const q = skillQuery.trim().toLowerCase();
+    const matches = q
+      ? skills.filter((skill) =>
+          [skill.name, skill.title, skill.description ?? "", skill.sourceId]
+            .join(" ")
+            .toLowerCase()
+            .includes(q),
+        )
+      : skills;
+    if (selectedSkill && !matches.some((skill) => skill.id === selectedSkill.id)) {
+      return [selectedSkill, ...matches];
+    }
+    return matches;
+  }, [selectedSkill, skillQuery, skills]);
   const context = seed?.context ?? [];
   const canRun = Boolean(selectedSkill && prompt.trim());
 
@@ -141,89 +158,119 @@ export function ComposeDialog({
           </button>
         </header>
 
-        <div className="compose-grid">
-          <label className="field">
-            <span>Skill</span>
-            <select value={skillId} onChange={(event) => setSkillId(event.target.value)}>
-              {skills.map((skill) => (
-                <option key={skill.id} value={skill.id}>
-                  {skill.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="compose-body">
+          <aside className="compose-run-panel">
+            <label className="search-box compose-skill-search" title="Search skills">
+              <Search size={14} />
+              <input
+                value={skillQuery}
+                onChange={(event) => setSkillQuery(event.target.value)}
+                placeholder="Search skills"
+              />
+            </label>
+            <label className="field">
+              <span>Skill</span>
+              {visibleSkills.length > 0 ? (
+                <select value={skillId} onChange={(event) => setSkillId(event.target.value)}>
+                  {visibleSkills.map((skill) => (
+                    <option key={skill.id} value={skill.id}>
+                      {skill.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="compose-empty-select">No skills available</div>
+              )}
+            </label>
 
-          <div className="segmented-control" role="group" aria-label="Run target">
-            <button
-              type="button"
-              className={runtime === "claude" ? "active" : ""}
-              onClick={() => setRuntime("claude")}
-            >
-              <SquareTerminal size={13} />
-              <span>Claude</span>
-            </button>
-            <button
-              type="button"
-              className={runtime === "codex" ? "active" : ""}
-              onClick={() => setRuntime("codex")}
-            >
-              <Code2 size={13} />
-              <span>Codex</span>
-            </button>
-          </div>
+            {selectedSkill ? (
+              <div className="compose-skill-summary">
+                <strong>{selectedSkill.title || selectedSkill.name}</strong>
+                <span>{selectedSkill.description || selectedSkill.absPath}</span>
+              </div>
+            ) : (
+              <div className="compose-skill-summary muted">
+                <strong>No skill selected</strong>
+              </div>
+            )}
 
-          <div className="segmented-control" role="group" aria-label="Run mode">
-            <button
-              type="button"
-              className={mode === "terminal" ? "active" : ""}
-              onClick={() => setMode("terminal")}
-            >
-              <SquareTerminal size={13} />
-              <span>Terminal</span>
-            </button>
-            <button
-              type="button"
-              className={mode === "background" ? "active" : ""}
-              onClick={() => setMode("background")}
-            >
-              <Play size={13} />
-              <span>Background</span>
-            </button>
-          </div>
+            <div className="compose-run-groups">
+              <div>
+                <span className="compose-label">Target</span>
+                <div className="segmented-control" role="group" aria-label="Run target">
+                  <button
+                    type="button"
+                    className={runtime === "claude" ? "active" : ""}
+                    onClick={() => setRuntime("claude")}
+                  >
+                    <SquareTerminal size={13} />
+                    <span>Claude</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={runtime === "codex" ? "active" : ""}
+                    onClick={() => setRuntime("codex")}
+                  >
+                    <Code2 size={13} />
+                    <span>Codex</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <span className="compose-label">Mode</span>
+                <div className="segmented-control" role="group" aria-label="Run mode">
+                  <button
+                    type="button"
+                    className={mode === "terminal" ? "active" : ""}
+                    onClick={() => setMode("terminal")}
+                  >
+                    <SquareTerminal size={13} />
+                    <span>Terminal</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={mode === "background" ? "active" : ""}
+                    onClick={() => setMode("background")}
+                  >
+                    <Play size={13} />
+                    <span>Background</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="compose-context">
+              {context.length > 0 ? (
+                context.map((item) => (
+                  <span key={`${item.kind ?? "path"}-${item.path}`} title={item.path}>
+                    <FileText size={12} />
+                    {item.path.split("/").pop() ?? item.path}
+                  </span>
+                ))
+              ) : (
+                <span>No context</span>
+              )}
+            </div>
+          </aside>
+
+          <section className="compose-main">
+            <label className="field">
+              <span>Prompt</span>
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Describe the work to run"
+                autoFocus
+              />
+            </label>
+
+            <details className="compose-preview">
+              <summary>Prompt preview</summary>
+              <pre>{preview?.prompt ?? "Preview appears after you enter a prompt."}</pre>
+            </details>
+          </section>
         </div>
-
-        {selectedSkill ? (
-          <div className="compose-skill-summary">
-            <strong>{selectedSkill.title || selectedSkill.name}</strong>
-            <span>{selectedSkill.description || selectedSkill.absPath}</span>
-          </div>
-        ) : null}
-
-        {context.length > 0 ? (
-          <div className="compose-context">
-            {context.map((item) => (
-              <span key={`${item.kind ?? "path"}-${item.path}`} title={item.path}>
-                <FileText size={12} />
-                {item.path.split("/").pop() ?? item.path}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        <label className="field">
-          <span>Prompt</span>
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="What should this skill do with the selected context?"
-            autoFocus
-          />
-        </label>
-
-        <details className="compose-preview">
-          <summary>Prompt preview</summary>
-          <pre>{preview?.prompt ?? ""}</pre>
-        </details>
 
         <footer className="compose-actions">
           <Button variant="secondary" size="sm" onClick={onClose}>
