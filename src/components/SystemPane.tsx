@@ -1209,6 +1209,10 @@ function SkillsTab({ workPath }: { workPath: string }) {
       } = {},
     ) =>
       new Promise<boolean>((resolve) => {
+        if (confirmResolverRef.current) {
+          resolve(false);
+          return;
+        }
         confirmResolverRef.current = resolve;
         setConfirmState({
           title: options.title ?? t("system.skills.confirmTitle"),
@@ -1772,8 +1776,8 @@ function SkillsTab({ workPath }: { workPath: string }) {
           ) : null}
           {operation.errors.length > 0 ? (
             <ul>
-              {operation.errors.slice(0, 6).map((item) => (
-                <li key={item}>{item}</li>
+              {operation.errors.slice(0, 6).map((item, index) => (
+                <li key={`${index}:${item}`}>{item}</li>
               ))}
               {operation.errors.length > 6 ? (
                 <li>{t("system.skills.moreErrors", { count: operation.errors.length - 6 })}</li>
