@@ -1,23 +1,27 @@
-import { Check, FolderInput, X } from "lucide-react";
+import { Check, FolderInput, Play, X } from "lucide-react";
 import { Button } from "./ui/Button";
 
 interface BulkActionBarProps {
   count: number;
   fileCount: number;
+  entryCount: number;
   busy?: boolean;
   onAccept: () => void;
   onReject: () => void;
   onMoveFiles: () => void;
+  onProcess: () => void;
   onCancel: () => void;
 }
 
 export function BulkActionBar({
   count,
   fileCount,
+  entryCount,
   busy = false,
   onAccept,
   onReject,
   onMoveFiles,
+  onProcess,
   onCancel,
 }: BulkActionBarProps) {
   if (count <= 0) return null;
@@ -41,6 +45,16 @@ export function BulkActionBar({
       >
         <FolderInput size={14} />
         폴더로 이동
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={busy || entryCount === 0}
+        onClick={onProcess}
+      >
+        <Play size={14} />
+        Process
       </Button>
       <button
         type="button"

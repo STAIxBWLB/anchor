@@ -1,4 +1,4 @@
-use crate::inbox_settings::{self, InboxSettings};
+use crate::inbox_settings::{self, InboxRuntimeConfig, InboxSettings};
 use crate::vault::normalize_existing_dir;
 use crate::vault::{
     lexical_normalize, load_anchorignore, matches_anchorignore, resolve_inside_vault,
@@ -44,6 +44,44 @@ pub struct InboxDecisionOutcome {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxEntry {
+    pub id: String,
+    pub kind: String,
+    pub path: String,
+    pub rel_path: String,
+    pub title: String,
+    pub channel: String,
+    pub source_kind: Option<String>,
+    pub drop_path: Option<String>,
+    pub configured_root: String,
+    pub item_id: Option<String>,
+    pub status: Option<String>,
+    pub manifest_path: Option<String>,
+    pub summary_path: Option<String>,
+    pub route_path: Option<String>,
+    pub size_bytes: u64,
+    pub received_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PendingManifest {
+    id: String,
+    status: String,
+    channel: String,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    metadata: PendingManifestMetadata,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct PendingManifestMetadata {
+    #[serde(default)]
+    source_kind: Option<String>,
+}
+
 const INBOX_FILE_ACCEPT_KIND: &str = "inbox.file.accept";
 const INBOX_FILE_REJECT_KIND: &str = "inbox.file.reject";
 const INBOX_BULK_KIND: &str = "inbox.bulk";
@@ -53,6 +91,13 @@ pub fn scan_inbox_drop(vault_path: String) -> Result<Vec<InboxDropItem>, String>
     let vault = resolve_inside_vault(&vault_path, ".")?;
     let settings = inbox_settings::load(&vault);
     scan_inbox_with_settings(&vault, &settings)
+}
+
+#[tauri::command]
+pub fn scan_inbox_entries(work_path: String) -> Result<Vec<InboxEntry>, String> {
+    let work = resolve_inside_vault(&work_path, ".")?;
+    let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
+    scan_inbox_entries_with_config(&work, &config)
 }
 
 #[tauri::command]
@@ -209,6 +254,171 @@ fn scan_inbox_with_settings(
             .then_with(|| a.rel_path.cmp(&b.rel_path))
     });
     Ok(items)
+}
+
+fn scan_inbox_entries_with_config(
+    work: &Path,
+    config: &InboxRuntimeConfig,
+) -> Result<Vec<InboxEntry>, String> {
+    let root = inbox_settings::resolve_runtime_root(work, config)?;
+    let ignore_patterns = load_anchorignore(work);
+    let mut entries = Vec::new();
+
+    for (channel_key, channel) in &config.channels {
+        for drop_path in &channel.drop_paths {
+            let drop_root = inbox_settings::lexical_normalize_path(&root.join(drop_path));
+            if !drop_root.exists() {
+                continue;
+            }
+            if !drop_root.is_dir() {
+                return Err(format!(
+                    "{} exists but is not a directory",
+                    drop_root.display()
+                ));
+            }
+            for entry in WalkDir::new(&drop_root).into_iter().filter_map(Result::ok) {
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let path = inbox_settings::lexical_normalize_path(entry.path());
+                let rel_to_work = path.strip_prefix(work).unwrap_or(&path).to_path_buf();
+                if matches_anchorignore(&rel_to_work, &ignore_patterns) || is_inbox_noise(&path) {
+                    continue;
+                }
+                let metadata = fs::metadata(&path)
+                    .map_err(|err| format!("Cannot read inbox item metadata: {err}"))?;
+                let source_kind = source_kind_for_drop(&path, &drop_root, channel);
+                let received_at = metadata
+                    .modified()
+                    .ok()
+                    .map(DateTime::<Utc>::from)
+                    .map(|dt| dt.to_rfc3339());
+                let rel_path = rel_to_work.to_string_lossy().to_string();
+                let title = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("Untitled")
+                    .to_string();
+                entries.push(InboxEntry {
+                    id: rel_path.clone(),
+                    kind: "dropFile".to_string(),
+                    path: path.to_string_lossy().to_string(),
+                    rel_path,
+                    title,
+                    channel: channel_key.clone(),
+                    source_kind,
+                    drop_path: Some(drop_path.clone()),
+                    configured_root: root.to_string_lossy().to_string(),
+                    item_id: None,
+                    status: Some("drop".to_string()),
+                    manifest_path: None,
+                    summary_path: None,
+                    route_path: None,
+                    size_bytes: metadata.len(),
+                    received_at,
+                });
+            }
+        }
+    }
+
+    let pending_root = inbox_settings::lexical_normalize_path(&root.join(&config.paths.pending));
+    if pending_root.is_dir() {
+        let manifest_file = config.naming.manifest_file.as_str();
+        for entry in WalkDir::new(&pending_root)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if !entry.file_type().is_file()
+                || entry.file_name().to_string_lossy().as_ref() != manifest_file
+            {
+                continue;
+            }
+            let manifest_path = inbox_settings::lexical_normalize_path(entry.path());
+            let raw = fs::read_to_string(&manifest_path)
+                .map_err(|err| format!("Cannot read inbox manifest: {err}"))?;
+            let manifest: PendingManifest = serde_yaml::from_str(&raw)
+                .map_err(|err| format!("Cannot parse inbox manifest: {err}"))?;
+            let item_dir = manifest_path.parent().unwrap_or(pending_root.as_path());
+            let metadata = fs::metadata(&manifest_path)
+                .map_err(|err| format!("Cannot read inbox manifest metadata: {err}"))?;
+            let received_at = metadata
+                .modified()
+                .ok()
+                .map(DateTime::<Utc>::from)
+                .map(|dt| dt.to_rfc3339());
+            let title = manifest.id.clone();
+            entries.push(InboxEntry {
+                id: manifest_path
+                    .strip_prefix(work)
+                    .unwrap_or(&manifest_path)
+                    .to_string_lossy()
+                    .to_string(),
+                kind: "pendingItem".to_string(),
+                path: item_dir.to_string_lossy().to_string(),
+                rel_path: item_dir
+                    .strip_prefix(work)
+                    .unwrap_or(item_dir)
+                    .to_string_lossy()
+                    .to_string(),
+                title,
+                channel: manifest.channel,
+                source_kind: manifest.metadata.source_kind.or(manifest.kind),
+                drop_path: None,
+                configured_root: root.to_string_lossy().to_string(),
+                item_id: Some(manifest.id),
+                status: Some(manifest.status),
+                manifest_path: Some(manifest_path.to_string_lossy().to_string()),
+                summary_path: Some(
+                    item_dir
+                        .join(&config.naming.summary_file)
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                route_path: Some(
+                    item_dir
+                        .join(&config.naming.route_file)
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                size_bytes: 0,
+                received_at,
+            });
+        }
+    }
+
+    entries.sort_by(|a, b| {
+        b.received_at
+            .cmp(&a.received_at)
+            .then_with(|| a.channel.cmp(&b.channel))
+            .then_with(|| a.rel_path.cmp(&b.rel_path))
+    });
+    Ok(entries)
+}
+
+fn source_kind_for_drop(
+    path: &Path,
+    drop_root: &Path,
+    channel: &inbox_settings::InboxChannelConfig,
+) -> Option<String> {
+    let rel = path.strip_prefix(drop_root).ok()?;
+    let first = rel
+        .parent()
+        .and_then(|parent| parent.components().next())
+        .and_then(|component| component.as_os_str().to_str())
+        .filter(|value| !value.is_empty())?;
+    channel
+        .source_kinds
+        .get(first)
+        .cloned()
+        .or_else(|| Some(first.to_string()))
+}
+
+fn is_inbox_noise(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|name| name.to_str()),
+        Some(".DS_Store" | ".gitkeep" | ".keep" | "Thumbs.db")
+    )
 }
 
 fn accept_inbox_item_at(
@@ -506,5 +716,105 @@ mod tests {
         assert!(!outcome.ok);
         assert_eq!(outcome.id, "missing");
         assert_eq!(outcome.error.as_deref(), Some("nope"));
+    }
+
+    #[test]
+    fn scan_inbox_entries_reads_configured_drop_files_and_pending_manifests() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::write(
+            root.join("workspace.config.yaml"),
+            r#"
+inbox:
+  root: inbox
+  paths:
+    drop: drop
+    items: items
+    pending: items/pending
+    done: items/done
+    failed: items/failed
+    duplicate: items/duplicate
+    state: _state
+    receipts: _state/index.jsonl
+  naming:
+    item_id_template: "{date}-{channel}-{slug}"
+    raw_dir: raw
+    manifest_file: manifest.yaml
+    extracted_file: extracted.md
+    summary_file: digest.md
+    route_file: route.md
+  channels:
+    kakao:
+      provider: kakao
+      skill: io-kakao
+      kind: bundle
+      dedupe: sha256
+      drop_paths:
+        - drop/kakao
+      source_kinds:
+        messages: message
+"#,
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("inbox/drop/kakao/messages")).unwrap();
+        fs::write(root.join("inbox/drop/kakao/messages/chat.txt"), b"hello").unwrap();
+        fs::create_dir_all(root.join("inbox/items/pending/260510-kakao-chat")).unwrap();
+        fs::write(
+            root.join("inbox/items/pending/260510-kakao-chat/manifest.yaml"),
+            r#"
+id: 260510-kakao-chat
+status: pending
+channel: kakao
+kind: message
+metadata:
+  source_kind: message
+"#,
+        )
+        .unwrap();
+
+        let entries = scan_inbox_entries(root.to_string_lossy().to_string()).unwrap();
+
+        assert_eq!(entries.len(), 2);
+        let drop_entry = entries
+            .iter()
+            .find(|entry| entry.kind == "dropFile")
+            .unwrap();
+        assert_eq!(drop_entry.channel, "kakao");
+        assert_eq!(drop_entry.source_kind.as_deref(), Some("message"));
+        assert_eq!(drop_entry.drop_path.as_deref(), Some("drop/kakao"));
+        assert_eq!(drop_entry.rel_path, "inbox/drop/kakao/messages/chat.txt");
+
+        let pending_entry = entries
+            .iter()
+            .find(|entry| entry.kind == "pendingItem")
+            .unwrap();
+        assert_eq!(pending_entry.item_id.as_deref(), Some("260510-kakao-chat"));
+        assert_eq!(pending_entry.status.as_deref(), Some("pending"));
+        assert!(pending_entry
+            .summary_path
+            .as_deref()
+            .unwrap()
+            .ends_with("inbox/items/pending/260510-kakao-chat/digest.md"));
+    }
+
+    #[test]
+    fn scan_inbox_entries_uses_legacy_settings_when_workspace_config_has_no_inbox() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".anchor")).unwrap();
+        fs::write(
+            root.join(".anchor/inbox.json"),
+            r#"{"inboxRoot":"incoming/spool","sources":["alpha"]}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("incoming/spool/alpha")).unwrap();
+        fs::write(root.join("incoming/spool/alpha/note.md"), b"legacy").unwrap();
+
+        let entries = scan_inbox_entries(root.to_string_lossy().to_string()).unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].kind, "dropFile");
+        assert_eq!(entries[0].channel, "alpha");
+        assert_eq!(entries[0].rel_path, "incoming/spool/alpha/note.md");
     }
 }

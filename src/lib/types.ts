@@ -133,6 +133,67 @@ export interface InboxDropItem {
   receivedAt: string | null;
 }
 
+export interface InboxPathConfig {
+  drop: string;
+  items: string;
+  pending: string;
+  done: string;
+  failed: string;
+  duplicate: string;
+  state: string;
+  receipts: string;
+}
+
+export interface InboxNamingConfig {
+  item_id_template: string;
+  raw_dir: string;
+  manifest_file: string;
+  extracted_file: string;
+  summary_file: string;
+  route_file: string;
+}
+
+export interface InboxChannelConfig {
+  provider: string;
+  skill?: string | null;
+  kind: string;
+  drop_paths: string[];
+  source_kinds?: Record<string, string>;
+  dedupe: string;
+  [extra: string]: unknown;
+}
+
+export interface InboxRuntimeConfig {
+  root: string;
+  schema_version?: number | null;
+  paths: InboxPathConfig;
+  naming: InboxNamingConfig;
+  dedupe?: Record<string, unknown>;
+  channels: Record<string, InboxChannelConfig>;
+  processing?: Record<string, unknown>;
+  hooks?: Record<string, unknown>;
+  [extra: string]: unknown;
+}
+
+export interface InboxEntry {
+  id: string;
+  kind: "dropFile" | "pendingItem";
+  path: string;
+  relPath: string;
+  title: string;
+  channel: string;
+  sourceKind: string | null;
+  dropPath: string | null;
+  configuredRoot: string;
+  itemId: string | null;
+  status: string | null;
+  manifestPath: string | null;
+  summaryPath: string | null;
+  routePath: string | null;
+  sizeBytes: number;
+  receivedAt: string | null;
+}
+
 export interface InboxAcceptRequest {
   id: string;
   targetFolder?: string | null;

@@ -3128,6 +3128,39 @@ button.git-badge:hover {
   gap: 10px;
 }
 
+.inbox-channel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inbox-channel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.inbox-channel-header > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inbox-channel-header strong {
+  font-size: 12px;
+}
+
+.inbox-channel-header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .gmail-item .gmail-from {
   margin: 0;
   font-size: 12px;
@@ -3259,6 +3292,8 @@ button.git-badge:hover {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .suggested-folder {
@@ -6664,6 +6699,7 @@ button.git-badge:hover {
   line-height: 1.35;
 }
 
+.settings-form input,
 .settings-form select,
 .settings-form .settings-textarea {
   height: 34px;
@@ -6673,6 +6709,40 @@ button.git-badge:hover {
   color: var(--ink);
   padding: 0 10px;
   outline: 0;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-grid.two {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.inbox-runtime-editor {
+  max-width: none;
+}
+
+.inbox-channel-editor {
+  display: grid;
+  grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.inbox-channel-list,
+.inbox-channel-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.inbox-channel-list-actions,
+.system-detail-actions.compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-form .settings-textarea {

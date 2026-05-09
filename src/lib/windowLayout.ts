@@ -7,7 +7,7 @@ export function tauriAvailable(): boolean {
   return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 }
 
-export async function openSettingsWindow(workPath: string | null): Promise<void> {
+export async function openSettingsWindow(workPath: string | null, tab?: string): Promise<void> {
   if (!tauriAvailable()) {
     throw new Error("Settings window requires the Tauri app.");
   }
@@ -20,6 +20,7 @@ export async function openSettingsWindow(workPath: string | null): Promise<void>
 
   const params = new URLSearchParams({ window: "settings" });
   if (workPath) params.set("workPath", workPath);
+  if (tab) params.set("tab", tab);
   const settingsWindow = new WebviewWindow("settings", {
     url: `/?${params.toString()}`,
     title: "Anchor Settings",

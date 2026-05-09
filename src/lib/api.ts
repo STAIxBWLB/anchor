@@ -33,6 +33,8 @@ import type {
   InboxClassification,
   InboxDecisionOutcome,
   InboxDropItem,
+  InboxEntry,
+  InboxRuntimeConfig,
   InboxSettings,
   MissionRecord,
   MemoDocument,
@@ -60,6 +62,77 @@ export const DEFAULT_INBOX_SETTINGS: InboxSettings = {
   inboxRoot: "inbox/downloads",
   sources: ["outlook", "sharepoint", "gmail", "kakao", "telegram", "downloads"],
   gwsPath: null,
+};
+
+export const DEFAULT_INBOX_RUNTIME_CONFIG: InboxRuntimeConfig = {
+  root: "inbox",
+  schema_version: 1,
+  paths: {
+    drop: "drop",
+    items: "items",
+    pending: "items/pending",
+    done: "items/done",
+    failed: "items/failed",
+    duplicate: "items/duplicate",
+    state: "_state",
+    receipts: "_state/index.jsonl",
+  },
+  naming: {
+    item_id_template: "{date}-{channel}-{slug}",
+    raw_dir: "raw",
+    manifest_file: "manifest.yaml",
+    extracted_file: "extracted.md",
+    summary_file: "summary.md",
+    route_file: "route.md",
+  },
+  dedupe: { default: "sha256" },
+  channels: {
+    incoming: { provider: "local", kind: "file", drop_paths: ["drop/incoming"], dedupe: "sha256" },
+    arc: { provider: "local", kind: "file", drop_paths: ["drop/arc"], dedupe: "sha256" },
+    atlas: { provider: "local", kind: "file", drop_paths: ["drop/atlas"], dedupe: "sha256" },
+    chrome: { provider: "local", kind: "file", drop_paths: ["drop/chrome"], dedupe: "sha256" },
+    flow: { provider: "local", kind: "file", drop_paths: ["drop/flow"], dedupe: "sha256" },
+    safari: { provider: "local", kind: "file", drop_paths: ["drop/safari"], dedupe: "sha256" },
+    others: { provider: "local", kind: "file", drop_paths: ["drop/others"], dedupe: "sha256" },
+    transcripts: { provider: "local", kind: "transcript", drop_paths: ["drop/transcripts"], dedupe: "sha256" },
+    mso: {
+      provider: "mso",
+      skill: "io-mso",
+      kind: "bundle",
+      drop_paths: ["drop/mso"],
+      source_kinds: { mail: "message", sharepoint: "document", onedrive: "document" },
+      dedupe: "provider-native",
+    },
+    gws: {
+      provider: "gws",
+      skill: "io-gws",
+      kind: "bundle",
+      drop_paths: ["drop/gws"],
+      source_kinds: { mail: "message", drive: "document", gdrive: "document" },
+      dedupe: "provider-native",
+    },
+    telegram: {
+      provider: "telegram",
+      skill: "io-telegram",
+      kind: "bundle",
+      drop_paths: ["drop/telegram"],
+      source_kinds: { messages: "message", files: "attachment" },
+      dedupe: "provider-native",
+    },
+    kakao: {
+      provider: "kakao",
+      skill: "io-kakao",
+      kind: "bundle",
+      drop_paths: ["drop/kakao"],
+      source_kinds: { messages: "message", files: "attachment", exports: "data" },
+      dedupe: "sha256",
+    },
+  },
+  processing: {
+    require_confirm_before_route: true,
+    summary_schema: "inbox-summary/v1",
+  },
+  hooks: {},
 };
 
 export async function getSampleVaultPath(): Promise<string> {
@@ -133,6 +206,24 @@ export async function readVaultCache(vaultPath: string): Promise<VaultEntry[] | 
 export async function scanInboxDrop(vaultPath: string): Promise<InboxDropItem[]> {
   if (!isTauri()) return mockInboxDropItems();
   return invoke<InboxDropItem[]>("scan_inbox_drop", { vaultPath });
+}
+
+export async function scanInboxEntries(workPath: string): Promise<InboxEntry[]> {
+  if (!isTauri()) return [];
+  return invoke<InboxEntry[]>("scan_inbox_entries", { workPath });
+}
+
+export async function readInboxRuntimeConfig(workPath: string): Promise<InboxRuntimeConfig> {
+  if (!isTauri()) return DEFAULT_INBOX_RUNTIME_CONFIG;
+  return invoke<InboxRuntimeConfig>("read_inbox_runtime_config", { workPath });
+}
+
+export async function saveInboxRuntimeConfig(
+  workPath: string,
+  config: InboxRuntimeConfig,
+): Promise<InboxRuntimeConfig> {
+  if (!isTauri()) return config;
+  return invoke<InboxRuntimeConfig>("save_inbox_runtime_config", { workPath, config });
 }
 
 export async function prepareApproval(input: {

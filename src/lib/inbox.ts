@@ -1,4 +1,9 @@
-import type { InboxClassification, InboxDropItem } from "./types";
+import type {
+  InboxClassification,
+  InboxDropItem,
+  InboxEntry,
+  InboxRuntimeConfig,
+} from "./types";
 
 export type InboxDecision = "pending" | "accepted" | "rejected";
 
@@ -97,4 +102,45 @@ export function toggleInboxSelectionKeys(
   if (next.has(key)) next.delete(key);
   else next.add(key);
   return next;
+}
+
+export function inboxEntryProcessPath(entry: InboxEntry): string {
+  if (entry.kind === "pendingItem") return entry.manifestPath ?? entry.path;
+  return entry.path;
+}
+
+export function buildInboxProcessPrompt({
+  channel,
+  entries,
+  config,
+}: {
+  channel: string;
+  entries: InboxEntry[];
+  config: InboxRuntimeConfig;
+}): string {
+  const contextLines =
+    entries.length > 0
+      ? entries.map((entry) => {
+          const label = entry.kind === "pendingItem" ? "pending manifest" : "drop file";
+          const source = entry.sourceKind ? ` sourceKind=${entry.sourceKind}` : "";
+          return `- ${label}: ${inboxEntryProcessPath(entry)}${source}`;
+        })
+      : ["- channel header action: process configured local drop files and pending manifests"];
+
+  return [
+    `inbox-process ${channel}`,
+    "",
+    "Process the configured local inbox items for this channel.",
+    "Do not fetch providers; external collection stays with io-* and inbox-intake.",
+    "Use workspace.config.yaml as the SSOT, especially inbox.paths and inbox.naming.",
+    "",
+    "Selected context:",
+    ...contextLines,
+    "",
+    "Configured inbox.paths:",
+    JSON.stringify(config.paths, null, 2),
+    "",
+    "Configured inbox.naming:",
+    JSON.stringify(config.naming, null, 2),
+  ].join("\n");
 }

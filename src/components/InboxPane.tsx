@@ -1,4 +1,4 @@
-import { Brain, Check, HelpCircle, Inbox, Loader2, Mail, RefreshCcw, Settings, X } from "lucide-react";
+import { Brain, Check, HelpCircle, Inbox, Loader2, Mail, Play, RefreshCcw, Settings, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { type GmailMessageState, shortFrom } from "../lib/gmail";
@@ -10,10 +10,12 @@ import {
   type InboxItemState,
 } from "../lib/inbox";
 import { useTranslation } from "../lib/i18n";
+import type { InboxEntry } from "../lib/types";
 import { BulkActionBar } from "./BulkActionBar";
 
 interface InboxPaneProps {
   items: InboxItemState[];
+  entries: InboxEntry[];
   loading: boolean;
   gmailMessages: GmailMessageState[];
   gmailLoading: boolean;
@@ -30,14 +32,18 @@ interface InboxPaneProps {
   onBulkAccept: (keys: string[]) => void | Promise<void>;
   onBulkReject: (keys: string[]) => void | Promise<void>;
   onBulkMoveFiles: (keys: string[]) => void | Promise<void>;
+  onProcessEntries: (keys: string[]) => void | Promise<void>;
+  onProcessChannel: (channel: string) => void | Promise<void>;
 }
 
 type InboxRow =
+  | { key: string; kind: "entry"; entry: InboxEntry }
   | { key: string; kind: "file"; entry: InboxItemState }
   | { key: string; kind: "gmail"; entry: GmailMessageState };
 
 export function InboxPane({
   items,
+  entries,
   loading,
   gmailMessages,
   gmailLoading,
@@ -54,6 +60,8 @@ export function InboxPane({
   onBulkAccept,
   onBulkReject,
   onBulkMoveFiles,
+  onProcessEntries,
+  onProcessChannel,
 }: InboxPaneProps) {
   const { t, locale } = useTranslation();
   const paneRef = useRef<HTMLElement | null>(null);
@@ -67,19 +75,31 @@ export function InboxPane({
     [items, sourceFilter],
   );
   const pending = visibleItems.filter((entry) => entry.decision === "pending").length;
+  const entryPending = entries.filter((entry) => entry.status !== "done").length;
   const gmailPending = gmailMessages.filter((entry) => entry.decision === "pending").length;
+  const entriesByChannel = useMemo(() => {
+    const grouped = new Map<string, InboxEntry[]>();
+    for (const entry of entries) {
+      const group = grouped.get(entry.channel) ?? [];
+      group.push(entry);
+      grouped.set(entry.channel, group);
+    }
+    return [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [entries]);
   const rows = useMemo<InboxRow[]>(
     () => [
+      ...entries.map((entry) => ({ key: `entry:${entry.id}`, kind: "entry" as const, entry })),
       ...visibleItems.map((entry) => ({ key: `file:${entry.item.id}`, kind: "file" as const, entry })),
       ...gmailMessages.map((entry) => ({ key: `gmail:${entry.message.id}`, kind: "gmail" as const, entry })),
     ],
-    [gmailMessages, visibleItems],
+    [entries, gmailMessages, visibleItems],
   );
   const selected = useMemo(
     () => rows.filter((row) => selectedKeys.has(row.key)),
     [rows, selectedKeys],
   );
   const selectedFileCount = selected.filter((row) => row.kind === "file").length;
+  const selectedEntryCount = selected.filter((row) => row.kind === "entry").length;
 
   useEffect(() => {
     const valid = new Set(rows.map((row) => row.key));
@@ -95,15 +115,24 @@ export function InboxPane({
   }, [focusRequest, rows]);
 
   const actOnKeys = async (keys: string[], decision: InboxDecision) => {
-    if (keys.length > 1) {
-      if (decision === "accepted") await onBulkAccept(keys);
-      else await onBulkReject(keys);
+    const decisionKeys = keys.filter((key) => !key.startsWith("entry:"));
+    if (decisionKeys.length > 1) {
+      if (decision === "accepted") await onBulkAccept(decisionKeys);
+      else await onBulkReject(decisionKeys);
       return;
     }
-    const key = keys[0];
+    const key = decisionKeys[0];
     if (!key) return;
     if (key.startsWith("file:")) await onDecide(key.slice("file:".length), decision);
     else if (key.startsWith("gmail:")) await onDecideGmail(key.slice("gmail:".length), decision);
+  };
+
+  const processActionKeys = () => {
+    const selectedEntryKeys = [...selectedKeys].filter((key) => key.startsWith("entry:"));
+    if (selectedEntryKeys.length > 0) return selectedEntryKeys;
+    if (focusedKey?.startsWith("entry:")) return [focusedKey];
+    const fallback = rows.find((row) => row.kind === "entry")?.key;
+    return fallback ? [fallback] : [];
   };
 
   const actionKeys = () => {
@@ -176,6 +205,9 @@ export function InboxPane({
         } else if (event.key.toLowerCase() === "r") {
           event.preventDefault();
           void actOnKeys(actionKeys(), "rejected");
+        } else if (event.key.toLowerCase() === "p") {
+          event.preventDefault();
+          void onProcessEntries(processActionKeys());
         } else if (event.key === "?") {
           event.preventDefault();
           setCheatsheetOpen((value) => !value);
@@ -190,6 +222,7 @@ export function InboxPane({
               files: pending.toLocaleString(locale),
               gmail: gmailPending.toLocaleString(locale),
             })}
+            {entryPending > 0 ? ` · process ${entryPending.toLocaleString(locale)}` : ""}
           </p>
         </div>
         <div className="inbox-header-actions">
@@ -228,6 +261,7 @@ export function InboxPane({
           <span>↑/↓ focus</span>
           <span>a accept</span>
           <span>r reject</span>
+          <span>p process</span>
           <span>shift/cmd click select</span>
         </div>
       ) : null}
@@ -259,6 +293,90 @@ export function InboxPane({
       ) : null}
 
       <div className="inbox-sections">
+        {entriesByChannel.length > 0 ? (
+          <section className="inbox-section">
+            <h3 className="inbox-section-title">Configured Inbox</h3>
+            <div className="inbox-list">
+              {entriesByChannel.map(([channel, channelEntries]) => (
+                <div className="inbox-channel-group" key={channel}>
+                  <div className="inbox-channel-header">
+                    <div>
+                      <strong>{channel}</strong>
+                      <span>{channelEntries.length.toLocaleString(locale)} items</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-ghost button-sm"
+                      onClick={() => void onProcessChannel(channel)}
+                      disabled={actionBusy}
+                    >
+                      <Play size={14} />
+                      <span>Process</span>
+                    </button>
+                  </div>
+                  {channelEntries.map((entry) => {
+                    const key = `entry:${entry.id}`;
+                    return (
+                      <article
+                        className={`inbox-item configured-inbox-item${focusedKey === key ? " focused" : ""}${selectedKeys.has(key) ? " selected" : ""}`}
+                        key={entry.id}
+                        data-inbox-row-key={key}
+                        onClick={(event) => handleRowClick(event, key)}
+                      >
+                        <input
+                          type="checkbox"
+                          className="inbox-row-check"
+                          checked={selectedKeys.has(key)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleSelection(key, event.shiftKey);
+                          }}
+                          onChange={() => {}}
+                          aria-label={`Select ${entry.title}`}
+                        />
+                        <div className="inbox-item-main">
+                          <div className="inbox-item-title">
+                            <span className="source-chip">{entry.channel}</span>
+                            <strong>{entry.title}</strong>
+                          </div>
+                          <p className="inbox-item-hint">
+                            {entry.kind === "pendingItem" ? "pending item" : "drop file"}
+                            {entry.sourceKind ? ` · ${entry.sourceKind}` : ""}
+                          </p>
+                          <div className="inbox-item-meta">
+                            <span>{entry.relPath}</span>
+                            {entry.status ? <span>{entry.status}</span> : null}
+                            {entry.kind === "dropFile" ? <span>{formatBytes(entry.sizeBytes)}</span> : null}
+                          </div>
+                          {entry.manifestPath ? (
+                            <div className="inbox-item-meta">
+                              <span>{entry.manifestPath}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="inbox-decision">
+                          <button
+                            type="button"
+                            className="button button-ghost button-sm"
+                            disabled={actionBusy}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void onProcessEntries([key]);
+                            }}
+                          >
+                            <Play size={14} />
+                            <span>Process</span>
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="inbox-section">
           <h3 className="inbox-section-title">{t("inbox.section.files")}</h3>
           <div className="inbox-list">
@@ -453,10 +571,12 @@ export function InboxPane({
       <BulkActionBar
         count={selectedKeys.size}
         fileCount={selectedFileCount}
+        entryCount={selectedEntryCount}
         busy={actionBusy}
         onAccept={() => void onBulkAccept([...selectedKeys])}
         onReject={() => void onBulkReject([...selectedKeys])}
         onMoveFiles={() => void onBulkMoveFiles([...selectedKeys])}
+        onProcess={() => void onProcessEntries([...selectedKeys])}
         onCancel={() => setSelectedKeys(new Set())}
       />
     </main>
@@ -465,6 +585,7 @@ export function InboxPane({
 
 function firstPendingKey(rows: InboxRow[]): string | null {
   const row = rows.find((entry) => {
+    if (entry.kind === "entry") return entry.entry.status !== "done";
     if (entry.kind === "file") return entry.entry.decision === "pending";
     return entry.entry.decision === "pending";
   });

@@ -20,7 +20,6 @@ import { DocumentList } from "./components/DocumentList";
 import { EditorPane, type EditorViewMode } from "./components/EditorPane";
 import { GitStatusBadge } from "./components/GitStatusBadge";
 import { InboxPane } from "./components/InboxPane";
-import { InboxSettingsDialog } from "./components/InboxSettingsDialog";
 import { MissionBadge } from "./components/MissionBadge";
 import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
@@ -43,7 +42,7 @@ import {
   acceptInboxItems,
   createDocument,
   createVersion,
-  DEFAULT_INBOX_SETTINGS,
+  DEFAULT_INBOX_RUNTIME_CONFIG,
   decideGmailItem as decideGmailItemApi,
   decideGmailItems,
   describeFileQueueSources,
@@ -56,7 +55,7 @@ import {
   readDocument,
   prepareApproval,
   revealInFileManager,
-  readInboxSettings,
+  readInboxRuntimeConfig,
   readVaultCache,
   refreshWorkspaceCapabilities,
   removeWorkspaceRoot,
@@ -64,8 +63,8 @@ import {
   rejectInboxItem,
   rejectInboxItems,
   saveDocument,
-  saveInboxSettings,
   scanInboxDrop,
+  scanInboxEntries,
   scanWorkspaceFiles,
   scanVault,
   setActiveWorkspaceRoot,
@@ -104,6 +103,7 @@ import { buildGmailMessageStates, type GmailMessageState } from "./lib/gmail";
 import { LocaleContext, assertParityOrThrow, useLocaleState } from "./lib/i18n";
 import { listenForMenuCommand } from "./lib/menu";
 import {
+  buildInboxProcessPrompt,
   buildInboxItemStates,
   type InboxDecision,
   type InboxItemState,
@@ -112,6 +112,7 @@ import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import type { TerminalKind } from "./lib/terminal";
 import {
   skillsListSkills,
+  skillsDispatchBackground,
   type SkillContextItem,
   type SkillRecord,
   type TerminalDispatchSpec,
@@ -136,7 +137,8 @@ import type {
   GmailMessage,
   InboxClassification,
   InboxDropItem,
-  InboxSettings,
+  InboxEntry,
+  InboxRuntimeConfig,
   VaultEntry,
   WorkspaceFileEntry,
   WorkspaceRegistry,
@@ -379,7 +381,7 @@ export default function App() {
   const params =
     typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   if (params?.get("window") === "settings") {
-    return <SettingsWindowRoot workPath={params.get("workPath")} />;
+    return <SettingsWindowRoot workPath={params.get("workPath")} initialTab={params.get("tab")} />;
   }
   if (params?.get("window") === "skill-editor") {
     return (
@@ -407,7 +409,13 @@ function useSuppressNativeContextMenu() {
   }, []);
 }
 
-function SettingsWindowRoot({ workPath }: { workPath: string | null }) {
+function SettingsWindowRoot({
+  workPath,
+  initialTab,
+}: {
+  workPath: string | null;
+  initialTab: string | null;
+}) {
   const localeValue = useLocaleState();
   const { t } = localeValue;
   const [settings, setSettings] = useState<AnchorSettings>(() =>
@@ -477,6 +485,7 @@ function SettingsWindowRoot({ workPath }: { workPath: string | null }) {
           workPath={workPath}
           settings={settings}
           onSettingsChange={updateSettings}
+          initialTab={initialTab}
         />
         {error ? (
           <div className="toast-stack">
@@ -644,6 +653,10 @@ function MainApp() {
   // raw drop item via the InboxItemState shape.
   const [appMode, setAppMode] = useState<AppMode>(DEFAULT_ANCHOR_SETTINGS.ui.activeAppMode);
   const [inboxDrops, setInboxDrops] = useState<InboxDropItem[]>([]);
+  const [inboxEntries, setInboxEntries] = useState<InboxEntry[]>([]);
+  const [inboxRuntimeConfig, setInboxRuntimeConfig] = useState<InboxRuntimeConfig>(
+    DEFAULT_INBOX_RUNTIME_CONFIG,
+  );
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxCarry, setInboxCarry] = useState<Map<string, InboxCarry>>(() => new Map());
 
@@ -657,8 +670,6 @@ function MainApp() {
   const [gmailDecisions, setGmailDecisions] = useState<Map<string, InboxDecision>>(
     () => new Map(),
   );
-  const [inboxSettings, setInboxSettings] = useState<InboxSettings>(DEFAULT_INBOX_SETTINGS);
-  const [inboxSettingsOpen, setInboxSettingsOpen] = useState(false);
   const [inboxSourceFilter, setInboxSourceFilter] = useState<string | null>(null);
   const [inboxFocusTick, setInboxFocusTick] = useState(0);
   const [inboxActionBusy, setInboxActionBusy] = useState(false);
@@ -1579,12 +1590,18 @@ function MainApp() {
   const refreshInbox = useCallback(async () => {
     if (!inboxWorkspacePath) {
       setInboxDrops([]);
+      setInboxEntries([]);
       return;
     }
     setInboxLoading(true);
     setError(null);
     try {
-      setInboxDrops(await scanInboxDrop(inboxWorkspacePath));
+      const [drops, entries] = await Promise.all([
+        scanInboxDrop(inboxWorkspacePath),
+        scanInboxEntries(inboxWorkspacePath),
+      ]);
+      setInboxDrops(drops);
+      setInboxEntries(entries);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1811,6 +1828,68 @@ function MainApp() {
     [decideInboxKeys],
   );
 
+  const processInboxKeys = useCallback(
+    async (keys: string[], channelOverride?: string | null) => {
+      if (!inboxWorkspacePath) return;
+      const processSkill =
+        skills.find((skill) => skill.name === "inbox-process") ??
+        skills.find((skill) => skill.id.endsWith(":inbox-process") || skill.id === "inbox-process");
+      if (!processSkill) {
+        setError("inbox-process skill is not installed or indexed.");
+        return;
+      }
+      const selectedEntryIds = new Set(
+        keys.filter((key) => key.startsWith("entry:")).map((key) => key.slice("entry:".length)),
+      );
+      const selectedEntries =
+        selectedEntryIds.size > 0
+          ? inboxEntries.filter((entry) => selectedEntryIds.has(entry.id))
+          : channelOverride
+            ? inboxEntries.filter((entry) => entry.channel === channelOverride)
+            : [];
+      if (selectedEntries.length === 0 && !channelOverride) return;
+
+      const grouped = new Map<string, InboxEntry[]>();
+      if (channelOverride && selectedEntries.length === 0) {
+        grouped.set(channelOverride, []);
+      } else {
+        for (const entry of selectedEntries) {
+          const group = grouped.get(entry.channel) ?? [];
+          group.push(entry);
+          grouped.set(entry.channel, group);
+        }
+      }
+
+      setInboxActionBusy(true);
+      setError(null);
+      try {
+        for (const [channel, entries] of grouped) {
+          const prompt = buildInboxProcessPrompt({
+            channel,
+            entries,
+            config: inboxRuntimeConfig,
+          });
+          const context: SkillContextItem[] = entries.map((entry) => ({
+            path: entry.kind === "pendingItem" ? entry.manifestPath ?? entry.path : entry.path,
+            kind: entry.kind === "pendingItem" ? "manifest" : "file",
+          }));
+          await skillsDispatchBackground({
+            skillId: processSkill.id,
+            runtime: "claude",
+            prompt,
+            cwd: inboxWorkspacePath,
+            context,
+          });
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setInboxActionBusy(false);
+      }
+    },
+    [inboxEntries, inboxRuntimeConfig, inboxWorkspacePath, skills],
+  );
+
   const classifyItem = useCallback(
     async (id: string) => {
       const target = inboxDrops.find((drop) => drop.id === id);
@@ -1831,35 +1910,43 @@ function MainApp() {
 
   useEffect(() => {
     if (!inboxWorkspacePath) {
-      setInboxSettings(DEFAULT_INBOX_SETTINGS);
+      setInboxRuntimeConfig(DEFAULT_INBOX_RUNTIME_CONFIG);
       setInboxSourceFilter(null);
       return;
     }
     let cancelled = false;
-    void readInboxSettings(inboxWorkspacePath)
-      .then((settings) => {
-        if (!cancelled) setInboxSettings(settings);
+    let unlistenConfigEvent: (() => void) | null = null;
+    void readInboxRuntimeConfig(inboxWorkspacePath)
+      .then((config) => {
+        if (!cancelled) setInboxRuntimeConfig(config);
       })
       .catch(() => {
-        if (!cancelled) setInboxSettings(DEFAULT_INBOX_SETTINGS);
+        if (!cancelled) setInboxRuntimeConfig(DEFAULT_INBOX_RUNTIME_CONFIG);
+      });
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("inbox://runtime_config_updated", (event) => {
+          const payload = event.payload as
+            | { workPath?: string; config?: InboxRuntimeConfig }
+            | null;
+          if (!payload?.config || payload.workPath !== inboxWorkspacePath) return;
+          setInboxRuntimeConfig(payload.config);
+          setInboxSourceFilter(null);
+          void refreshInbox();
+        }),
+      )
+      .then((off) => {
+        if (cancelled) off();
+        else unlistenConfigEvent = off;
+      })
+      .catch(() => {
+        // Browser dev shell without Tauri event bridge.
       });
     return () => {
       cancelled = true;
+      unlistenConfigEvent?.();
     };
-  }, [inboxWorkspacePath]);
-
-  const persistInboxSettings = useCallback(
-    async (next: InboxSettings) => {
-      if (!inboxWorkspacePath) return;
-      const saved = await saveInboxSettings(inboxWorkspacePath, next);
-      setInboxSettings(saved);
-      setInboxSettingsOpen(false);
-      setInboxSourceFilter(null);
-      void refreshInbox();
-      void refreshGmail();
-    },
-    [inboxWorkspacePath, refreshGmail, refreshInbox],
-  );
+  }, [inboxWorkspacePath, refreshInbox]);
 
   // First entry into Inbox mode triggers a Gmail fetch. Subsequent
   // refreshes are user-driven via the refresh button / ⌘R.
@@ -1879,6 +1966,7 @@ function MainApp() {
   useEffect(() => {
     if (!inboxWorkspacePath) {
       setInboxDrops([]);
+      setInboxEntries([]);
       return;
     }
     if (appMode !== "inbox") {
@@ -3141,6 +3229,12 @@ function MainApp() {
 
   const openPreferences = useCallback(() => {
     void openSettingsWindow(settingsWorkPath).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }, [settingsWorkPath]);
+
+  const openInboxSettings = useCallback(() => {
+    void openSettingsWindow(settingsWorkPath, "inbox-channels").catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
     });
   }, [settingsWorkPath]);
@@ -4520,6 +4614,7 @@ function MainApp() {
         {appMode === "inbox" ? (
           <InboxPane
             items={inboxItems}
+            entries={inboxEntries}
             loading={inboxLoading}
             gmailMessages={gmailItems}
             gmailLoading={gmailLoading}
@@ -4532,13 +4627,15 @@ function MainApp() {
               void refreshInbox();
               void refreshGmail();
             }}
-            onOpenSettings={() => setInboxSettingsOpen(true)}
+            onOpenSettings={openInboxSettings}
             onClassify={(id) => void classifyItem(id)}
             onDecide={decideInboxItem}
             onDecideGmail={decideGmailItem}
             onBulkAccept={bulkAcceptInboxKeys}
             onBulkReject={bulkRejectInboxKeys}
             onBulkMoveFiles={bulkMoveInboxFiles}
+            onProcessEntries={(keys) => void processInboxKeys(keys)}
+            onProcessChannel={(channel) => void processInboxKeys([], channel)}
           />
         ) : (
           <>
@@ -4921,12 +5018,6 @@ function MainApp() {
           onOpenChange={setAddWorkspaceOpen}
           onAdd={handleAddWorkspace}
           onRegisterWorkspace={handleRegisterWorkspace}
-        />
-        <InboxSettingsDialog
-          open={inboxSettingsOpen}
-          settings={inboxSettings}
-          onOpenChange={setInboxSettingsOpen}
-          onSave={persistInboxSettings}
         />
         {approvalGate.dialog}
         <ComposeDialog

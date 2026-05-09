@@ -42,9 +42,12 @@ use git::{git_changes, git_commit, git_diff, git_status, git_status_fast};
 use gmail_gws::{decide_gmail_item, decide_gmail_items, fetch_gmail_unread};
 use inbox::{
     accept_inbox_item, accept_inbox_items, reject_inbox_item, reject_inbox_items, scan_inbox_drop,
+    scan_inbox_entries,
 };
 use inbox_classifier::{build_inbox_classification_prompt, parse_inbox_classification};
-use inbox_settings::{read_inbox_settings, save_inbox_settings};
+use inbox_settings::{
+    read_inbox_runtime_config, read_inbox_settings, save_inbox_runtime_config, save_inbox_settings,
+};
 use inbox_watcher::{start_inbox_watcher, stop_inbox_watcher, InboxWatcherState};
 use korean_date::parse_korean_date_cmd;
 use mission_state::{list_ai_missions, stop_ai_mission, MissionState};
@@ -114,6 +117,7 @@ pub fn run() {
             git_diff,
             reveal_in_file_manager,
             scan_inbox_drop,
+            scan_inbox_entries,
             accept_inbox_item,
             accept_inbox_items,
             reject_inbox_item,
@@ -122,6 +126,8 @@ pub fn run() {
             stop_inbox_watcher,
             read_inbox_settings,
             save_inbox_settings,
+            read_inbox_runtime_config,
+            save_inbox_runtime_config,
             parse_korean_date_cmd,
             store_shelf_files,
             store_shelf_files_as,
