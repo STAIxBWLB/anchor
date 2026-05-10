@@ -12,6 +12,7 @@ import { useTranslation } from "../../lib/i18n";
 
 interface CommsSettingsTabProps {
   settings: CommsSettings;
+  effectiveSettings?: CommsSettings;
   gmailSettings: InboxGmailConfig;
   effectiveGwsPath?: string | null;
   pollingStatus?: TelegramPollingStatus;
@@ -26,6 +27,7 @@ interface CommsSettingsTabProps {
 
 export function CommsSettingsTab({
   settings,
+  effectiveSettings,
   gmailSettings,
   effectiveGwsPath = null,
   pollingStatus = {
@@ -51,7 +53,8 @@ export function CommsSettingsTab({
     onSettingsChange({ ...settings, outlook: { ...settings.outlook, ...patch } });
   const updateTelegram = (patch: Partial<CommsSettings["telegram"]>) =>
     onSettingsChange({ ...settings, telegram: { ...settings.telegram, ...patch } });
-  const gwsValue = gmailSettings.gws_path ?? effectiveGwsPath ?? "";
+  const gwsValue = gmailSettings.gws_path ?? "";
+  const effectiveM365Path = effectiveSettings?.outlook.m365Path ?? null;
 
   return (
     <div className="settings-form comms-settings-form">
@@ -141,9 +144,12 @@ export function CommsSettingsTab({
             <input
               className="path-input"
               value={gwsValue}
-              onChange={(event) => updateGmail({ gws_path: event.target.value || null })}
-              placeholder="/opt/homebrew/bin/gws"
-              title={gwsValue || "/opt/homebrew/bin/gws"}
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                updateGmail({ gws_path: value || null });
+              }}
+              placeholder={effectiveGwsPath ?? "/opt/homebrew/bin/gws"}
+              title={gwsValue || effectiveGwsPath || "/opt/homebrew/bin/gws"}
               spellCheck={false}
             />
             {!gmailSettings.gws_path && effectiveGwsPath ? (
@@ -183,11 +189,17 @@ export function CommsSettingsTab({
           <input
             className="path-input"
             value={settings.outlook.m365Path ?? ""}
-            onChange={(event) => updateOutlook({ m365Path: event.target.value || null })}
-            placeholder="/opt/homebrew/bin/m365"
-            title={settings.outlook.m365Path ?? "/opt/homebrew/bin/m365"}
+            onChange={(event) => {
+              const value = event.target.value.trim();
+              updateOutlook({ m365Path: value || null });
+            }}
+            placeholder={effectiveM365Path ?? "/opt/homebrew/bin/m365"}
+            title={settings.outlook.m365Path ?? effectiveM365Path ?? "/opt/homebrew/bin/m365"}
             spellCheck={false}
           />
+          {!settings.outlook.m365Path && effectiveM365Path ? (
+            <small>Using workspace config: {effectiveM365Path}</small>
+          ) : null}
         </label>
         <label className="field">
           <span>{t("comms.maxResults")}</span>

@@ -1931,6 +1931,8 @@ function MainApp() {
       outlookLoadingRef.current = false;
       outlookRefreshCacheRef.current = { fetchedAt: null, key: "" };
       setOutlookMessages([]);
+      setOutlookLoading(false);
+      setOutlookError(null);
       setOutlookStatus("");
       return;
     }
@@ -1980,6 +1982,8 @@ function MainApp() {
       telegramLoadingRef.current = false;
       telegramRefreshCacheRef.current = { fetchedAt: null, key: "" };
       setTelegramMessages([]);
+      setTelegramLoading(false);
+      setTelegramError(null);
       return;
     }
     const refreshKey = JSON.stringify({
@@ -2582,12 +2586,6 @@ function MainApp() {
       unlistenConfigEvent?.();
     };
   }, [inboxWorkspacePath, refreshInbox, refreshProcessedItems]);
-
-  // Provider message lists are transient and refresh only inside Comms.
-  useEffect(() => {
-    if (appMode !== "comms") return;
-    void refreshCommsProviders();
-  }, [appMode, refreshCommsProviders]);
 
   useEffect(() => {
     if (appMode !== "comms") return;

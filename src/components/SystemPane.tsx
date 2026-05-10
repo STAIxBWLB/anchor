@@ -314,7 +314,7 @@ function CommsSettingsSystemTab({
     () => applyWorkspaceCommsOverrides(settings.comms, workspaceConfig),
     [settings.comms, workspaceConfig],
   );
-  const [draftComms, setDraftComms] = useState(effectiveComms);
+  const [draftComms, setDraftComms] = useState(settings.comms);
   const [config, setConfig] = useState<InboxRuntimeConfig>(() =>
     cloneInboxConfig(DEFAULT_INBOX_RUNTIME_CONFIG),
   );
@@ -339,13 +339,13 @@ function CommsSettingsSystemTab({
   );
   const gmail = config.gmail ?? DEFAULT_INBOX_RUNTIME_CONFIG.gmail;
   const dirty =
-    JSON.stringify(draftComms) !== JSON.stringify(effectiveComms) ||
+    JSON.stringify(draftComms) !== JSON.stringify(settings.comms) ||
     JSON.stringify(gmail) !==
       JSON.stringify(pristine.gmail ?? DEFAULT_INBOX_RUNTIME_CONFIG.gmail);
 
   useEffect(() => {
-    setDraftComms(effectiveComms);
-  }, [effectiveComms]);
+    setDraftComms(settings.comms);
+  }, [settings.comms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,6 +442,7 @@ function CommsSettingsSystemTab({
       {status ? <div className="save-state saved">{status}</div> : null}
       <CommsSettingsTab
         settings={draftComms}
+        effectiveSettings={effectiveComms}
         gmailSettings={gmail}
         effectiveGwsPath={effectiveGwsPath}
         telegramEnvHealthy={telegramEnvHealthy}
