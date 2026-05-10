@@ -332,6 +332,22 @@ export interface InboxDecisionOutcome {
 
 export type InboxDecisionValue = "pending" | "accepted" | "rejected";
 
+export type InboxTrashKind = "dropFile" | "pendingItem" | "processedItem";
+
+export interface InboxTrashTarget {
+  id: string;
+  kind: InboxTrashKind;
+  path: string;
+}
+
+export interface InboxTrashOutcome {
+  id: string;
+  kind: InboxTrashKind;
+  originalPath: string;
+  ok: boolean;
+  error: string | null;
+}
+
 export interface ScanOptions {
   includeDotFolders: string[];
 }

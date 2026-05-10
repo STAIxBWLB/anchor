@@ -48,6 +48,8 @@ import type {
   InboxDropStageRequest,
   InboxRuntimeConfig,
   InboxSettings,
+  InboxTrashOutcome,
+  InboxTrashTarget,
   MissionLogTail,
   MissionRecord,
   MemoDocument,
@@ -267,6 +269,22 @@ export async function readInboxProcessedItem(
     throw new Error("Processed inbox item details require the Tauri shell.");
   }
   return invoke<InboxProcessedItemDetail>("read_inbox_processed_item", { workPath, itemDir });
+}
+
+export async function trashInboxItems(
+  workPath: string,
+  targets: InboxTrashTarget[],
+): Promise<InboxTrashOutcome[]> {
+  if (!isTauri()) {
+    return targets.map((target) => ({
+      id: target.id,
+      kind: target.kind,
+      originalPath: target.path,
+      ok: true,
+      error: null,
+    }));
+  }
+  return invoke<InboxTrashOutcome[]>("trash_inbox_items", { workPath, targets });
 }
 
 export async function stageInboxDropFiles(

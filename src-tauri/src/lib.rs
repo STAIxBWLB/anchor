@@ -51,7 +51,7 @@ use gmail_gws::{decide_gmail_item, decide_gmail_items, fetch_gmail_unread};
 use inbox::{
     accept_inbox_item, accept_inbox_items, read_inbox_processed_item, reject_inbox_item,
     reject_inbox_items, scan_inbox_drop, scan_inbox_entries, scan_inbox_processed_items,
-    stage_inbox_drop_files,
+    stage_inbox_drop_files, trash_inbox_items,
 };
 use inbox_classifier::{build_inbox_classification_prompt, parse_inbox_classification};
 use inbox_settings::{
@@ -137,6 +137,7 @@ pub fn run() {
             scan_inbox_entries,
             scan_inbox_processed_items,
             read_inbox_processed_item,
+            trash_inbox_items,
             stage_inbox_drop_files,
             accept_inbox_item,
             accept_inbox_items,

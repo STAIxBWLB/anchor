@@ -90,6 +90,7 @@ import {
   stopTelegramPolling,
   telegramPollingStatus,
   trashDocument,
+  trashInboxItems,
   updateFrontmatterField,
   type LegacyLaunchdService,
 } from "./lib/api";
@@ -183,6 +184,7 @@ import type {
   InboxProcessedItemDetail,
   InboxProcessedStatus,
   InboxRuntimeConfig,
+  InboxTrashTarget,
   MissionRecord,
   VaultEntry,
   WorkspaceFileEntry,
@@ -2414,6 +2416,44 @@ function MainApp() {
       void decideInboxKeys(keys.filter((key) => key.startsWith("file:")), "accepted", trimmed);
     },
     [decideInboxKeys],
+  );
+
+  const trashInboxTargets = useCallback(
+    async (targets: InboxTrashTarget[]) => {
+      if (!inboxWorkspacePath || targets.length === 0) return;
+      const title =
+        targets.length === 1
+          ? targets[0].id
+          : t("inbox.menu.selectionTitle", { count: targets.length });
+      if (!window.confirm(t("inbox.delete.confirm", { count: targets.length, name: title }))) {
+        return;
+      }
+      setInboxActionBusy(true);
+      setError(null);
+      try {
+        const outcomes = await trashInboxItems(inboxWorkspacePath, targets);
+        const failed = outcomes.filter((outcome) => !outcome.ok);
+        if (targets.some((target) => target.kind === "processedItem" && target.path === processedDetail?.item.itemDir)) {
+          setProcessedDetail(null);
+        }
+        await Promise.all([refreshInbox(), refreshProcessedItems()]);
+        if (failed.length > 0) {
+          setError(
+            [
+              t("inbox.delete.partialFailure", { count: failed.length }),
+              ...failed.map((outcome) => outcome.error).filter(Boolean),
+            ].join("\n"),
+          );
+        } else {
+          setError(t("inbox.delete.success", { count: outcomes.length }));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setInboxActionBusy(false);
+      }
+    },
+    [inboxWorkspacePath, processedDetail?.item.itemDir, refreshInbox, refreshProcessedItems, t],
   );
 
   const processInboxKeys = useCallback(
@@ -5461,6 +5501,7 @@ function MainApp() {
             onRevealPath={(path) => {
               if (inboxWorkspacePath) void revealInFileManager(inboxWorkspacePath, path);
             }}
+            onTrashItems={(targets) => void trashInboxTargets(targets)}
             onStopProcessingMission={(id) => void stopProcessingMission(id)}
           />
         ) : appMode === "comms" ? (

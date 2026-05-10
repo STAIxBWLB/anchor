@@ -5,9 +5,12 @@ import {
   countInboxSources,
   filterProcessedItems,
   firstPendingInboxKey,
+  inboxContextActionKeys,
   inboxEntryProcessPath,
+  inboxTrashTargetsForRows,
   isInboxProcessMission,
   nextInboxFocusKey,
+  shouldHandleInboxDeleteShortcut,
   toggleInboxSelectionKeys,
 } from "../lib/inbox";
 import type { InboxEntry, InboxProcessedItem, InboxRuntimeConfig, MissionRecord } from "../lib/types";
@@ -46,6 +49,39 @@ describe("inbox keyboard helpers", () => {
       true,
     );
     expect([...selected]).toEqual(["entry:a", "file:b", "file:c"]);
+  });
+
+  it("uses the full selection for a selected context-menu target", () => {
+    expect(inboxContextActionKeys(new Set(["file:a", "file:b"]), "file:a")).toEqual([
+      "file:a",
+      "file:b",
+    ]);
+    expect(inboxContextActionKeys(new Set(["file:a", "file:b"]), "file:c")).toEqual(["file:c"]);
+  });
+
+  it("maps selected inbox rows to trash targets while dropping unsupported keys", () => {
+    const targets = inboxTrashTargetsForRows(
+      [
+        {
+          key: "entry:a",
+          trashTarget: { id: "entry-a", kind: "pendingItem", path: "/work/inbox/items/pending/a" },
+        },
+        {
+          key: "file:a",
+          trashTarget: { id: "inbox/downloads/a.txt", kind: "dropFile", path: "/work/inbox/downloads/a.txt" },
+        },
+      ],
+      ["entry:a", "missing", "file:a"],
+    );
+    expect(targets.map((target) => target.kind)).toEqual(["pendingItem", "dropFile"]);
+  });
+
+  it("handles Delete and Backspace only outside text inputs", () => {
+    expect(shouldHandleInboxDeleteShortcut({ key: "Delete", targetTag: "article" })).toBe(true);
+    expect(shouldHandleInboxDeleteShortcut({ key: "Backspace", targetTag: "div" })).toBe(true);
+    expect(shouldHandleInboxDeleteShortcut({ key: "Delete", targetTag: "input" })).toBe(false);
+    expect(shouldHandleInboxDeleteShortcut({ key: "Delete", isContentEditable: true })).toBe(false);
+    expect(shouldHandleInboxDeleteShortcut({ key: "Delete", metaKey: true })).toBe(false);
   });
 
   it("keeps configured and staged file row order without collapse filtering", () => {

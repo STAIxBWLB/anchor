@@ -5,6 +5,7 @@ import type {
   InboxProcessedItem,
   InboxProcessedStatus,
   InboxRuntimeConfig,
+  InboxTrashTarget,
   MissionRecord,
 } from "./types";
 
@@ -74,6 +75,50 @@ export function buildInboxFeedRowKeys({
     ...entries.map((entry) => `entry:${entry.id}`),
     ...files.map((entry) => `file:${entry.item.id}`),
   ];
+}
+
+export interface InboxTrashableRow {
+  key: string;
+  trashTarget: InboxTrashTarget | null;
+}
+
+export function inboxContextActionKeys(
+  selectedKeys: Iterable<string>,
+  targetKey: string,
+): string[] {
+  const selected = [...selectedKeys];
+  return selected.includes(targetKey) ? selected : [targetKey];
+}
+
+export function inboxTrashTargetsForRows(
+  rows: InboxTrashableRow[],
+  keys: string[],
+): InboxTrashTarget[] {
+  const byKey = new Map(rows.map((row) => [row.key, row.trashTarget] as const));
+  return keys
+    .map((key) => byKey.get(key) ?? null)
+    .filter((target): target is InboxTrashTarget => target !== null);
+}
+
+export function shouldHandleInboxDeleteShortcut({
+  key,
+  metaKey = false,
+  ctrlKey = false,
+  altKey = false,
+  targetTag = null,
+  isContentEditable = false,
+}: {
+  key: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  targetTag?: string | null;
+  isContentEditable?: boolean;
+}): boolean {
+  if (metaKey || ctrlKey || altKey) return false;
+  if (key !== "Delete" && key !== "Backspace") return false;
+  const tag = targetTag?.toLowerCase() ?? "";
+  return tag !== "input" && tag !== "textarea" && !isContentEditable;
 }
 
 export function categoryLabel(category: string): string {
