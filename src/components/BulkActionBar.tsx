@@ -5,6 +5,7 @@ interface BulkActionBarProps {
   count: number;
   fileCount: number;
   entryCount: number;
+  decisionCount: number;
   busy?: boolean;
   onAccept: () => void;
   onReject: () => void;
@@ -17,6 +18,7 @@ export function BulkActionBar({
   count,
   fileCount,
   entryCount,
+  decisionCount,
   busy = false,
   onAccept,
   onReject,
@@ -28,11 +30,17 @@ export function BulkActionBar({
   return (
     <div className="bulk-action-bar" role="toolbar" aria-label="Selected inbox actions">
       <strong>선택 {count}건</strong>
-      <Button type="button" size="sm" disabled={busy} onClick={onAccept}>
+      <Button type="button" size="sm" disabled={busy || decisionCount === 0} onClick={onAccept}>
         <Check size={14} />
         모두 accept
       </Button>
-      <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onReject}>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={busy || decisionCount === 0}
+        onClick={onReject}
+      >
         <X size={14} />
         모두 reject
       </Button>

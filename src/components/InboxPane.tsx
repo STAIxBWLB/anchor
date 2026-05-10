@@ -157,8 +157,13 @@ export function InboxPane({
     () => rows.filter((row) => selectedKeys.has(row.key)),
     [rows, selectedKeys],
   );
+  const selectedDecisionKeys = useMemo(
+    () => selected.filter((row) => row.kind !== "entry").map((row) => row.key),
+    [selected],
+  );
   const selectedFileCount = selected.filter((row) => row.kind === "file").length;
   const selectedEntryCount = selected.filter((row) => row.kind === "entry").length;
+  const selectedDecisionCount = selectedDecisionKeys.length;
 
   useEffect(() => {
     const valid = new Set(rows.map((row) => row.key));
@@ -815,9 +820,10 @@ export function InboxPane({
         count={selectedKeys.size}
         fileCount={selectedFileCount}
         entryCount={selectedEntryCount}
+        decisionCount={selectedDecisionCount}
         busy={actionBusy}
-        onAccept={() => void onBulkAccept([...selectedKeys])}
-        onReject={() => void onBulkReject([...selectedKeys])}
+        onAccept={() => void onBulkAccept(selectedDecisionKeys)}
+        onReject={() => void onBulkReject(selectedDecisionKeys)}
         onMoveFiles={() => void onBulkMoveFiles([...selectedKeys])}
         onProcess={() => void onProcessEntries([...selectedKeys])}
         onCancel={() => setSelectedKeys(new Set())}
