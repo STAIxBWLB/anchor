@@ -154,11 +154,14 @@ struct PendingManifestMetadata {
     source_kind: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct ProcessedManifest {
-    id: String,
-    status: String,
-    channel: String,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    channel: Option<String>,
     #[serde(default)]
     provider: Option<String>,
     #[serde(default)]
@@ -171,10 +174,10 @@ struct ProcessedManifest {
     metadata: ProcessedManifestMetadata,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct ProcessedManifestFile {
-    #[serde(rename = "path")]
-    _path: String,
+    #[serde(default, rename = "path")]
+    path: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -810,7 +813,26 @@ fn build_processed_item(
         .as_deref()
         .map(split_markdown_frontmatter)
         .unwrap_or((None, ""));
-    let title = yaml_string(summary_meta.as_ref(), "title").unwrap_or_else(|| manifest.id.clone());
+    let fallback_id = item_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let id = manifest
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback_id.as_str())
+        .to_string();
+    let channel = manifest
+        .channel
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown")
+        .to_string();
+    let title = yaml_string(summary_meta.as_ref(), "title").unwrap_or_else(|| id.clone());
     let description = yaml_string(summary_meta.as_ref(), "description");
     let project = yaml_string(summary_meta.as_ref(), "project")
         .or_else(|| yaml_string(route_meta.as_ref(), "project"))
@@ -820,19 +842,26 @@ fn build_processed_item(
     let provider = manifest.provider.or_else(|| {
         config
             .channels
-            .get(&manifest.channel)
+            .get(&channel)
             .map(|channel| channel.provider.clone())
     });
     let kind = manifest.kind.or(manifest.metadata.source_kind);
-    let status = if manifest.status.trim().is_empty() {
-        folder_status.to_string()
+    let status = manifest
+        .status
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(folder_status)
+        .to_string();
+    let manifest_raw_file_count = manifest
+        .files
+        .iter()
+        .filter(|file| file.path.as_deref().map(str::trim).is_some_and(|path| !path.is_empty()))
+        .count();
+    let raw_file_count = if manifest_raw_file_count > 0 {
+        manifest_raw_file_count
     } else {
-        manifest.status
-    };
-    let raw_file_count = if manifest.files.is_empty() {
         count_raw_files(item_dir, &config.naming.raw_dir)?
-    } else {
-        manifest.files.len()
     };
     let updated_at = latest_modified_time(&[
         manifest_path.as_path(),
@@ -842,9 +871,9 @@ fn build_processed_item(
     ]);
 
     Ok(InboxProcessedItem {
-        id: manifest.id,
+        id,
         status,
-        channel: manifest.channel,
+        channel,
         provider,
         kind,
         received_at: manifest.received_at,
@@ -1833,6 +1862,70 @@ inbox:
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].id, "bad");
         assert!(items[0].error.as_deref().unwrap().contains("Cannot parse"));
+    }
+
+    #[test]
+    fn processed_manifest_allows_file_entries_without_raw_path() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        write_processed_config(root, "summary.md", "route.md", "extracted.md");
+        let dir = root.join("inbox/items/done/no-raw");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("manifest.yaml"),
+            r#"
+id: no-raw
+status: done
+channel: kakao
+files:
+  - original_name: source.txt
+"#,
+        )
+        .unwrap();
+        fs::write(
+            dir.join("summary.md"),
+            "---\ntitle: no raw\n---\n\nsummary\n",
+        )
+        .unwrap();
+
+        let items =
+            scan_inbox_processed_items(root.to_string_lossy().to_string(), None, None, None)
+                .unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "no-raw");
+        assert_eq!(items[0].raw_file_count, 0);
+        assert!(items[0].error.is_none());
+    }
+
+    #[test]
+    fn processed_manifest_uses_folder_fallbacks_for_missing_identity_fields() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        write_processed_config(root, "summary.md", "route.md", "extracted.md");
+        let dir = root.join("inbox/items/failed/missing-fields");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("manifest.yaml"), "files:\n  - original_name: source.txt\n").unwrap();
+        fs::write(
+            dir.join("summary.md"),
+            "---\ndescription: field sparse item\n---\n\nsummary\n",
+        )
+        .unwrap();
+
+        let items = scan_inbox_processed_items(
+            root.to_string_lossy().to_string(),
+            Some(vec!["failed".to_string()]),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "missing-fields");
+        assert_eq!(items[0].title, "missing-fields");
+        assert_eq!(items[0].status, "failed");
+        assert_eq!(items[0].channel, "unknown");
+        assert!(items[0].error.is_none());
     }
 
     #[test]

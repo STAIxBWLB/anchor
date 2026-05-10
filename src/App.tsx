@@ -190,6 +190,7 @@ import {
   restoreMainWindowLayout,
   startWindowDrag,
   subscribeMainWindowLayout,
+  tauriAvailable,
 } from "./lib/windowLayout";
 import { resolveWikilinkTarget } from "./lib/wikilinkSuggestions";
 import {
@@ -1234,8 +1235,46 @@ function MainApp() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!tauriAvailable()) return;
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    let closing = false;
+
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        if (disposed) return;
+        const appWindow = getCurrentWindow();
+        if (appWindow.label !== "main") return;
+        return appWindow.onCloseRequested(async (event) => {
+          if (closing) return;
+          event.preventDefault();
+          closing = true;
+          try {
+            await settingsSaverRef.current?.flush();
+          } finally {
+            await appWindow.close();
+          }
+        });
+      })
+      .then((off) => {
+        if (!off) return;
+        if (disposed) off();
+        else unlisten = off;
+      })
+      .catch(() => {});
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const updateSettings = useCallback(
-    (updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings)) => {
+    (
+      updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings),
+      options?: { flush?: boolean },
+    ) => {
       setAnchorSettings((current) => {
         const next = normalizeAnchorSettings(
           typeof updater === "function" ? updater(current) : updater,
@@ -1247,6 +1286,9 @@ function MainApp() {
               settingsSaveBaseRef.current = current;
             }
             saver.schedule(next);
+            if (options?.flush) {
+              void saver.flush();
+            }
           } else {
             void saveAnchorSettings(settingsWorkPath, next, current).catch((err) => {
               setError(err instanceof Error ? err.message : String(err));
@@ -1260,7 +1302,10 @@ function MainApp() {
   );
 
   const updateLayoutSettings = useCallback(
-    (patch: Partial<AnchorSettings["ui"]["layout"]>) => {
+    (
+      patch: Partial<AnchorSettings["ui"]["layout"]>,
+      options?: { flush?: boolean },
+    ) => {
       updateSettings((current) => {
         const layout = {
           ...current.ui.layout,
@@ -1278,7 +1323,7 @@ function MainApp() {
             lastHeight: layout.terminalHeight,
           },
         };
-      });
+      }, options);
     },
     [updateSettings],
   );
@@ -5238,7 +5283,9 @@ function MainApp() {
           splitOpen={anchorSettings.ui.layout.terminalSplitOpen}
           splitRatio={anchorSettings.ui.layout.terminalSplitRatio}
           maximized={anchorSettings.ui.layout.terminalMaximized}
-          onOpenChange={(terminalOpen) => updateLayoutSettings({ terminalOpen })}
+          onOpenChange={(terminalOpen) =>
+            updateLayoutSettings({ terminalOpen }, { flush: true })
+          }
           onHeightChange={(terminalHeight) => updateLayoutSettings({ terminalHeight })}
           onSplitOpenChange={(terminalSplitOpen) =>
             updateLayoutSettings({ terminalSplitOpen, terminalOpen: true })
