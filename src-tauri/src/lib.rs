@@ -41,8 +41,9 @@ use file_manager::reveal_in_file_manager;
 use git::{git_changes, git_commit, git_diff, git_status, git_status_fast};
 use gmail_gws::{decide_gmail_item, decide_gmail_items, fetch_gmail_unread};
 use inbox::{
-    accept_inbox_item, accept_inbox_items, reject_inbox_item, reject_inbox_items, scan_inbox_drop,
-    scan_inbox_entries, stage_inbox_drop_files,
+    accept_inbox_item, accept_inbox_items, read_inbox_processed_item, reject_inbox_item,
+    reject_inbox_items, scan_inbox_drop, scan_inbox_entries, scan_inbox_processed_items,
+    stage_inbox_drop_files,
 };
 use inbox_classifier::{build_inbox_classification_prompt, parse_inbox_classification};
 use inbox_settings::{
@@ -50,7 +51,7 @@ use inbox_settings::{
 };
 use inbox_watcher::{start_inbox_watcher, stop_inbox_watcher, InboxWatcherState};
 use korean_date::parse_korean_date_cmd;
-use mission_state::{list_ai_missions, stop_ai_mission, MissionState};
+use mission_state::{list_ai_missions, read_ai_mission_log, stop_ai_mission, MissionState};
 use shelf::{
     delete_memo, list_memos, read_memo, save_memo, save_memo_as, store_shelf_files,
     store_shelf_files_as,
@@ -118,6 +119,8 @@ pub fn run() {
             reveal_in_file_manager,
             scan_inbox_drop,
             scan_inbox_entries,
+            scan_inbox_processed_items,
+            read_inbox_processed_item,
             stage_inbox_drop_files,
             accept_inbox_item,
             accept_inbox_items,
@@ -139,6 +142,7 @@ pub fn run() {
             save_memo_as,
             start_claude_cli_invocation,
             list_ai_missions,
+            read_ai_mission_log,
             stop_ai_mission,
             terminal_spawn,
             terminal_write,

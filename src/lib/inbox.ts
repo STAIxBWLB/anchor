@@ -2,7 +2,10 @@ import type {
   InboxClassification,
   InboxDropItem,
   InboxEntry,
+  InboxProcessedItem,
+  InboxProcessedStatus,
   InboxRuntimeConfig,
+  MissionRecord,
 } from "./types";
 
 export type InboxDecision = "pending" | "accepted" | "rejected";
@@ -169,4 +172,59 @@ export function buildInboxProcessPrompt({
     "Configured inbox.naming:",
     JSON.stringify(config.naming, null, 2),
   ].join("\n");
+}
+
+export function filterProcessedItems(
+  items: InboxProcessedItem[],
+  status: InboxProcessedStatus | "all",
+  query: string,
+): InboxProcessedItem[] {
+  const needle = query.trim().toLowerCase();
+  return sortProcessedItemsNewestFirst(
+    items.filter((item) => {
+      if (status !== "all" && item.status !== status) return false;
+      if (!needle) return true;
+      return [
+        item.id,
+        item.channel,
+        item.title,
+        item.project ?? "",
+        item.classification ?? "",
+        item.routeStatus ?? "",
+        item.summaryPreview,
+      ].some((value) => value.toLowerCase().includes(needle));
+    }),
+  );
+}
+
+export function sortProcessedItemsNewestFirst(
+  items: InboxProcessedItem[],
+): InboxProcessedItem[] {
+  return [...items].sort((a, b) => {
+    const aTime = Date.parse(a.receivedAt ?? a.updatedAt ?? "");
+    const bTime = Date.parse(b.receivedAt ?? b.updatedAt ?? "");
+    if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+      return bTime - aTime;
+    }
+    if (Number.isFinite(bTime) && !Number.isFinite(aTime)) return 1;
+    if (Number.isFinite(aTime) && !Number.isFinite(bTime)) return -1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+export function isInboxProcessMission(record: MissionRecord): boolean {
+  const metadata = record.metadata;
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    "origin" in metadata &&
+    metadata.origin === "inboxProcess"
+  );
+}
+
+export function activeInboxProcessMissions(records: MissionRecord[]): MissionRecord[] {
+  return records
+    .filter(isInboxProcessMission)
+    .filter((record) => record.status === "running" || record.status === "idle")
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }

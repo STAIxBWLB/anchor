@@ -1,14 +1,19 @@
 import {
+  AlertTriangle,
   Brain,
   Check,
+  Clock3,
   FilePlus2,
+  FileText,
   HelpCircle,
   Inbox,
   Loader2,
   Mail,
   Play,
   RefreshCcw,
+  Search,
   Settings,
+  Square,
   Upload,
   X,
 } from "lucide-react";
@@ -30,7 +35,14 @@ import {
   type InboxItemState,
 } from "../lib/inbox";
 import { useTranslation } from "../lib/i18n";
-import type { InboxEntry, InboxFileDropConfig } from "../lib/types";
+import type {
+  InboxEntry,
+  InboxFileDropConfig,
+  InboxProcessedItem,
+  InboxProcessedItemDetail,
+  InboxProcessedStatus,
+  MissionRecord,
+} from "../lib/types";
 import { BulkActionBar } from "./BulkActionBar";
 
 interface InboxPaneProps {
@@ -41,6 +53,14 @@ interface InboxPaneProps {
   gmailLoading: boolean;
   gmailError: string | null;
   gmailStatus: string;
+  processedItems: InboxProcessedItem[];
+  processedLoading: boolean;
+  processedError: string | null;
+  processedStatusFilter: InboxProcessedStatus | "all";
+  processedQuery: string;
+  processedDetail: InboxProcessedItemDetail | null;
+  processingMissions: MissionRecord[];
+  processingLogLines: Record<string, string[]>;
   sourceFilter: string | null;
   onSourceFilter: (source: string | null) => void;
   fileDropTarget: InboxFileDropConfig;
@@ -56,6 +76,12 @@ interface InboxPaneProps {
   onBulkMoveFiles: (keys: string[]) => void | Promise<void>;
   onProcessEntries: (keys: string[]) => void | Promise<void>;
   onStageFiles: (paths: string[]) => void | Promise<void>;
+  onProcessedStatusFilter: (status: InboxProcessedStatus | "all") => void;
+  onProcessedQuery: (query: string) => void;
+  onRefreshProcessed: () => void;
+  onSelectProcessedItem: (item: InboxProcessedItem) => void | Promise<void>;
+  onRevealPath: (path: string) => void;
+  onStopProcessingMission: (id: string) => void | Promise<void>;
 }
 
 type InboxRow =
@@ -71,6 +97,14 @@ export function InboxPane({
   gmailLoading,
   gmailError,
   gmailStatus,
+  processedItems,
+  processedLoading,
+  processedError,
+  processedStatusFilter,
+  processedQuery,
+  processedDetail,
+  processingMissions,
+  processingLogLines,
   sourceFilter,
   onSourceFilter,
   fileDropTarget,
@@ -86,6 +120,12 @@ export function InboxPane({
   onBulkMoveFiles,
   onProcessEntries,
   onStageFiles,
+  onProcessedStatusFilter,
+  onProcessedQuery,
+  onRefreshProcessed,
+  onSelectProcessedItem,
+  onRevealPath,
+  onStopProcessingMission,
 }: InboxPaneProps) {
   const { t, locale } = useTranslation();
   const paneRef = useRef<HTMLElement | null>(null);
@@ -94,6 +134,8 @@ export function InboxPane({
   const [lastSelectedKey, setLastSelectedKey] = useState<string | null>(null);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [dragOverDrop, setDragOverDrop] = useState(false);
+  const [processedDetailTab, setProcessedDetailTab] =
+    useState<"summary" | "route" | "manifest" | "extracted">("summary");
   const sources = useMemo(() => uniqueSources(items), [items]);
   const sourceCounts = useMemo(() => countInboxSources(items), [items]);
   const visibleItems = useMemo(
@@ -428,6 +470,129 @@ export function InboxPane({
             </div>
         </InboxSection>
 
+        <InboxSection title="PROCESSING">
+          <div className="processing-panel">
+            {processingMissions.length === 0 ? (
+              <div className="processing-empty">
+                <Clock3 size={16} />
+                <span>No active inbox process.</span>
+              </div>
+            ) : null}
+            {processingMissions.map((mission) => {
+              const lines = processingLogLines[mission.id] ?? [];
+              const channel = inboxProcessChannel(mission);
+              return (
+                <article className={`processing-card ${mission.status}`} key={mission.id}>
+                  <div className="processing-card-header">
+                    <div>
+                      <strong>{channel ? `inbox-process ${channel}` : "inbox-process"}</strong>
+                      <span>{mission.status} · {mission.startedAt}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="button button-ghost button-sm"
+                      onClick={() => void onStopProcessingMission(mission.id)}
+                      title="Stop processing"
+                    >
+                      <Square size={12} />
+                      <span>Stop</span>
+                    </button>
+                  </div>
+                  <pre className="processing-log">
+                    {lines.length > 0 ? lines.join("\n") : "Waiting for output..."}
+                  </pre>
+                </article>
+              );
+            })}
+          </div>
+        </InboxSection>
+
+        <InboxSection title="PROCESSED ITEMS">
+          <div className="processed-toolbar">
+            <div className="processed-status-chips" role="toolbar" aria-label="Processed status">
+              {(["all", "done", "failed", "duplicate"] as Array<InboxProcessedStatus | "all">).map((status) => (
+                <button
+                  type="button"
+                  key={status}
+                  className={processedStatusFilter === status ? "inbox-filter-chip active" : "inbox-filter-chip"}
+                  onClick={() => onProcessedStatusFilter(status)}
+                >
+                  {statusLabel(status)}
+                </button>
+              ))}
+            </div>
+            <label className="processed-search">
+              <Search size={13} />
+              <input
+                value={processedQuery}
+                onChange={(event) => onProcessedQuery(event.target.value)}
+                placeholder="Search processed items"
+                spellCheck={false}
+              />
+            </label>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={onRefreshProcessed}
+              title="Refresh processed items"
+              aria-label="Refresh processed items"
+            >
+              <RefreshCcw size={14} />
+            </button>
+          </div>
+          <div className="processed-layout">
+            <div className="processed-list">
+              {processedLoading ? <div className="inbox-empty">Loading processed items...</div> : null}
+              {processedError ? <div className="inbox-error gmail-error">{processedError}</div> : null}
+              {!processedLoading && !processedError && processedItems.length === 0 ? (
+                <div className="inbox-empty">
+                  <FileText size={22} />
+                  <strong>No processed items</strong>
+                  <span>Done, failed, and duplicate items from inbox/items will appear here.</span>
+                </div>
+              ) : null}
+              {processedItems.map((item) => (
+                <button
+                  type="button"
+                  key={`${item.status}:${item.id}`}
+                  className={
+                    processedDetail?.item.itemDir === item.itemDir
+                      ? `processed-row active ${item.status}`
+                      : `processed-row ${item.status}`
+                  }
+                  onClick={() => void onSelectProcessedItem(item)}
+                >
+                  <div className="processed-row-title">
+                    <span className={`status-chip ${item.status}`}>{statusLabel(item.status)}</span>
+                    <strong>{item.title || item.id}</strong>
+                  </div>
+                  <div className="processed-row-meta">
+                    <span>{item.channel}</span>
+                    {item.project ? <span>{item.project}</span> : null}
+                    {item.classification ? <span>{item.classification}</span> : null}
+                    {item.receivedAt ? <time>{formatShortDate(item.receivedAt)}</time> : null}
+                  </div>
+                  {item.summaryPreview ? <p>{item.summaryPreview}</p> : null}
+                  {item.error ? (
+                    <div className="processed-row-error">
+                      <AlertTriangle size={13} />
+                      <span>{item.error}</span>
+                    </div>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+            {processedDetail ? (
+              <ProcessedDetailPanel
+                detail={processedDetail}
+                tab={processedDetailTab}
+                onTab={setProcessedDetailTab}
+                onRevealPath={onRevealPath}
+              />
+            ) : null}
+          </div>
+        </InboxSection>
+
         <InboxSection
           title="FILES"
         >
@@ -678,6 +843,130 @@ function InboxSection({
       {children}
     </section>
   );
+}
+
+function ProcessedDetailPanel({
+  detail,
+  tab,
+  onTab,
+  onRevealPath,
+}: {
+  detail: InboxProcessedItemDetail;
+  tab: "summary" | "route" | "manifest" | "extracted";
+  onTab: (tab: "summary" | "route" | "manifest" | "extracted") => void;
+  onRevealPath: (path: string) => void;
+}) {
+  const tabs = [
+    { key: "summary" as const, label: "Summary", value: detail.summaryText },
+    { key: "route" as const, label: "Route", value: detail.routeText },
+    { key: "manifest" as const, label: "Manifest", value: detail.manifestText },
+    { key: "extracted" as const, label: "Extracted", value: detail.extractedText },
+  ];
+  const active = tabs.find((item) => item.key === tab) ?? tabs[0];
+  const artifactPath =
+    tab === "summary"
+      ? detail.item.summaryPath
+      : tab === "route"
+        ? detail.item.routePath
+        : tab === "manifest"
+          ? detail.item.manifestPath
+          : detail.item.extractedPath;
+
+  return (
+    <aside className="processed-detail">
+      <div className="processed-detail-header">
+        <div>
+          <strong>{detail.item.title || detail.item.id}</strong>
+          <span>{detail.item.channel} · {detail.item.status}</span>
+        </div>
+        <button
+          type="button"
+          className="button button-ghost button-sm"
+          onClick={() => onRevealPath(detail.item.itemDir)}
+        >
+          Reveal
+        </button>
+      </div>
+      <div className="processed-tabs" role="tablist">
+        {tabs.map((item) => (
+          <button
+            type="button"
+            key={item.key}
+            className={tab === item.key ? "active" : ""}
+            onClick={() => onTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="processed-artifact-path">
+        <span>{artifactPath ?? "Artifact not present"}</span>
+        {artifactPath ? (
+          <button type="button" className="link-button" onClick={() => onRevealPath(artifactPath)}>
+            Reveal
+          </button>
+        ) : null}
+      </div>
+      <pre className="processed-artifact">
+        {active.value ?? "No artifact content."}
+        {tab === "extracted" && detail.extractedTruncated ? "\n\n[truncated]" : ""}
+      </pre>
+      {detail.rawFiles.length > 0 ? (
+        <div className="processed-raw-files">
+          <strong>Raw files</strong>
+          {detail.rawFiles.map((file) => (
+            <button
+              type="button"
+              key={file.path}
+              className="link-button"
+              onClick={() => onRevealPath(file.path)}
+            >
+              {file.relPath} · {formatBytes(file.sizeBytes)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function statusLabel(status: string): string {
+  switch (status) {
+    case "all":
+      return "All";
+    case "done":
+      return "Done";
+    case "failed":
+      return "Failed";
+    case "duplicate":
+      return "Duplicate";
+    default:
+      return status;
+  }
+}
+
+function inboxProcessChannel(mission: MissionRecord): string | null {
+  const metadata = mission.metadata;
+  if (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    "channel" in metadata &&
+    typeof metadata.channel === "string"
+  ) {
+    return metadata.channel;
+  }
+  return null;
+}
+
+function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function firstPendingKey(rows: InboxRow[]): string | null {

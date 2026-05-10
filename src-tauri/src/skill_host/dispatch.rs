@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -122,6 +123,7 @@ pub fn skills_dispatch_background(
     prompt: String,
     cwd: Option<String>,
     context: Option<Vec<SkillContextItem>>,
+    metadata: Option<JsonValue>,
 ) -> Result<String, String> {
     let composition = compose(skill_id, prompt, cwd, context.unwrap_or_default())?;
     let runtime = normalize_runtime(&runtime)?;
@@ -141,7 +143,15 @@ pub fn skills_dispatch_background(
             for dir in add_dirs {
                 cmd.arg("--add-dir").arg(dir);
             }
-            spawn_background(app, invocation_id, cmd, composition.cwd, env, None)
+            spawn_background(
+                app,
+                invocation_id,
+                cmd,
+                composition.cwd,
+                env,
+                None,
+                metadata,
+            )
         }
         "codex" => {
             let bin = resolve_program("codex").ok_or_else(|| {
@@ -160,6 +170,7 @@ pub fn skills_dispatch_background(
                 composition.cwd,
                 env,
                 Some(composition.prompt),
+                metadata,
             )
         }
         _ => Err(format!("unsupported_dispatch_runtime: {runtime}")),
@@ -283,6 +294,7 @@ fn spawn_background(
     cwd: String,
     env: BTreeMap<String, String>,
     stdin_payload: Option<String>,
+    metadata: Option<JsonValue>,
 ) -> Result<String, String> {
     cmd.current_dir(cwd)
         .stdin(if stdin_payload.is_some() {
@@ -324,7 +336,13 @@ fn spawn_background(
         "stderr".to_string(),
         stderr,
     );
-    let _ = mission_state::register_mission(&app, &invocation_id, "skill", child_pid);
+    let _ = mission_state::register_mission_with_metadata(
+        &app,
+        &invocation_id,
+        "skill",
+        child_pid,
+        metadata,
+    );
     let app_done = app.clone();
     let id_done = invocation_id.clone();
     thread::spawn(move || match child.wait() {

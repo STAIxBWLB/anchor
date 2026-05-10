@@ -212,6 +212,47 @@ export interface InboxEntry {
   receivedAt: string | null;
 }
 
+export type InboxProcessedStatus = "done" | "failed" | "duplicate";
+
+export interface InboxProcessedItem {
+  id: string;
+  status: InboxProcessedStatus | string;
+  channel: string;
+  provider: string | null;
+  kind: string | null;
+  receivedAt: string | null;
+  itemDir: string;
+  manifestPath: string;
+  summaryPath: string | null;
+  routePath: string | null;
+  extractedPath: string | null;
+  title: string;
+  description: string | null;
+  project: string | null;
+  classification: string | null;
+  routeStatus: string | null;
+  summaryPreview: string;
+  rawFileCount: number;
+  updatedAt: string | null;
+  error: string | null;
+}
+
+export interface InboxProcessedRawFile {
+  path: string;
+  relPath: string;
+  sizeBytes: number;
+}
+
+export interface InboxProcessedItemDetail {
+  item: InboxProcessedItem;
+  manifestText: string;
+  summaryText: string | null;
+  routeText: string | null;
+  extractedText: string | null;
+  extractedTruncated: boolean;
+  rawFiles: InboxProcessedRawFile[];
+}
+
 export interface InboxAcceptRequest {
   id: string;
   targetFolder?: string | null;
@@ -307,6 +348,16 @@ export type ApprovalDecision = "pending" | "approved" | "rejected";
 
 export type MissionStatus = "running" | "idle" | "done" | "failed" | "stopped";
 
+export interface InboxProcessMissionMetadata {
+  origin: "inboxProcess";
+  channel: string;
+  inputPaths: string[];
+  workspacePath?: string | null;
+  skillName?: string | null;
+}
+
+export type MissionMetadata = InboxProcessMissionMetadata | Record<string, unknown>;
+
 export interface MissionRecord {
   id: string;
   kind: string;
@@ -315,6 +366,12 @@ export interface MissionRecord {
   status: MissionStatus;
   exitCode: number | null;
   outputLogPath: string | null;
+  metadata?: MissionMetadata | null;
+}
+
+export interface MissionLogTail {
+  invocationId: string;
+  lines: string[];
 }
 
 /** Per-workspace inbox configuration persisted at `<workspace>/.anchor/inbox.json`. */

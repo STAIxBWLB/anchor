@@ -10,7 +10,9 @@ use crate::workspace_files::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_yaml::Value as YamlValue;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 use walkdir::WalkDir;
@@ -90,6 +92,51 @@ pub struct InboxEntry {
     pub received_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxProcessedItem {
+    pub id: String,
+    pub status: String,
+    pub channel: String,
+    pub provider: Option<String>,
+    pub kind: Option<String>,
+    pub received_at: Option<String>,
+    pub item_dir: String,
+    pub manifest_path: String,
+    pub summary_path: Option<String>,
+    pub route_path: Option<String>,
+    pub extracted_path: Option<String>,
+    pub title: String,
+    pub description: Option<String>,
+    pub project: Option<String>,
+    pub classification: Option<String>,
+    pub route_status: Option<String>,
+    pub summary_preview: String,
+    pub raw_file_count: usize,
+    pub updated_at: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxProcessedRawFile {
+    pub path: String,
+    pub rel_path: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxProcessedItemDetail {
+    pub item: InboxProcessedItem,
+    pub manifest_text: String,
+    pub summary_text: Option<String>,
+    pub route_text: Option<String>,
+    pub extracted_text: Option<String>,
+    pub extracted_truncated: bool,
+    pub raw_files: Vec<InboxProcessedRawFile>,
+}
+
 #[derive(Debug, Deserialize)]
 struct PendingManifest {
     id: String,
@@ -105,6 +152,43 @@ struct PendingManifest {
 struct PendingManifestMetadata {
     #[serde(default)]
     source_kind: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProcessedManifest {
+    id: String,
+    status: String,
+    channel: String,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    received_at: Option<String>,
+    #[serde(default)]
+    files: Vec<ProcessedManifestFile>,
+    #[serde(default)]
+    metadata: ProcessedManifestMetadata,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProcessedManifestFile {
+    #[serde(rename = "path")]
+    _path: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ProcessedManifestMetadata {
+    #[serde(default)]
+    source_kind: Option<String>,
+    #[serde(default)]
+    processing_hints: ProcessedProcessingHints,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ProcessedProcessingHints {
+    #[serde(default)]
+    project: Option<String>,
 }
 
 const INBOX_FILE_ACCEPT_KIND: &str = "inbox.file.accept";
@@ -131,6 +215,28 @@ pub fn scan_inbox_entries(
     let scan_filter = ScanFilter::from_options(scan_options)?;
     let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
     scan_inbox_entries_with_config(&work, &config, &scan_filter)
+}
+
+#[tauri::command]
+pub fn scan_inbox_processed_items(
+    work_path: String,
+    statuses: Option<Vec<String>>,
+    query: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<InboxProcessedItem>, String> {
+    let work = normalize_existing_dir(&work_path)?;
+    let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
+    scan_processed_items_with_config(&work, &config, statuses, query, limit)
+}
+
+#[tauri::command]
+pub fn read_inbox_processed_item(
+    work_path: String,
+    item_dir: String,
+) -> Result<InboxProcessedItemDetail, String> {
+    let work = normalize_existing_dir(&work_path)?;
+    let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
+    read_processed_item_with_config(&work, &config, &item_dir)
 }
 
 #[tauri::command]
@@ -492,6 +598,465 @@ fn scan_inbox_entries_with_config(
             .then_with(|| a.rel_path.cmp(&b.rel_path))
     });
     Ok(entries)
+}
+
+fn scan_processed_items_with_config(
+    work: &Path,
+    config: &InboxRuntimeConfig,
+    statuses: Option<Vec<String>>,
+    query: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<InboxProcessedItem>, String> {
+    let root = inbox_settings::resolve_runtime_root(work, config)?;
+    let statuses = normalize_processed_statuses(statuses)?;
+    let query = query
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty());
+    let limit = limit.unwrap_or(100).clamp(1, 500);
+    let mut items = Vec::new();
+
+    for status in statuses {
+        let status_dir = processed_status_dir(&root, config, &status)?;
+        if !status_dir.exists() {
+            continue;
+        }
+        if !status_dir.is_dir() {
+            return Err(format!(
+                "{} exists but is not a directory",
+                status_dir.display()
+            ));
+        }
+        let read_dir = fs::read_dir(&status_dir)
+            .map_err(|err| format!("Cannot scan inbox processed items: {err}"))?;
+        for entry in read_dir {
+            let entry = entry.map_err(|err| format!("Cannot scan inbox processed item: {err}"))?;
+            let file_type = entry
+                .file_type()
+                .map_err(|err| format!("Cannot inspect inbox processed item: {err}"))?;
+            if !file_type.is_dir() {
+                continue;
+            }
+            let item_dir = inbox_settings::lexical_normalize_path(&entry.path());
+            let item = match build_processed_item(work, &root, config, &item_dir, &status) {
+                Ok(item) => item,
+                Err(err) => error_processed_item(work, config, &item_dir, &status, err),
+            };
+            if query
+                .as_deref()
+                .map(|needle| processed_item_matches_query(&item, needle))
+                .unwrap_or(true)
+            {
+                items.push(item);
+            }
+        }
+    }
+
+    items.sort_by(|a, b| {
+        b.received_at
+            .cmp(&a.received_at)
+            .then_with(|| b.updated_at.cmp(&a.updated_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    items.truncate(limit);
+    Ok(items)
+}
+
+fn read_processed_item_with_config(
+    work: &Path,
+    config: &InboxRuntimeConfig,
+    item_dir: &str,
+) -> Result<InboxProcessedItemDetail, String> {
+    let root = inbox_settings::resolve_runtime_root(work, config)?;
+    let item_dir = resolve_processed_item_dir(work, &root, config, item_dir)?;
+    let status = processed_status_for_item_dir(&root, config, &item_dir)
+        .ok_or_else(|| "processed_item_outside_configured_statuses".to_string())?;
+    let item = build_processed_item(work, &root, config, &item_dir, &status)?;
+    let manifest_text = fs::read_to_string(&item.manifest_path)
+        .map_err(|err| format!("Cannot read inbox manifest: {err}"))?;
+    let summary_text = read_optional_text(item.summary_path.as_deref())?;
+    let route_text = read_optional_text(item.route_path.as_deref())?;
+    let (extracted_text, extracted_truncated) =
+        read_optional_text_limited(item.extracted_path.as_deref(), 200 * 1024)?;
+    let raw_files = list_raw_files(&item_dir, &config.naming.raw_dir)?;
+
+    Ok(InboxProcessedItemDetail {
+        item,
+        manifest_text,
+        summary_text,
+        route_text,
+        extracted_text,
+        extracted_truncated,
+        raw_files,
+    })
+}
+
+fn normalize_processed_statuses(statuses: Option<Vec<String>>) -> Result<Vec<String>, String> {
+    let default = vec![
+        "done".to_string(),
+        "failed".to_string(),
+        "duplicate".to_string(),
+    ];
+    let Some(values) = statuses else {
+        return Ok(default);
+    };
+    let mut out = Vec::new();
+    for raw in values {
+        let value = raw.trim().to_lowercase();
+        if value.is_empty() {
+            continue;
+        }
+        if value == "all" {
+            return Ok(default);
+        }
+        if !matches!(value.as_str(), "done" | "failed" | "duplicate") {
+            return Err(format!("unsupported_inbox_processed_status: {value}"));
+        }
+        if !out.contains(&value) {
+            out.push(value);
+        }
+    }
+    if out.is_empty() {
+        Ok(default)
+    } else {
+        Ok(out)
+    }
+}
+
+fn processed_status_dir(
+    root: &Path,
+    config: &InboxRuntimeConfig,
+    status: &str,
+) -> Result<PathBuf, String> {
+    let rel = match status {
+        "done" => &config.paths.done,
+        "failed" => &config.paths.failed,
+        "duplicate" => &config.paths.duplicate,
+        "pending" => &config.paths.pending,
+        _ => return Err(format!("unsupported_inbox_processed_status: {status}")),
+    };
+    let path = inbox_settings::lexical_normalize_path(&root.join(rel));
+    if !path.starts_with(root) {
+        return Err(format!("processed_status_path_outside_inbox: {rel}"));
+    }
+    Ok(path)
+}
+
+fn resolve_processed_item_dir(
+    work: &Path,
+    root: &Path,
+    config: &InboxRuntimeConfig,
+    item_dir: &str,
+) -> Result<PathBuf, String> {
+    let raw = PathBuf::from(item_dir);
+    let path = if raw.is_absolute() {
+        inbox_settings::lexical_normalize_path(&raw)
+    } else {
+        resolve_inside_vault(&work.to_string_lossy(), item_dir)?
+    };
+    if !path.exists() {
+        return Err("processed_item_missing".to_string());
+    }
+    if !path.is_dir() {
+        return Err("processed_item_not_directory".to_string());
+    }
+    if !path.starts_with(root) {
+        return Err("processed_item_outside_inbox".to_string());
+    }
+    if processed_status_for_item_dir(root, config, &path).is_none() {
+        return Err("processed_item_outside_configured_statuses".to_string());
+    }
+    Ok(path)
+}
+
+fn processed_status_for_item_dir(
+    root: &Path,
+    config: &InboxRuntimeConfig,
+    item_dir: &Path,
+) -> Option<String> {
+    for status in ["done", "failed", "duplicate"] {
+        let status_dir = processed_status_dir(root, config, status).ok()?;
+        if item_dir.starts_with(status_dir) {
+            return Some(status.to_string());
+        }
+    }
+    None
+}
+
+fn build_processed_item(
+    _work: &Path,
+    root: &Path,
+    config: &InboxRuntimeConfig,
+    item_dir: &Path,
+    folder_status: &str,
+) -> Result<InboxProcessedItem, String> {
+    if !item_dir.starts_with(root) {
+        return Err("processed_item_outside_inbox".to_string());
+    }
+    let manifest_path = item_dir.join(&config.naming.manifest_file);
+    let manifest_raw = fs::read_to_string(&manifest_path)
+        .map_err(|err| format!("Cannot read inbox manifest: {err}"))?;
+    let manifest: ProcessedManifest = serde_yaml::from_str(&manifest_raw)
+        .map_err(|err| format!("Cannot parse inbox manifest: {err}"))?;
+    let summary_path = item_dir.join(&config.naming.summary_file);
+    let route_path = item_dir.join(&config.naming.route_file);
+    let extracted_path = item_dir.join(&config.naming.extracted_file);
+    let summary_raw = read_file_if_exists(&summary_path)?;
+    let route_raw = read_file_if_exists(&route_path)?;
+    let (summary_meta, summary_body) = summary_raw
+        .as_deref()
+        .map(split_markdown_frontmatter)
+        .unwrap_or((None, ""));
+    let (route_meta, _route_body) = route_raw
+        .as_deref()
+        .map(split_markdown_frontmatter)
+        .unwrap_or((None, ""));
+    let title = yaml_string(summary_meta.as_ref(), "title").unwrap_or_else(|| manifest.id.clone());
+    let description = yaml_string(summary_meta.as_ref(), "description");
+    let project = yaml_string(summary_meta.as_ref(), "project")
+        .or_else(|| yaml_string(route_meta.as_ref(), "project"))
+        .or(manifest.metadata.processing_hints.project);
+    let classification = yaml_string(route_meta.as_ref(), "classification");
+    let route_status = yaml_string(route_meta.as_ref(), "route_status");
+    let provider = manifest.provider.or_else(|| {
+        config
+            .channels
+            .get(&manifest.channel)
+            .map(|channel| channel.provider.clone())
+    });
+    let kind = manifest.kind.or(manifest.metadata.source_kind);
+    let status = if manifest.status.trim().is_empty() {
+        folder_status.to_string()
+    } else {
+        manifest.status
+    };
+    let raw_file_count = if manifest.files.is_empty() {
+        count_raw_files(item_dir, &config.naming.raw_dir)?
+    } else {
+        manifest.files.len()
+    };
+    let updated_at = latest_modified_time(&[
+        manifest_path.as_path(),
+        summary_path.as_path(),
+        route_path.as_path(),
+        extracted_path.as_path(),
+    ]);
+
+    Ok(InboxProcessedItem {
+        id: manifest.id,
+        status,
+        channel: manifest.channel,
+        provider,
+        kind,
+        received_at: manifest.received_at,
+        item_dir: item_dir.to_string_lossy().to_string(),
+        manifest_path: manifest_path.to_string_lossy().to_string(),
+        summary_path: path_string_if_exists(&summary_path),
+        route_path: path_string_if_exists(&route_path),
+        extracted_path: path_string_if_exists(&extracted_path),
+        title,
+        description,
+        project,
+        classification,
+        route_status,
+        summary_preview: preview_text(summary_body, 280),
+        raw_file_count,
+        updated_at,
+        error: None,
+    })
+}
+
+fn error_processed_item(
+    _work: &Path,
+    config: &InboxRuntimeConfig,
+    item_dir: &Path,
+    status: &str,
+    error: String,
+) -> InboxProcessedItem {
+    let id = item_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let manifest_path = item_dir.join(&config.naming.manifest_file);
+    InboxProcessedItem {
+        id: id.clone(),
+        status: status.to_string(),
+        channel: "unknown".to_string(),
+        provider: None,
+        kind: None,
+        received_at: None,
+        item_dir: item_dir.to_string_lossy().to_string(),
+        manifest_path: manifest_path.to_string_lossy().to_string(),
+        summary_path: path_string_if_exists(&item_dir.join(&config.naming.summary_file)),
+        route_path: path_string_if_exists(&item_dir.join(&config.naming.route_file)),
+        extracted_path: path_string_if_exists(&item_dir.join(&config.naming.extracted_file)),
+        title: id,
+        description: None,
+        project: None,
+        classification: None,
+        route_status: None,
+        summary_preview: String::new(),
+        raw_file_count: count_raw_files(item_dir, &config.naming.raw_dir).unwrap_or(0),
+        updated_at: fs::metadata(item_dir)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .map(DateTime::<Utc>::from)
+            .map(|dt| dt.to_rfc3339()),
+        error: Some(error),
+    }
+}
+
+fn split_markdown_frontmatter(raw: &str) -> (Option<YamlValue>, &str) {
+    if !raw.starts_with("---\n") && !raw.starts_with("---\r\n") {
+        return (None, raw);
+    }
+    let body_start = if raw.starts_with("---\r\n") { 5 } else { 4 };
+    let rest = &raw[body_start..];
+    let Some(end) = rest.find("\n---") else {
+        return (None, raw);
+    };
+    let yaml = &rest[..end];
+    let after_marker = &rest[end + "\n---".len()..];
+    let body = after_marker.trim_start_matches(['\r', '\n']);
+    let parsed = serde_yaml::from_str::<YamlValue>(yaml).ok();
+    (parsed, body)
+}
+
+fn yaml_string(value: Option<&YamlValue>, key: &str) -> Option<String> {
+    let YamlValue::Mapping(map) = value? else {
+        return None;
+    };
+    let value = map.get(YamlValue::String(key.to_string()))?;
+    match value {
+        YamlValue::String(text) => Some(text.clone()),
+        YamlValue::Number(number) => Some(number.to_string()),
+        YamlValue::Bool(flag) => Some(flag.to_string()),
+        _ => None,
+    }
+}
+
+fn preview_text(body: &str, max_chars: usize) -> String {
+    let compact = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.chars().count() <= max_chars {
+        return compact;
+    }
+    let mut preview = compact.chars().take(max_chars).collect::<String>();
+    preview.push_str("...");
+    preview
+}
+
+fn processed_item_matches_query(item: &InboxProcessedItem, needle: &str) -> bool {
+    [
+        item.id.as_str(),
+        item.channel.as_str(),
+        item.title.as_str(),
+        item.summary_preview.as_str(),
+        item.project.as_deref().unwrap_or(""),
+        item.classification.as_deref().unwrap_or(""),
+        item.route_status.as_deref().unwrap_or(""),
+    ]
+    .iter()
+    .any(|value| value.to_lowercase().contains(needle))
+}
+
+fn read_file_if_exists(path: &Path) -> Result<Option<String>, String> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(path).map(Some).map_err(|err| {
+        format!(
+            "Cannot read inbox processed artifact {}: {err}",
+            path.display()
+        )
+    })
+}
+
+fn read_optional_text(path: Option<&str>) -> Result<Option<String>, String> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    fs::read_to_string(path)
+        .map(Some)
+        .map_err(|err| format!("Cannot read inbox processed artifact {path}: {err}"))
+}
+
+fn read_optional_text_limited(
+    path: Option<&str>,
+    limit_bytes: usize,
+) -> Result<(Option<String>, bool), String> {
+    let Some(path) = path else {
+        return Ok((None, false));
+    };
+    let mut file = fs::File::open(path)
+        .map_err(|err| format!("Cannot read inbox processed artifact {path}: {err}"))?;
+    let mut buffer = Vec::new();
+    let limit = limit_bytes.saturating_add(1) as u64;
+    file.by_ref()
+        .take(limit)
+        .read_to_end(&mut buffer)
+        .map_err(|err| format!("Cannot read inbox processed artifact {path}: {err}"))?;
+    let truncated = buffer.len() > limit_bytes;
+    if truncated {
+        buffer.truncate(limit_bytes);
+    }
+    Ok((
+        Some(String::from_utf8_lossy(&buffer).to_string()),
+        truncated,
+    ))
+}
+
+fn path_string_if_exists(path: &Path) -> Option<String> {
+    path.exists().then(|| path.to_string_lossy().to_string())
+}
+
+fn count_raw_files(item_dir: &Path, raw_dir: &str) -> Result<usize, String> {
+    let raw_root = item_dir.join(raw_dir);
+    if !raw_root.is_dir() {
+        return Ok(0);
+    }
+    Ok(WalkDir::new(&raw_root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+        .count())
+}
+
+fn list_raw_files(item_dir: &Path, raw_dir: &str) -> Result<Vec<InboxProcessedRawFile>, String> {
+    let raw_root = item_dir.join(raw_dir);
+    if !raw_root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    for entry in WalkDir::new(&raw_root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_file())
+    {
+        let path = inbox_settings::lexical_normalize_path(entry.path());
+        let metadata =
+            fs::metadata(&path).map_err(|err| format!("Cannot read raw file metadata: {err}"))?;
+        files.push(InboxProcessedRawFile {
+            path: path.to_string_lossy().to_string(),
+            rel_path: path
+                .strip_prefix(item_dir)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .to_string(),
+            size_bytes: metadata.len(),
+        });
+    }
+    files.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    Ok(files)
+}
+
+fn latest_modified_time(paths: &[&Path]) -> Option<String> {
+    paths
+        .iter()
+        .filter_map(|path| fs::metadata(path).ok())
+        .filter_map(|metadata| metadata.modified().ok())
+        .max()
+        .map(DateTime::<Utc>::from)
+        .map(|dt| dt.to_rfc3339())
 }
 
 fn source_kind_for_drop(
@@ -1187,5 +1752,206 @@ inbox:
         assert_eq!(entries[0].kind, "dropFile");
         assert_eq!(entries[0].channel, "alpha");
         assert_eq!(entries[0].rel_path, "incoming/spool/alpha/note.md");
+    }
+
+    #[test]
+    fn scan_processed_items_reads_done_failed_duplicate_and_excludes_pending_by_default() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        write_processed_config(root, "summary.md", "route.md", "extracted.md");
+        write_processed_item(root, "done", "a", "kakao", "Project A", "요약 A");
+        write_processed_item(root, "failed", "b", "gws", "Project B", "요약 B");
+        write_processed_item(root, "duplicate", "c", "mso", "Project C", "요약 C");
+        fs::create_dir_all(root.join("inbox/items/pending/p")).unwrap();
+        fs::write(
+            root.join("inbox/items/pending/p/manifest.yaml"),
+            "id: p\nstatus: pending\nchannel: kakao\n",
+        )
+        .unwrap();
+
+        let items =
+            scan_inbox_processed_items(root.to_string_lossy().to_string(), None, None, None)
+                .unwrap();
+
+        assert_eq!(items.len(), 3);
+        assert!(items
+            .iter()
+            .any(|item| item.id == "a" && item.status == "done"));
+        assert!(items.iter().all(|item| item.status != "pending"));
+    }
+
+    #[test]
+    fn scan_processed_items_uses_custom_filenames_and_query() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        write_processed_config(root, "digest.md", "routing.md", "text.md");
+        write_processed_item_custom(
+            root,
+            "done",
+            "custom",
+            "kakao",
+            "digest.md",
+            "routing.md",
+            "text.md",
+            "Special Project",
+            "custom summary body",
+        );
+
+        let items = scan_inbox_processed_items(
+            root.to_string_lossy().to_string(),
+            Some(vec!["done".to_string()]),
+            Some("special".to_string()),
+            Some(10),
+        )
+        .unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert!(items[0]
+            .summary_path
+            .as_deref()
+            .unwrap()
+            .ends_with("digest.md"));
+        assert_eq!(items[0].project.as_deref(), Some("Special Project"));
+    }
+
+    #[test]
+    fn malformed_processed_manifest_returns_item_error() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        write_processed_config(root, "summary.md", "route.md", "extracted.md");
+        fs::create_dir_all(root.join("inbox/items/done/bad")).unwrap();
+        fs::write(
+            root.join("inbox/items/done/bad/manifest.yaml"),
+            "id: [not-valid-for-struct\n",
+        )
+        .unwrap();
+
+        let items =
+            scan_inbox_processed_items(root.to_string_lossy().to_string(), None, None, None)
+                .unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "bad");
+        assert!(items[0].error.as_deref().unwrap().contains("Cannot parse"));
+    }
+
+    #[test]
+    fn read_processed_item_rejects_traversal_and_truncates_extracted() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        write_processed_config(&root, "summary.md", "route.md", "extracted.md");
+        write_processed_item(&root, "done", "large", "kakao", "Project", "요약");
+        fs::write(
+            root.join("inbox/items/done/large/extracted.md"),
+            "x".repeat(220 * 1024),
+        )
+        .unwrap();
+        let outside =
+            read_inbox_processed_item(root.to_string_lossy().to_string(), "../outside".to_string())
+                .unwrap_err();
+        assert!(outside.contains("escapes"));
+
+        let detail = read_inbox_processed_item(
+            root.to_string_lossy().to_string(),
+            root.join("inbox/items/done/large")
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        assert!(detail.extracted_truncated);
+        assert!(detail.extracted_text.unwrap().len() <= 200 * 1024);
+    }
+
+    fn write_processed_config(root: &Path, summary: &str, route: &str, extracted: &str) {
+        fs::write(
+            root.join("workspace.config.yaml"),
+            format!(
+                r#"
+inbox:
+  root: inbox
+  paths:
+    drop: drop
+    items: items
+    pending: items/pending
+    done: items/done
+    failed: items/failed
+    duplicate: items/duplicate
+    state: _state
+    receipts: _state/index.jsonl
+  naming:
+    item_id_template: "{{date}}-{{channel}}-{{slug}}"
+    raw_dir: raw
+    manifest_file: manifest.yaml
+    extracted_file: {extracted}
+    summary_file: {summary}
+    route_file: {route}
+  channels:
+    kakao:
+      provider: kakao
+      kind: bundle
+      dedupe: sha256
+      drop_paths:
+        - drop/kakao
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_processed_item(
+        root: &Path,
+        status: &str,
+        id: &str,
+        channel: &str,
+        project: &str,
+        summary_body: &str,
+    ) {
+        write_processed_item_custom(
+            root,
+            status,
+            id,
+            channel,
+            "summary.md",
+            "route.md",
+            "extracted.md",
+            project,
+            summary_body,
+        );
+    }
+
+    fn write_processed_item_custom(
+        root: &Path,
+        status: &str,
+        id: &str,
+        channel: &str,
+        summary_name: &str,
+        route_name: &str,
+        extracted_name: &str,
+        project: &str,
+        summary_body: &str,
+    ) {
+        let dir = root.join("inbox/items").join(status).join(id);
+        fs::create_dir_all(dir.join("raw")).unwrap();
+        fs::write(dir.join("raw/input.txt"), b"raw").unwrap();
+        fs::write(
+            dir.join("manifest.yaml"),
+            format!(
+                "id: {id}\nstatus: {status}\nchannel: {channel}\nprovider: {channel}\nkind: bundle\nreceived_at: 2026-05-10T00:00:00Z\nfiles:\n  - path: raw/input.txt\nmetadata:\n  source_kind: message\n"
+            ),
+        )
+        .unwrap();
+        fs::write(
+            dir.join(summary_name),
+            format!(
+                "---\ntitle: {id} title\nproject: {project}\ndescription: item description\n---\n\n{summary_body}\n"
+            ),
+        )
+        .unwrap();
+        fs::write(
+            dir.join(route_name),
+            "---\nclassification: reference\nroute_status: routed\n---\n\nroute\n",
+        )
+        .unwrap();
+        fs::write(dir.join(extracted_name), "extracted").unwrap();
     }
 }

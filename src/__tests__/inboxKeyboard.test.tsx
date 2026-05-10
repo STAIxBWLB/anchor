@@ -3,12 +3,14 @@ import {
   buildInboxFeedRowKeys,
   buildInboxProcessPrompt,
   countInboxSources,
+  filterProcessedItems,
   firstPendingInboxKey,
   inboxEntryProcessPath,
+  isInboxProcessMission,
   nextInboxFocusKey,
   toggleInboxSelectionKeys,
 } from "../lib/inbox";
-import type { InboxEntry, InboxRuntimeConfig } from "../lib/types";
+import type { InboxEntry, InboxProcessedItem, InboxRuntimeConfig, MissionRecord } from "../lib/types";
 
 describe("inbox keyboard helpers", () => {
   const keys = ["file:a", "file:b", "gmail:c", "gmail:d"];
@@ -88,6 +90,22 @@ describe("inbox keyboard helpers", () => {
     expect(prompt).toContain('"summary_file": "summary.md"');
     expect(prompt).toContain("Do not fetch providers");
   });
+
+  it("filters processed item history by status and search text", () => {
+    const items = [
+      processedItem("done", "a", "kakao", "Project A", "reference", "alpha summary"),
+      processedItem("failed", "b", "gws", "Project B", "task", "beta summary"),
+    ];
+
+    expect(filterProcessedItems(items, "done", "").map((item) => item.id)).toEqual(["a"]);
+    expect(filterProcessedItems(items, "all", "project b").map((item) => item.id)).toEqual(["b"]);
+    expect(filterProcessedItems(items, "all", "reference").map((item) => item.id)).toEqual(["a"]);
+  });
+
+  it("recognizes inbox-process mission metadata", () => {
+    expect(isInboxProcessMission(mission("inboxProcess"))).toBe(true);
+    expect(isInboxProcessMission(mission("other"))).toBe(false);
+  });
 });
 
 function inboxEntry(kind: InboxEntry["kind"], relPath: string): InboxEntry {
@@ -152,5 +170,50 @@ function runtimeConfig(): InboxRuntimeConfig {
     channels: {},
     processing: {},
     hooks: {},
+  };
+}
+
+function processedItem(
+  status: InboxProcessedItem["status"],
+  id: string,
+  channel: string,
+  project: string,
+  classification: string,
+  summaryPreview: string,
+): InboxProcessedItem {
+  return {
+    id,
+    status,
+    channel,
+    provider: channel,
+    kind: "bundle",
+    receivedAt: `2026-05-10T00:00:0${id === "a" ? "2" : "1"}Z`,
+    itemDir: `/work/inbox/items/${status}/${id}`,
+    manifestPath: `/work/inbox/items/${status}/${id}/manifest.yaml`,
+    summaryPath: `/work/inbox/items/${status}/${id}/summary.md`,
+    routePath: `/work/inbox/items/${status}/${id}/route.md`,
+    extractedPath: `/work/inbox/items/${status}/${id}/extracted.md`,
+    title: `${id} title`,
+    description: null,
+    project,
+    classification,
+    routeStatus: "routed",
+    summaryPreview,
+    rawFileCount: 1,
+    updatedAt: null,
+    error: null,
+  };
+}
+
+function mission(origin: string): MissionRecord {
+  return {
+    id: "ai-test",
+    kind: "skill",
+    startedAt: "2026-05-10T00:00:00Z",
+    lastOutputAt: "2026-05-10T00:00:01Z",
+    status: "running",
+    exitCode: null,
+    outputLogPath: null,
+    metadata: { origin },
   };
 }

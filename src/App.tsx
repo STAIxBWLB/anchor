@@ -50,11 +50,14 @@ import {
   fetchGmailUnread,
   getSampleVaultPath,
   gitStatus,
+  listAiMissions,
   listWorkspaceRoots,
   moveDocument,
   readDocument,
+  readAiMissionLog,
   prepareApproval,
   revealInFileManager,
+  readInboxProcessedItem,
   readInboxRuntimeConfig,
   readVaultCache,
   refreshWorkspaceCapabilities,
@@ -65,11 +68,13 @@ import {
   saveDocument,
   scanInboxDrop,
   scanInboxEntries,
+  scanInboxProcessedItems,
   scanWorkspaceFiles,
   scanVault,
   setActiveWorkspaceRoot,
   stageInboxDropFiles,
   startInboxWatcher,
+  stopAiMission,
   stopInboxWatcher,
   trashDocument,
   updateFrontmatterField,
@@ -114,6 +119,8 @@ import { listenForMenuCommand } from "./lib/menu";
 import {
   buildInboxProcessPrompt,
   buildInboxItemStates,
+  activeInboxProcessMissions,
+  isInboxProcessMission,
   type InboxDecision,
   type InboxItemState,
 } from "./lib/inbox";
@@ -147,7 +154,11 @@ import type {
   InboxClassification,
   InboxDropItem,
   InboxEntry,
+  InboxProcessedItem,
+  InboxProcessedItemDetail,
+  InboxProcessedStatus,
   InboxRuntimeConfig,
+  MissionRecord,
   VaultEntry,
   WorkspaceFileEntry,
   WorkspaceRegistry,
@@ -285,6 +296,12 @@ interface GmailScanStatus {
   ttlSeconds: number;
 }
 
+interface AiOutputEvent {
+  invocationId: string;
+  stream: string;
+  line: string;
+}
+
 const DEFAULT_GMAIL_SCAN_STATUS: GmailScanStatus = {
   fetchedAt: null,
   durationMs: null,
@@ -353,6 +370,18 @@ function formatGmailScanStatus(
   const duration =
     status.durationMs === null ? null : `${(status.durationMs / 1000).toFixed(1)}s`;
   return [`updated ${updated}`, duration, `TTL ${ttl}`].filter(Boolean).join(" · ");
+}
+
+function matchesActiveMission(record: MissionRecord): boolean {
+  return record.status === "running" || record.status === "idle";
+}
+
+function upsertMission(current: MissionRecord[], next: MissionRecord): MissionRecord[] {
+  const merged = current.filter((mission) => mission.id !== next.id);
+  if (matchesActiveMission(next)) {
+    merged.unshift(next);
+  }
+  return activeInboxProcessMissions(merged);
 }
 
 function formatGmailTtl(seconds: number): string {
@@ -668,6 +697,7 @@ function MainApp() {
   const gmailScanStatusRef = useRef<GmailScanStatus>(DEFAULT_GMAIL_SCAN_STATUS);
   const gmailLoadingRef = useRef(false);
   const gmailRequestSeqRef = useRef(0);
+  const processingMissionIdsRef = useRef<Set<string>>(new Set());
 
   // Monotonic counter so a slow readDocument from an earlier click cannot
   // overwrite the editor with stale content if the user clicked a later
@@ -712,6 +742,15 @@ function MainApp() {
   );
   const [inboxLoading, setInboxLoading] = useState(false);
   const [inboxCarry, setInboxCarry] = useState<Map<string, InboxCarry>>(() => new Map());
+  const [processedItems, setProcessedItems] = useState<InboxProcessedItem[]>([]);
+  const [processedLoading, setProcessedLoading] = useState(false);
+  const [processedError, setProcessedError] = useState<string | null>(null);
+  const [processedStatusFilter, setProcessedStatusFilter] =
+    useState<InboxProcessedStatus | "all">("all");
+  const [processedQuery, setProcessedQuery] = useState("");
+  const [processedDetail, setProcessedDetail] = useState<InboxProcessedItemDetail | null>(null);
+  const [processingMissions, setProcessingMissions] = useState<MissionRecord[]>([]);
+  const [processingLogLines, setProcessingLogLines] = useState<Record<string, string[]>>({});
 
   // Gmail surface (gws CLI). Sibling section in InboxPane; list state is
   // memory-only, while accept/reject calls write labels/archive through gws.
@@ -1637,6 +1676,10 @@ function MainApp() {
     [gmailLoading, gmailScanStatus, locale],
   );
 
+  useEffect(() => {
+    processingMissionIdsRef.current = new Set(processingMissions.map((mission) => mission.id));
+  }, [processingMissions]);
+
   const updateGmailScanStatus = useCallback((status: GmailScanStatus) => {
     gmailScanStatusRef.current = status;
     setGmailScanStatus(status);
@@ -1748,6 +1791,68 @@ function MainApp() {
       setInboxLoading(false);
     }
   }, [inboxWorkspacePath, scanOptions]);
+
+  const refreshProcessedItems = useCallback(async () => {
+    if (!inboxWorkspacePath) {
+      setProcessedItems([]);
+      setProcessedDetail(null);
+      return;
+    }
+    const statuses =
+      processedStatusFilter === "all"
+        ? (["done", "failed", "duplicate"] as InboxProcessedStatus[])
+        : [processedStatusFilter];
+    setProcessedLoading(true);
+    setProcessedError(null);
+    try {
+      const items = await scanInboxProcessedItems(
+        inboxWorkspacePath,
+        statuses,
+        processedQuery,
+        120,
+      );
+      setProcessedItems(items);
+    } catch (err) {
+      setProcessedError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProcessedLoading(false);
+    }
+  }, [inboxWorkspacePath, processedQuery, processedStatusFilter]);
+
+  const selectProcessedItem = useCallback(
+    async (item: InboxProcessedItem) => {
+      if (!inboxWorkspacePath) return;
+      setProcessedError(null);
+      try {
+        const detail = await readInboxProcessedItem(inboxWorkspacePath, item.itemDir);
+        setProcessedDetail(detail);
+      } catch (err) {
+        setProcessedError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [inboxWorkspacePath],
+  );
+
+  const refreshProcessingMissions = useCallback(async () => {
+    try {
+      const missions = activeInboxProcessMissions(await listAiMissions());
+      setProcessingMissions(missions);
+      processingMissionIdsRef.current = new Set(missions.map((mission) => mission.id));
+      const tails = await Promise.all(
+        missions.map((mission) =>
+          readAiMissionLog(mission.id, 80)
+            .then((tail) => [mission.id, tail.lines] as const)
+            .catch(() => [mission.id, []] as const),
+        ),
+      );
+      setProcessingLogLines((current) => ({
+        ...current,
+        ...Object.fromEntries(tails),
+      }));
+    } catch {
+      // Mission listing is a secondary diagnostic surface.
+    }
+  }, []);
 
   const updateInboxCarry = useCallback(
     (id: string, patch: Partial<InboxCarry>) => {
@@ -2013,22 +2118,47 @@ function MainApp() {
             path: entry.kind === "pendingItem" ? entry.manifestPath ?? entry.path : entry.path,
             kind: entry.kind === "pendingItem" ? "manifest" : "file",
           }));
-          await skillsDispatchBackground({
+          const inputPaths = context.map((item) => item.path);
+          const invocationId = await skillsDispatchBackground({
             skillId: processSkill.id,
             runtime: "claude",
             prompt,
             cwd: inboxWorkspacePath,
             context,
+            metadata: {
+              origin: "inboxProcess",
+              channel,
+              inputPaths,
+              workspacePath: inboxWorkspacePath,
+              skillName: "inbox-process",
+            },
           });
+          processingMissionIdsRef.current = new Set([
+            ...processingMissionIdsRef.current,
+            invocationId,
+          ]);
+          setProcessingLogLines((current) => ({ ...current, [invocationId]: [] }));
         }
+        void refreshProcessingMissions();
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setInboxActionBusy(false);
       }
     },
-    [inboxEntries, inboxRuntimeConfig, inboxWorkspacePath, skills],
+    [inboxEntries, inboxRuntimeConfig, inboxWorkspacePath, refreshProcessingMissions, skills],
   );
+
+  const stopProcessingMission = useCallback(async (id: string) => {
+    try {
+      const record = await stopAiMission(id);
+      if (isInboxProcessMission(record)) {
+        setProcessingMissions((current) => upsertMission(current, record));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
 
   const stageInboxFiles = useCallback(
     async (sourcePaths: string[]) => {
@@ -2098,6 +2228,7 @@ function MainApp() {
           setInboxRuntimeConfig(payload.config);
           setInboxSourceFilter(null);
           void refreshInbox();
+          void refreshProcessedItems();
         }),
       )
       .then((off) => {
@@ -2111,7 +2242,7 @@ function MainApp() {
       cancelled = true;
       unlistenConfigEvent?.();
     };
-  }, [inboxWorkspacePath, refreshInbox]);
+  }, [inboxWorkspacePath, refreshInbox, refreshProcessedItems]);
 
   // Entering Inbox and changing Gmail runtime settings both refresh the
   // envelope list. Message bodies are never fetched.
@@ -2119,6 +2250,60 @@ function MainApp() {
     if (appMode !== "inbox") return;
     void refreshGmail();
   }, [appMode, refreshGmail]);
+
+  useEffect(() => {
+    if (appMode !== "inbox") return;
+    void refreshProcessedItems();
+    void refreshProcessingMissions();
+  }, [appMode, refreshProcessedItems, refreshProcessingMissions]);
+
+  useEffect(() => {
+    if (appMode !== "inbox") return;
+    let cancelled = false;
+    let unlistenMission: (() => void) | null = null;
+    let unlistenOutput: (() => void) | null = null;
+    void import("@tauri-apps/api/event")
+      .then(async ({ listen }) => {
+        const offMission = await listen<MissionRecord>("ai://mission_update", (event) => {
+          const record = event.payload;
+          if (!isInboxProcessMission(record)) return;
+          setProcessingMissions((current) => activeInboxProcessMissions(upsertMission(current, record)));
+          if (!matchesActiveMission(record)) {
+            void refreshProcessedItems();
+            void readAiMissionLog(record.id, 100)
+              .then((tail) =>
+                setProcessingLogLines((current) => ({
+                  ...current,
+                  [record.id]: tail.lines,
+                })),
+              )
+              .catch(() => {});
+          }
+        });
+        const offOutput = await listen<AiOutputEvent>("ai://output", (event) => {
+          const payload = event.payload;
+          if (!processingMissionIdsRef.current.has(payload.invocationId)) return;
+          const line = `[${payload.stream}] ${payload.line}`;
+          setProcessingLogLines((current) => {
+            const lines = [...(current[payload.invocationId] ?? []), line].slice(-120);
+            return { ...current, [payload.invocationId]: lines };
+          });
+        });
+        if (cancelled) {
+          offMission();
+          offOutput();
+        } else {
+          unlistenMission = offMission;
+          unlistenOutput = offOutput;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlistenMission?.();
+      unlistenOutput?.();
+    };
+  }, [appMode, refreshProcessedItems]);
 
   // Inbox scan + watcher subscription, scoped to the active workspace and
   // deferred until Inbox mode so startup document paint owns the I/O lane.
@@ -4786,6 +4971,14 @@ function MainApp() {
             gmailLoading={gmailLoading}
             gmailError={gmailError}
             gmailStatus={gmailStatus}
+            processedItems={processedItems}
+            processedLoading={processedLoading}
+            processedError={processedError}
+            processedStatusFilter={processedStatusFilter}
+            processedQuery={processedQuery}
+            processedDetail={processedDetail}
+            processingMissions={processingMissions}
+            processingLogLines={processingLogLines}
             sourceFilter={inboxSourceFilter}
             onSourceFilter={setInboxSourceFilter}
             fileDropTarget={inboxRuntimeConfig.file_drop}
@@ -4793,6 +4986,8 @@ function MainApp() {
             actionBusy={inboxActionBusy}
             onRefresh={() => {
               void refreshInbox();
+              void refreshProcessedItems();
+              void refreshProcessingMissions();
               void refreshGmail({ force: true });
             }}
             onOpenSettings={openInboxSettings}
@@ -4804,6 +4999,14 @@ function MainApp() {
             onBulkMoveFiles={bulkMoveInboxFiles}
             onProcessEntries={(keys) => void processInboxKeys(keys)}
             onStageFiles={(paths) => void stageInboxFiles(paths)}
+            onProcessedStatusFilter={setProcessedStatusFilter}
+            onProcessedQuery={setProcessedQuery}
+            onRefreshProcessed={() => void refreshProcessedItems()}
+            onSelectProcessedItem={(item) => void selectProcessedItem(item)}
+            onRevealPath={(path) => {
+              if (inboxWorkspacePath) void revealInFileManager(inboxWorkspacePath, path);
+            }}
+            onStopProcessingMission={(id) => void stopProcessingMission(id)}
           />
         ) : (
           <>

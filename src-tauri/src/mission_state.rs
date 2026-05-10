@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -22,7 +23,7 @@ pub enum MissionStatus {
     Stopped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MissionRecord {
     pub id: String,
@@ -32,6 +33,15 @@ pub struct MissionRecord {
     pub status: MissionStatus,
     pub exit_code: Option<i32>,
     pub output_log_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<JsonValue>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MissionLogTail {
+    pub invocation_id: String,
+    pub lines: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -64,9 +74,27 @@ pub fn stop_ai_mission(app: AppHandle, invocation_id: String) -> Result<MissionR
     Ok(record)
 }
 
+#[tauri::command]
+pub fn read_ai_mission_log(
+    invocation_id: String,
+    max_lines: Option<usize>,
+) -> Result<MissionLogTail, String> {
+    read_mission_log_tail(&invocation_id, max_lines.unwrap_or(160).clamp(1, 1000))
+}
+
 pub fn register_mission(app: &AppHandle, id: &str, kind: &str, pid: u32) -> Result<(), String> {
+    register_mission_with_metadata(app, id, kind, pid, None)
+}
+
+pub fn register_mission_with_metadata(
+    app: &AppHandle,
+    id: &str,
+    kind: &str,
+    pid: u32,
+    metadata: Option<JsonValue>,
+) -> Result<(), String> {
     let state = app.state::<MissionState>();
-    let record = state.start(id, kind, pid)?;
+    let record = state.start(id, kind, pid, metadata)?;
     emit_update(app, &record);
     spawn_idle_watch(app.clone(), id.to_string());
     Ok(())
@@ -94,7 +122,13 @@ pub fn fail_mission(app: &AppHandle, id: &str, message: &str) {
 }
 
 impl MissionState {
-    fn start(&self, id: &str, kind: &str, pid: u32) -> Result<MissionRecord, String> {
+    fn start(
+        &self,
+        id: &str,
+        kind: &str,
+        pid: u32,
+        metadata: Option<JsonValue>,
+    ) -> Result<MissionRecord, String> {
         let now = Utc::now().to_rfc3339();
         let log_path = mission_log_path(id)?;
         let record = MissionRecord {
@@ -105,6 +139,7 @@ impl MissionState {
             status: MissionStatus::Running,
             exit_code: None,
             output_log_path: Some(log_path.to_string_lossy().to_string()),
+            metadata,
         };
         self.pids
             .lock()
@@ -208,6 +243,7 @@ impl MissionState {
     }
 
     fn list(&self) -> Result<Vec<MissionRecord>, String> {
+        self.hydrate_from_disk()?;
         let mut records: Vec<_> = self
             .missions
             .lock()
@@ -217,6 +253,46 @@ impl MissionState {
             .collect();
         records.sort_by(|a, b| b.started_at.cmp(&a.started_at));
         Ok(records)
+    }
+
+    fn hydrate_from_disk(&self) -> Result<(), String> {
+        let dir = mission_dir()?;
+        if !dir.is_dir() {
+            return Ok(());
+        }
+        let pids = self
+            .pids
+            .lock()
+            .map_err(|_| "mission_state_poisoned".to_string())?
+            .clone();
+        let mut missions = self
+            .missions
+            .lock()
+            .map_err(|_| "mission_state_poisoned".to_string())?;
+        for entry in fs::read_dir(&dir)
+            .map_err(|err| format!("Cannot read mission state directory: {err}"))?
+        {
+            let entry = entry.map_err(|err| format!("Cannot read mission state: {err}"))?;
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                continue;
+            }
+            let raw = fs::read_to_string(&path)
+                .map_err(|err| format!("Cannot read mission state: {err}"))?;
+            let mut record: MissionRecord = serde_json::from_str(&raw)
+                .map_err(|err| format!("Cannot parse mission state: {err}"))?;
+            if missions.contains_key(&record.id) {
+                continue;
+            }
+            if matches!(record.status, MissionStatus::Running | MissionStatus::Idle)
+                && !pids.contains_key(&record.id)
+            {
+                record.status = MissionStatus::Stopped;
+                let _ = persist_record(&record);
+            }
+            missions.insert(record.id.clone(), record);
+        }
+        Ok(())
     }
 
     fn mark_idle_if_stale(
@@ -298,11 +374,44 @@ fn mission_dir() -> Result<PathBuf, String> {
 }
 
 fn mission_json_path(id: &str) -> Result<PathBuf, String> {
+    validate_mission_id(id)?;
     Ok(mission_dir()?.join(format!("{id}.json")))
 }
 
 fn mission_log_path(id: &str) -> Result<PathBuf, String> {
+    validate_mission_id(id)?;
     Ok(mission_dir()?.join(format!("{id}.log")))
+}
+
+fn validate_mission_id(id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        return Err("mission_id_invalid".to_string());
+    }
+    Ok(())
+}
+
+fn read_mission_log_tail(id: &str, max_lines: usize) -> Result<MissionLogTail, String> {
+    validate_mission_id(id)?;
+    let path = mission_log_path(id)?;
+    if !path.exists() {
+        return Ok(MissionLogTail {
+            invocation_id: id.to_string(),
+            lines: Vec::new(),
+        });
+    }
+    let raw = fs::read_to_string(&path).map_err(|err| format!("Cannot read mission log: {err}"))?;
+    let mut lines = raw.lines().map(str::to_string).collect::<Vec<_>>();
+    if lines.len() > max_lines {
+        lines = lines.split_off(lines.len() - max_lines);
+    }
+    Ok(MissionLogTail {
+        invocation_id: id.to_string(),
+        lines,
+    })
 }
 
 fn persist_record(record: &MissionRecord) -> Result<(), String> {
@@ -383,7 +492,7 @@ mod tests {
         std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         let id = "ai-test-idle";
-        state.start(id, "test", 999_999).unwrap();
+        state.start(id, "test", 999_999, None).unwrap();
         {
             let mut missions = state.missions.lock().unwrap();
             let record = missions.get_mut(id).unwrap();
@@ -402,7 +511,7 @@ mod tests {
         std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         let id = "ai-test-stopped";
-        state.start(id, "test", 999_999).unwrap();
+        state.start(id, "test", 999_999, None).unwrap();
         {
             let mut missions = state.missions.lock().unwrap();
             missions.get_mut(id).unwrap().status = MissionStatus::Stopped;
@@ -420,10 +529,42 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
-        state.start("ai-old", "test", 999_998).unwrap();
-        state.start("ai-new", "test", 999_999).unwrap();
+        state.start("ai-old", "test", 999_998, None).unwrap();
+        state.start("ai-new", "test", 999_999, None).unwrap();
         let records = state.list().unwrap();
         assert_eq!(records[0].id, "ai-new");
+        state.pids.lock().unwrap().clear();
+        std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
+    }
+
+    #[test]
+    fn metadata_persists_and_log_tail_reads_recent_lines() {
+        let _guard = test_env_lock().lock().unwrap();
+        let tmp = TempDir::new().unwrap();
+        std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
+        let state = MissionState::default();
+        let id = "ai-test-meta";
+        state
+            .start(
+                id,
+                "skill",
+                999_999,
+                Some(serde_json::json!({
+                    "origin": "inboxProcess",
+                    "channel": "kakao",
+                })),
+            )
+            .unwrap();
+        let records = state.list().unwrap();
+        assert_eq!(
+            records[0].metadata.as_ref().unwrap()["origin"],
+            "inboxProcess"
+        );
+
+        append_output(id, "stdout", "one").unwrap();
+        append_output(id, "stdout", "two").unwrap();
+        let tail = read_mission_log_tail(id, 1).unwrap();
+        assert_eq!(tail.lines, vec!["[stdout] two"]);
         state.pids.lock().unwrap().clear();
         std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
     }

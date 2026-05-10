@@ -35,9 +35,13 @@ import type {
   InboxDropItem,
   InboxDropStageOutcome,
   InboxEntry,
+  InboxProcessedItem,
+  InboxProcessedItemDetail,
+  InboxProcessedStatus,
   InboxDropStageRequest,
   InboxRuntimeConfig,
   InboxSettings,
+  MissionLogTail,
   MissionRecord,
   MemoDocument,
   MemoEntry,
@@ -231,6 +235,31 @@ export async function scanInboxDrop(vaultPath: string, scanOptions?: ScanOptions
 export async function scanInboxEntries(workPath: string, scanOptions?: ScanOptions): Promise<InboxEntry[]> {
   if (!isTauri()) return [];
   return invoke<InboxEntry[]>("scan_inbox_entries", { workPath, scanOptions: scanOptions ?? null });
+}
+
+export async function scanInboxProcessedItems(
+  workPath: string,
+  statuses?: InboxProcessedStatus[] | null,
+  query?: string | null,
+  limit = 100,
+): Promise<InboxProcessedItem[]> {
+  if (!isTauri()) return [];
+  return invoke<InboxProcessedItem[]>("scan_inbox_processed_items", {
+    workPath,
+    statuses: statuses ?? null,
+    query: query ?? null,
+    limit,
+  });
+}
+
+export async function readInboxProcessedItem(
+  workPath: string,
+  itemDir: string,
+): Promise<InboxProcessedItemDetail> {
+  if (!isTauri()) {
+    throw new Error("Processed inbox item details require the Tauri shell.");
+  }
+  return invoke<InboxProcessedItemDetail>("read_inbox_processed_item", { workPath, itemDir });
 }
 
 export async function stageInboxDropFiles(
@@ -664,6 +693,14 @@ export async function startClaudeCliInvocation(
 export async function listAiMissions(): Promise<MissionRecord[]> {
   if (!isTauri()) return [];
   return invoke<MissionRecord[]>("list_ai_missions");
+}
+
+export async function readAiMissionLog(
+  invocationId: string,
+  maxLines = 160,
+): Promise<MissionLogTail> {
+  if (!isTauri()) return { invocationId, lines: [] };
+  return invoke<MissionLogTail>("read_ai_mission_log", { invocationId, maxLines });
 }
 
 export async function stopAiMission(invocationId: string): Promise<MissionRecord> {
