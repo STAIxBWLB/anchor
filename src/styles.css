@@ -7235,6 +7235,7 @@ button.git-badge:hover {
   display: grid;
   grid-template-rows: auto auto 1fr;
   background: var(--bg);
+  font-size: 12.5px;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -7253,7 +7254,7 @@ button.git-badge:hover {
 }
 .system-header h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
   text-wrap: balance;
@@ -7261,7 +7262,7 @@ button.git-badge:hover {
 .system-header p {
   margin: 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -7276,13 +7277,13 @@ button.git-badge:hover {
   scrollbar-width: thin;
 }
 .system-tab {
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 11.75px;
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
@@ -7417,7 +7418,7 @@ button.git-badge:hover {
   display: grid;
   gap: 7px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -7426,7 +7427,7 @@ button.git-badge:hover {
   align-items: center;
   justify-content: start;
   gap: 9px;
-  min-height: 36px;
+  min-height: 32px;
   width: fit-content;
   max-width: 100%;
   padding: 7px 10px;
@@ -7450,13 +7451,14 @@ button.git-badge:hover {
 .settings-form input,
 .settings-form select,
 .settings-form .settings-textarea {
-  height: 36px;
+  height: 32px;
   min-width: 0;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: var(--panel-raised);
   color: var(--ink);
   padding: 0 10px;
+  font-size: 12.5px;
   outline: 0;
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 80%, transparent);
   transition:
@@ -7523,14 +7525,14 @@ button.git-badge:hover {
 
 .settings-section-heading strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.3;
 }
 
 .settings-section-heading span,
 .settings-warning {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 11.25px;
   line-height: 1.45;
   text-wrap: pretty;
 }
@@ -7832,6 +7834,7 @@ button.git-badge:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--bg)) 0, var(--bg) 260px);
   color: var(--ink);
+  font-size: 13px;
 }
 
 .meetings-sidebar {
@@ -7888,9 +7891,18 @@ button.git-badge:hover {
 
 .meetings-sidebar-item {
   grid-template-columns: 18px minmax(0, 1fr) auto;
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 8px;
   border-radius: 8px;
+}
+
+.meetings-sidebar-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .meetings-sidebar-item strong {
@@ -7937,7 +7949,7 @@ button.git-badge:hover {
 
 .meetings-actions-bar h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   letter-spacing: 0;
   line-height: 1.18;
   text-wrap: balance;
@@ -7946,7 +7958,7 @@ button.git-badge:hover {
 .meetings-actions-bar p {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.75px;
   line-height: 1.45;
   text-wrap: pretty;
 }
