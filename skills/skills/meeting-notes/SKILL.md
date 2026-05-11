@@ -46,6 +46,11 @@ When Anchor runs this skill in background/review mode:
    - `[phase:draft]` while drafting the meeting note.
    - `[phase:proposal]` when preparing the `anchor_skill_proposal_v1` block.
    - `[phase:review]` when preparing the `anchor_meeting_review_v1` block.
+   - Always include exactly one phase marker per line and keep that marker
+     at the start of the line (after the timestamp) so the run-card parser
+     and Activity panel can colour-code each phase reliably.
+   - For errors, prepend `ERROR:` to the message or use `[phase:error]` so
+     the UI can surface them in red.
 2. Do not directly write files, update the vault, or run follow-up skills.
 3. Return one `anchor_skill_proposal_v1` JSON object with the meeting note file
    write proposal.
