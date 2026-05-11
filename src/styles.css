@@ -13,6 +13,8 @@
     ui-sans-serif,
     system-ui,
     sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
   --bg: #f4f3ee;
   --bg-tint: #eceae3;
   --panel: #ffffff;
@@ -555,14 +557,14 @@ a {
   color: var(--panel);
   font-weight: 750;
   font-size: 13px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   margin-left: 70px;
 }
 
 .brand-name {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -931,7 +933,11 @@ a {
   gap: 6px;
   padding: 10px 6px;
   border-right: 1px solid var(--line-subtle);
-  background: var(--rail-bg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--rail-bg) 92%, var(--rail-fg) 8%),
+    var(--rail-bg)
+  );
   color: var(--rail-fg);
 }
 
@@ -946,6 +952,7 @@ a {
   cursor: pointer;
   transition:
     background 120ms ease,
+    box-shadow 120ms ease,
     color 120ms ease,
     transform 100ms ease;
 }
@@ -953,11 +960,15 @@ a {
 .activity-button:hover {
   background: var(--rail-hover);
   color: var(--rail-fg-strong);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .activity-button.active {
   color: var(--rail-fg-strong);
   background: var(--rail-active);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 6px 18px -14px rgba(0, 0, 0, 0.7);
 }
 
 .activity-button.active::before {
@@ -1086,7 +1097,7 @@ a {
   color: var(--on-accent);
   font-size: 13px;
   font-weight: 650;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   box-shadow: var(--shadow-sm);
   transition: background 140ms ease, transform 100ms ease;
 }
@@ -1389,7 +1400,7 @@ a {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -1809,7 +1820,7 @@ a {
   font-size: 13.5px;
   font-weight: 650;
   line-height: 1.3;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -2221,7 +2232,7 @@ a {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -2396,7 +2407,7 @@ a {
   color: var(--ink);
   font-weight: 650;
   font-size: 13px;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2570,7 +2581,7 @@ a {
 .preview-surface h2,
 .preview-surface h3,
 .preview-surface h4 {
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   line-height: 1.25;
   color: var(--ink);
 }
@@ -3657,6 +3668,44 @@ button.git-badge:hover {
   color: var(--ink);
   font-size: 12px;
   font-weight: 700;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
+}
+
+.primary-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 0 13px;
+  font-size: 12.5px;
+  font-weight: 750;
+  box-shadow: var(--shadow-sm);
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--button-primary-hover);
+  box-shadow: var(--shadow);
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .danger-button {
@@ -3664,6 +3713,18 @@ button.git-badge:hover {
   color: var(--danger);
 }
 
+.danger-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 58%, var(--line));
+  background: var(--danger-soft);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.primary-button:disabled,
 .secondary-button:disabled,
 .danger-button:disabled {
   opacity: 0.45;
@@ -4863,7 +4924,7 @@ button.git-badge:hover {
   border-radius: var(--radius);
   cursor: pointer;
   font-weight: 650;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   transition:
     background 140ms ease,
     border-color 140ms ease,
@@ -4937,22 +4998,25 @@ button.git-badge:hover {
 }
 
 .icon-button {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--muted);
   background: transparent;
   cursor: pointer;
   transition:
     background 140ms ease,
+    border-color 140ms ease,
     color 140ms ease,
     transform 100ms ease;
 }
 
 .icon-button:hover {
   background: var(--panel-3);
+  border-color: var(--line-soft);
   color: var(--ink);
 }
 
@@ -5140,7 +5204,7 @@ button.git-badge:hover {
   color: var(--ink);
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
 }
 
 .dialog-header p,
@@ -7170,7 +7234,7 @@ button.git-badge:hover {
   grid-area: system;
   display: grid;
   grid-template-rows: auto auto 1fr;
-  background: var(--panel);
+  background: var(--bg);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -7181,8 +7245,9 @@ button.git-badge:hover {
   background: var(--panel-2);
 }
 .system-header {
-  padding: 18px 24px 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 18px 24px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel);
   display: grid;
   gap: 4px;
 }
@@ -7190,41 +7255,57 @@ button.git-badge:hover {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
+  text-wrap: balance;
 }
 .system-header p {
   margin: 0;
   color: var(--muted);
   font-size: 12.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 .system-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 24px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel-2);
+  gap: 6px;
+  padding: 9px 24px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-2) 86%, var(--bg));
   overflow-y: auto;
+  scrollbar-width: thin;
 }
 .system-tab {
-  padding: 6px 12px;
+  min-height: 30px;
+  padding: 0 12px;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: 7px;
   background: transparent;
   color: var(--muted);
   font-size: 12.5px;
+  font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
 }
 .system-tab:hover {
   color: var(--ink);
   background: var(--panel);
+  border-color: var(--line-soft);
 }
 .system-tab.active {
   color: var(--ink);
-  background: var(--panel);
-  border-color: var(--line);
+  background: var(--panel-raised);
+  border-color: var(--line-soft);
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+}
+.system-tab:active {
+  transform: scale(0.96);
 }
 .system-body {
   min-height: 0;
@@ -7302,10 +7383,11 @@ button.git-badge:hover {
 .system-detail {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 8px;
+  gap: 12px;
   min-height: 0;
-  padding: 14px 18px;
+  padding: 18px 22px;
   overflow: auto;
+  background: var(--bg);
 }
 .system-detail-actions {
   display: flex;
@@ -7325,53 +7407,89 @@ button.git-badge:hover {
 }
 
 .settings-form {
-  max-width: 520px;
+  width: min(760px, 100%);
+  max-width: 100%;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .settings-form .field {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   color: var(--muted);
   font-size: 12.5px;
+  line-height: 1.35;
 }
 
 .settings-form .checkbox-field {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   justify-content: start;
+  gap: 9px;
+  min-height: 36px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--panel-2);
 }
 
 .settings-form .field span {
+  color: var(--ink-2);
   font-weight: 650;
 }
 
 .settings-form .field small {
   color: var(--muted);
   font-size: 11.5px;
-  line-height: 1.35;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .settings-form input,
 .settings-form select,
 .settings-form .settings-textarea {
-  height: 34px;
-  border: 1px solid var(--line);
+  height: 36px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--panel-2);
+  background: var(--panel-raised);
   color: var(--ink);
   padding: 0 10px;
   outline: 0;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 80%, transparent);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.settings-form input:focus,
+.settings-form select:focus,
+.settings-form .settings-textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--line));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--panel) 80%, transparent),
+    0 0 0 3px var(--focus-ring);
+}
+
+.settings-form input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-width: 15px;
+  padding: 0;
+  accent-color: var(--accent);
+  box-shadow: none;
 }
 
 .settings-grid {
   display: grid;
-  gap: 12px;
+  gap: 13px;
 }
 
 .settings-grid.two {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
 }
 
 .inbox-runtime-editor {
@@ -7383,11 +7501,12 @@ button.git-badge:hover {
 
 .settings-section-panel {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 13px;
+  padding: 14px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-section-heading {
@@ -7403,13 +7522,17 @@ button.git-badge:hover {
 }
 
 .settings-section-heading strong {
-  font-size: 12.5px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .settings-section-heading span,
 .settings-warning {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .inbox-channel-editor {
@@ -7493,6 +7616,23 @@ button.git-badge:hover {
   font-size: 12px;
   line-height: 1.45;
   resize: vertical;
+}
+
+@media (max-width: 720px) {
+  .system-header,
+  .system-tabs,
+  .system-detail {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .settings-section-heading {
+    display: grid;
+  }
+
+  .settings-form .checkbox-field {
+    width: 100%;
+  }
 }
 
 .inbox-runtime-editor .settings-textarea {
@@ -7682,16 +7822,22 @@ button.git-badge:hover {
 }
 
 .meetings-pane {
+  --meetings-event-1: var(--accent);
+  --meetings-event-2: var(--info);
+  --meetings-event-3: var(--accent-2);
+  --meetings-event-4: var(--warn);
+  --meetings-event-5: var(--danger);
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--bg)) 0, var(--bg) 260px);
   color: var(--ink);
 }
 
 .meetings-sidebar {
   min-width: 0;
-  border-right: 1px solid var(--line);
-  background: var(--panel);
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
   padding: 18px 12px;
   overflow: auto;
 }
@@ -7704,11 +7850,14 @@ button.git-badge:hover {
 
 .meetings-sidebar-head strong {
   font-size: 14px;
+  line-height: 1.25;
 }
 
 .meetings-sidebar-head span {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.4;
+  text-wrap: pretty;
 }
 
 .meetings-sidebar-list,
@@ -7729,6 +7878,12 @@ button.git-badge:hover {
   background: transparent;
   color: var(--ink);
   text-align: left;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
 }
 
 .meetings-sidebar-item {
@@ -7744,10 +7899,21 @@ button.git-badge:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.meetings-sidebar-item:hover,
+.meetings-list-row:hover,
+.meetings-date-results button:hover {
+  border-color: var(--line-soft);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
+}
+
 .meetings-sidebar-item.active,
 .meetings-list-row.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: var(--active-surface);
+  box-shadow:
+    inset 2px 0 0 var(--accent),
+    var(--shadow-sm);
 }
 
 .meetings-main {
@@ -7763,20 +7929,26 @@ button.git-badge:hover {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  padding: 18px 22px 15px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--panel) 74%, transparent);
 }
 
 .meetings-actions-bar h1 {
   margin: 0;
   font-size: 20px;
+  letter-spacing: 0;
+  line-height: 1.18;
+  text-wrap: balance;
 }
 
 .meetings-actions-bar p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .meetings-actions,
@@ -7792,9 +7964,10 @@ button.git-badge:hover {
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--panel);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--panel) 74%, transparent);
 }
 
 .segmented-control button {
@@ -7807,15 +7980,26 @@ button.git-badge:hover {
   background: transparent;
   color: var(--muted);
   padding: 0 9px;
+  font-weight: 650;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
 }
 
 .segmented-control button.active {
-  background: var(--accent-soft);
+  background: var(--panel-raised);
   color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented-control button:active {
+  transform: scale(0.96);
 }
 
 .meetings-toolbar {
-  padding: 14px 22px 10px;
+  padding: 14px 22px 11px;
 }
 
 .meetings-search {
@@ -7825,11 +8009,20 @@ button.git-badge:hover {
 
 .meetings-select {
   height: 34px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--panel-raised);
   color: var(--ink);
   padding: 0 10px;
+  outline: 0;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.meetings-select:focus {
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--line));
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .meetings-content-grid {
@@ -7845,9 +8038,10 @@ button.git-badge:hover {
 .meetings-detail-pane {
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
 }
 
 .meetings-list {
@@ -7855,9 +8049,9 @@ button.git-badge:hover {
 }
 
 .meetings-list-row {
-  grid-template-columns: 92px auto minmax(0, 1fr) minmax(0, 0.8fr);
-  min-height: 48px;
-  padding: 8px 10px;
+  grid-template-columns: 96px max-content minmax(0, 1fr) minmax(0, 0.85fr);
+  min-height: 50px;
+  padding: 8px 11px;
   border-radius: 8px;
 }
 
@@ -7871,6 +8065,8 @@ button.git-badge:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .meetings-type-chip,
@@ -7878,13 +8074,18 @@ button.git-badge:hover {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
   padding: 0 8px;
-  background: var(--bg);
+  background: var(--panel-2);
   color: var(--muted);
   font-size: 11px;
   font-weight: 650;
+}
+
+.meetings-type-chip {
+  color: var(--accent);
+  background: var(--accent-tint);
 }
 
 .meetings-empty {
@@ -7893,6 +8094,7 @@ button.git-badge:hover {
   place-items: center;
   gap: 8px;
   color: var(--muted);
+  font-size: 12.5px;
 }
 
 .meetings-calendar {
@@ -7906,54 +8108,120 @@ button.git-badge:hover {
 .meetings-calendar .rbc-month-view,
 .meetings-calendar .rbc-time-view,
 .meetings-calendar .rbc-agenda-view {
-  border-color: var(--line);
-  background: var(--panel);
+  overflow: hidden;
+  border-color: var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
 }
 
 .meetings-calendar .rbc-toolbar {
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 13px;
+}
+
+.meetings-calendar .rbc-toolbar-label {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.2;
 }
 
 .meetings-calendar .rbc-toolbar button {
-  border: 1px solid var(--line);
+  min-height: 30px;
+  border: 1px solid var(--line-soft);
   border-radius: 7px;
-  background: var(--bg);
+  background: var(--panel);
   color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 100ms ease;
+}
+
+.meetings-calendar .rbc-toolbar button:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .meetings-calendar .rbc-toolbar button.rbc-active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: var(--active-surface);
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--line));
+  color: var(--ink);
+}
+
+.meetings-calendar .rbc-toolbar button:active {
+  transform: scale(0.96);
 }
 
 .meetings-calendar .rbc-header,
 .meetings-calendar .rbc-date-cell,
 .meetings-calendar .rbc-off-range-bg,
 .meetings-calendar .rbc-today {
-  border-color: var(--line);
+  border-color: var(--line-soft);
+}
+
+.meetings-calendar .rbc-header {
+  padding: 8px 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.meetings-calendar .rbc-date-cell {
+  padding: 5px 6px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .meetings-calendar .rbc-off-range-bg {
-  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  background: color-mix(in srgb, var(--panel) 72%, var(--bg));
 }
 
 .meetings-calendar .rbc-today {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-tint) 74%, var(--panel));
 }
 
 .meetings-calendar .rbc-event {
   border: 0;
   border-radius: 6px;
   background: var(--accent);
-  color: var(--accent-contrast);
+  color: var(--on-accent);
+  padding: 3px 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  box-shadow: 0 6px 16px -14px rgba(0, 0, 0, 0.6);
 }
 
-.meetings-calendar .meeting-type-1 { background: #3f6f8f; }
-.meetings-calendar .meeting-type-2 { background: #7a5a9e; }
-.meetings-calendar .meeting-type-3 { background: #587949; }
-.meetings-calendar .meeting-type-4 { background: #9b5b4f; }
-.meetings-calendar .meeting-type-5 { background: #6f6a3f; }
+.meetings-calendar .rbc-event:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.meetings-calendar .rbc-agenda-table,
+.meetings-calendar .rbc-agenda-table tbody > tr > td {
+  border-color: var(--line-soft);
+}
+
+.meetings-calendar .rbc-agenda-date-cell,
+.meetings-calendar .rbc-agenda-time-cell {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meetings-calendar .meeting-type-1 { background: var(--meetings-event-1); }
+.meetings-calendar .meeting-type-2 { background: var(--meetings-event-2); }
+.meetings-calendar .meeting-type-3 { background: var(--meetings-event-3); }
+.meetings-calendar .meeting-type-4 { background: var(--meetings-event-4); }
+.meetings-calendar .meeting-type-5 { background: var(--meetings-event-5); }
 
 .meetings-date-lookup,
 .meetings-flow {
@@ -7961,9 +8229,10 @@ button.git-badge:hover {
   gap: 12px;
   margin: 0 22px 12px;
   padding: 14px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
 }
 
 .meetings-date-results {
@@ -7975,16 +8244,19 @@ button.git-badge:hover {
 
 .meetings-date-results button {
   width: auto;
-  min-height: 28px;
+  min-height: 30px;
   padding: 0 9px;
-  border-color: var(--line);
+  border-color: var(--line-soft);
   border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .meetings-detail-pane {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 13px;
   padding: 14px;
 }
 
@@ -8004,6 +8276,8 @@ button.git-badge:hover {
 .meetings-detail-pane h2 {
   margin: 2px 0;
   font-size: 18px;
+  line-height: 1.22;
+  text-wrap: balance;
 }
 
 .meetings-detail-pane p,
@@ -8011,6 +8285,8 @@ button.git-badge:hover {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .meetings-detail-meta,
@@ -8025,12 +8301,12 @@ button.git-badge:hover {
   margin: 0;
   overflow: auto;
   white-space: pre-wrap;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
   color: var(--ink);
   padding: 12px;
-  font-family: var(--mono);
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -8040,19 +8316,40 @@ button.git-badge:hover {
   margin: 0;
 }
 
+.meetings-flow h2 {
+  font-size: 17px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
 .meetings-flow p {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
 }
 
 .meetings-textarea {
   min-height: 180px;
   resize: vertical;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
   color: var(--ink);
   padding: 10px;
+  outline: 0;
+  font-family: inherit;
+  line-height: 1.5;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.meetings-textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--line));
+  background: var(--panel-raised);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .meetings-selected-files span {
@@ -8060,16 +8357,18 @@ button.git-badge:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
   padding: 3px 8px;
+  background: var(--panel-2);
   color: var(--muted);
   font-size: 11px;
+  font-weight: 650;
 }
 
 .meetings-progress-dock {
-  border-top: 1px solid var(--line);
-  background: var(--panel);
+  border-top: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 88%, var(--bg));
   padding: 10px 22px;
 }
 
@@ -8086,10 +8385,11 @@ button.git-badge:hover {
   grid-template-columns: minmax(0, 180px) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
   padding: 8px;
-  background: var(--bg);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
 }
 
 .meetings-mission-card div {
@@ -8113,9 +8413,68 @@ button.git-badge:hover {
   margin: 0;
   white-space: pre-wrap;
   color: var(--muted);
-  font-family: var(--mono);
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
   font-size: 11px;
   max-height: 64px;
+}
+
+@media (max-width: 980px) {
+  .meetings-pane,
+  .meetings-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meetings-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .meetings-content-grid {
+    overflow: auto;
+  }
+
+  .meetings-detail-pane {
+    min-height: 360px;
+  }
+
+  .meetings-mission-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .meetings-mission-card pre {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .meetings-actions-bar,
+  .meetings-actions {
+    align-items: flex-start;
+  }
+
+  .meetings-actions-bar {
+    display: grid;
+    padding: 14px;
+  }
+
+  .meetings-toolbar,
+  .meetings-content-grid,
+  .meetings-date-lookup,
+  .meetings-flow,
+  .meetings-progress-dock {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .meetings-list-row {
+    grid-template-columns: 82px max-content minmax(0, 1fr);
+  }
+
+  .meetings-list-row > span:last-child {
+    grid-column: 1 / -1;
+  }
 }
 
 :is(

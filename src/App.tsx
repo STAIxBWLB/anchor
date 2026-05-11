@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import type React from "react";
 import {
   AlertTriangle,
-  CalendarDays,
   Clock3,
   Command,
   FileText,
@@ -12,6 +11,7 @@ import {
   PanelLeftOpen,
   RefreshCcw,
   Settings2,
+  UsersRound,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -5469,7 +5469,7 @@ function MainApp() {
             title={t("mode.meetings")}
             aria-label={t("mode.meetings")}
           >
-            <CalendarDays size={20} />
+            <UsersRound size={20} strokeWidth={1.9} />
           </button>
           <button
             type="button"
