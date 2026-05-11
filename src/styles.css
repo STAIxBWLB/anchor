@@ -8775,6 +8775,16 @@ button.git-badge:hover {
   align-items: flex-start;
 }
 
+.meetings-followup-row.continuation {
+  color: var(--ink);
+}
+
+.meetings-followup-row.continuation svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
 .meetings-followup-row div {
   min-width: 0;
   display: grid;

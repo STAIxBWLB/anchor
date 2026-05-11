@@ -175,6 +175,16 @@ describe("meeting review apply readiness", () => {
       checksComplete: false,
     })).toBe(false);
   });
+
+  it("allows approved continuation runs without proposal files", () => {
+    expect(meetingReviewCanApply({
+      proposal: null,
+      files: [],
+      followups: [],
+      checksComplete: true,
+      continuationAvailable: true,
+    })).toBe(true);
+  });
 });
 
 describe("meeting run step derivation", () => {

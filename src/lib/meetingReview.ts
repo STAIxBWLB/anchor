@@ -163,16 +163,19 @@ export function meetingReviewCanApply({
   followups,
   checksComplete,
   applyBusy = false,
+  continuationAvailable = false,
 }: {
   proposal: SkillProposal | null;
   files: MeetingProposalFileDraft[];
   followups: MeetingFollowupCandidate[];
   checksComplete: boolean;
   applyBusy?: boolean;
+  continuationAvailable?: boolean;
 }): boolean {
   if (applyBusy || !checksComplete) return false;
   const selectedFiles = selectedProposalFileCount(files);
   const selectedFollowups = selectedMeetingFollowupCount(followups);
+  if (continuationAvailable) return true;
   if (selectedFiles === 0 && selectedFollowups === 0) return false;
   return selectedFiles === 0 || Boolean(proposal);
 }

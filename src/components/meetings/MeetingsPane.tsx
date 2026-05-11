@@ -791,6 +791,7 @@ type MeetingSourceKind = "transcript" | "external";
 interface MeetingReviewBundle {
   runId: string;
   mission: MissionRecord;
+  rawOutput: string;
   proposal: SkillProposal | null;
   review: MeetingReviewArtifact;
   files: MeetingProposalFileDraft[];
@@ -955,6 +956,7 @@ function MeetingsSkillWorkbench({
       setBundle({
         runId: mission.id,
         mission,
+        rawOutput: raw,
         proposal,
         review,
         files,
@@ -973,6 +975,7 @@ function MeetingsSkillWorkbench({
   const selectedFiles = bundle ? selectedProposalFileCount(bundle.files) : 0;
   const selectedFollowups = bundle ? selectedMeetingFollowupCount(bundle.followups) : 0;
   const appliedCurrentRun = Boolean(bundle && appliedRunIds.has(bundle.runId));
+  const continuationAvailable = bundle ? meetingApprovalContinuationAvailable(bundle) : false;
   const canApply = bundle
     ? !appliedCurrentRun && meetingReviewCanApply({
       proposal: bundle.proposal,
@@ -980,6 +983,7 @@ function MeetingsSkillWorkbench({
       followups: bundle.followups,
       checksComplete,
       applyBusy,
+      continuationAvailable,
     })
     : false;
 
@@ -993,17 +997,19 @@ function MeetingsSkillWorkbench({
       kind: "meetings.proposal.apply",
       summary: t("meetings.review.applySummaryDetailed", {
         files: proposal?.files.length ?? 0,
-        followups: selectedFollowups,
+        followups: selectedFollowups + (continuationAvailable ? 1 : 0),
       }),
       target: [
         ...(proposal?.files.map((file) => file.path) ?? []),
         ...selectedFollowupItems.map((item) => `${item.skill}: ${item.title}`),
-      ].join("\n"),
+        continuationAvailable ? `${meetingMissionTitle(bundle.mission)}: MCP Obsidian continuation` : null,
+      ].filter(Boolean).join("\n"),
       payloadPreview: [
         proposal?.summary ?? bundle.review.summary,
         ...bundle.checks.map((check) => `${check.kind}: ${check.label} -> ${check.normalized} (${check.status})`),
         ...selectedFollowupItems.map((item) => `followup: ${item.skill} - ${item.title}`),
-      ].join("\n"),
+        continuationAvailable ? `approved-continuation:\n${bundle.rawOutput}` : null,
+      ].filter(Boolean).join("\n"),
     });
     if (!approvalId) return;
     setApplyBusy(true);
@@ -1025,10 +1031,18 @@ function MeetingsSkillWorkbench({
           onMissionStarted,
         });
       }
+      if (continuationAvailable) {
+        await dispatchApprovedFollowupContinuation({
+          workPath,
+          skills,
+          bundle,
+          onMissionStarted,
+        });
+      }
       setApplyResult({
         runId: bundle.runId,
         files: proposal?.files.length ?? 0,
-        followups: selectedFollowupItems.length,
+        followups: selectedFollowupItems.length + (continuationAvailable ? 1 : 0),
         appliedAt: new Date().toISOString(),
       });
       setAppliedRunIds((current) => new Set([...current, bundle.runId]));
@@ -1116,6 +1130,7 @@ function MeetingsSkillWorkbench({
           applyBusy={applyBusy}
           canApply={canApply}
           applyResult={applyResult?.runId === bundle?.runId ? applyResult : null}
+          continuationAvailable={continuationAvailable}
           onApply={() => void applyReview()}
           onUpdateFile={(id, patch) => {
             setBundle((current) => current ? {
@@ -1213,6 +1228,7 @@ function MeetingReviewPanel({
   applyBusy,
   canApply,
   applyResult,
+  continuationAvailable,
   onApply,
   onUpdateFile,
   onUpdateCheck,
@@ -1223,6 +1239,7 @@ function MeetingReviewPanel({
   applyBusy: boolean;
   canApply: boolean;
   applyResult: MeetingApplyResult | null;
+  continuationAvailable: boolean;
   onApply: () => void;
   onUpdateFile: (id: string, patch: Partial<MeetingProposalFileDraft>) => void;
   onUpdateCheck: (id: string, patch: Partial<MeetingReviewCheck>) => void;
@@ -1387,7 +1404,18 @@ function MeetingReviewPanel({
           <div className="meetings-followups">
             <h3>{t("meetings.review.followups")}</h3>
             {bundle.followups.length === 0 ? (
-              <div className="meetings-review-empty compact">{t("meetings.review.noFollowups")}</div>
+              continuationAvailable ? (
+                <div className="meetings-followup-row continuation">
+                  <CheckCircle2 size={15} />
+                  <div>
+                    <strong>{meetingMissionTitle(bundle.mission)}</strong>
+                    <span>{t("meetings.review.approvedContinuation")}</span>
+                    <small>{t("meetings.review.approvedContinuationHelp")}</small>
+                  </div>
+                </div>
+              ) : (
+                <div className="meetings-review-empty compact">{t("meetings.review.noFollowups")}</div>
+              )
             ) : null}
             {bundle.followups.map((item) => (
               <label className="meetings-followup-row" key={item.id}>
@@ -1416,7 +1444,7 @@ function MeetingReviewPanel({
                   })
                 : t("meetings.review.applyReadyDetailed", {
                   files: selectedFiles,
-                  followups: selectedFollowups,
+                  followups: selectedFollowups + (continuationAvailable ? 1 : 0),
                 })}
             </span>
             <button type="button" className="primary-button" disabled={!canApply} onClick={onApply}>
@@ -1713,34 +1741,100 @@ async function dispatchSelectedFollowups({
 }) {
   const selected = bundle.followups.filter((item) => item.selected);
   const appliedPaths = bundle.files.filter((file) => file.selected).map((file) => file.path);
+  const runtime = normalizeSkillDispatchRuntime(meetingMissionRuntimeValue(bundle.mission)) ?? "claude";
   for (const followup of selected) {
     const skill = findSkill(skills, followup.skill);
     if (!skill) continue;
     const invocationId = await skillsDispatchBackground({
       skillId: skill.id,
-      runtime: "claude",
+      runtime,
       cwd: workPath,
       prompt: [
+        "The user approved this selected meeting follow-up. Execute the approved follow-up now.",
+        "",
         followup.prompt,
         "",
-        "Run contract:",
-        "- Do not directly write files.",
-        "- Emit progress logs.",
-        "- Return an anchor_skill_proposal_v1 JSON proposal for user review.",
+        "Approved execution contract:",
+        "- This is not proposal-only mode; proceed to the actual approved action.",
+        "- For vault markdown reads, writes, patches, moves, deletes, tags, and searches, use MCP Obsidian only.",
+        "- Do not use filesystem write/edit/shell commands for vault markdown.",
+        "- If an item is still genuinely blocked, apply all non-blocked approved changes first, then report the blocker clearly.",
+        "- Emit progress logs and a final completion summary with changed note paths.",
         appliedPaths.length > 0 ? `Meeting note path(s):\n${appliedPaths.join("\n")}` : null,
       ].filter(Boolean).join("\n"),
       context: appliedPaths.map((path) => ({ path, kind: "document" })),
       metadata: {
         origin: followupOrigin(followup.skill),
+        runtime,
         reviewFlow: true,
+        approvedExecution: true,
         parentRunId: bundle.runId,
-        parentRuntime: meetingMissionRuntimeValue(bundle.mission),
+        parentRuntime: runtime,
         workspacePath: workPath,
         skillName: followup.skill,
       },
     });
     onMissionStarted(invocationId);
   }
+}
+
+async function dispatchApprovedFollowupContinuation({
+  workPath,
+  skills,
+  bundle,
+  onMissionStarted,
+}: {
+  workPath: string;
+  skills: SkillRecord[];
+  bundle: MeetingReviewBundle;
+  onMissionStarted: (invocationId: string) => void;
+}) {
+  const skillName = meetingMissionSkillName(bundle.mission);
+  if (!skillName) return;
+  const skill = findSkill(skills, skillName);
+  if (!skill) return;
+  const runtime = normalizeSkillDispatchRuntime(meetingMissionRuntimeValue(bundle.mission)) ?? "claude";
+  const invocationId = await skillsDispatchBackground({
+    skillId: skill.id,
+    runtime,
+    cwd: workPath,
+    prompt: [
+      "The user approved the follow-up result below. Continue from that result and execute the approved changes now.",
+      "",
+      "Approved execution contract:",
+      "- For vault markdown reads, writes, patches, moves, deletes, tags, and searches, use MCP Obsidian only.",
+      "- Do not use filesystem write/edit/shell commands for vault markdown.",
+      "- Apply all non-blocked approved changes. If a specific item is still blocked, leave only that item pending and explain it clearly.",
+      "- Emit progress logs and a final completion summary with changed note paths.",
+      "",
+      "Previously reviewed follow-up output:",
+      bundle.rawOutput,
+    ].filter(Boolean).join("\n\n"),
+    context: [],
+    metadata: {
+      origin: followupOrigin(skillName),
+      runtime,
+      reviewFlow: true,
+      approvedExecution: true,
+      approvedContinuation: true,
+      parentRunId: bundle.runId,
+      parentRuntime: runtime,
+      workspacePath: workPath,
+      skillName,
+    },
+  });
+  onMissionStarted(invocationId);
+}
+
+function meetingApprovalContinuationAvailable(bundle: MeetingReviewBundle): boolean {
+  const skillName = meetingMissionSkillName(bundle.mission);
+  if (!skillName || !["vault-extract", "vault-connect", "task-management"].includes(skillName)) {
+    return false;
+  }
+  const metadata = meetingMissionMetadata(bundle.mission);
+  if (metadata?.approvedContinuation === true || metadata?.approvedExecution === true) return false;
+  if (bundle.proposal || bundle.files.length > 0 || bundle.followups.length > 0) return false;
+  return /승인|approval|approved|MCP\s*Obsidian|Obsidian/i.test(bundle.rawOutput);
 }
 
 function mergeMeetingsMissions(
@@ -1798,17 +1892,14 @@ function followupOrigin(skill: string): string {
 }
 
 function meetingMissionTitle(mission: MissionRecord): string {
-  const metadata = mission.metadata;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return mission.id;
-  const skillName = (metadata as Record<string, unknown>).skillName;
-  return typeof skillName === "string" && skillName.trim() ? skillName : mission.id;
+  return meetingMissionSkillName(mission) ?? mission.id;
 }
 
 function meetingMissionSource(mission: MissionRecord): string {
-  const metadata = mission.metadata;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return mission.id;
-  const sourceKind = (metadata as Record<string, unknown>).sourceKind;
-  const origin = (metadata as Record<string, unknown>).origin;
+  const metadata = meetingMissionMetadata(mission);
+  if (!metadata) return mission.id;
+  const sourceKind = metadata.sourceKind;
+  const origin = metadata.origin;
   return typeof sourceKind === "string"
     ? sourceKind
     : typeof origin === "string"
@@ -1824,10 +1915,27 @@ function meetingMissionRuntime(mission: MissionRecord): string {
 }
 
 function meetingMissionRuntimeValue(mission: MissionRecord): string | null {
-  const metadata = mission.metadata;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
-  const runtime = (metadata as Record<string, unknown>).runtime;
+  const metadata = meetingMissionMetadata(mission);
+  if (!metadata) return null;
+  const runtime = metadata.runtime ?? metadata.parentRuntime;
   return typeof runtime === "string" && runtime.trim() ? runtime : null;
+}
+
+function meetingMissionSkillName(mission: MissionRecord): string | null {
+  const metadata = meetingMissionMetadata(mission);
+  const skillName = metadata?.skillName;
+  return typeof skillName === "string" && skillName.trim() ? skillName : null;
+}
+
+function meetingMissionMetadata(mission: MissionRecord): Record<string, unknown> | null {
+  const metadata = mission.metadata;
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : null;
+}
+
+function normalizeSkillDispatchRuntime(value: string | null): SkillDispatchRuntime | null {
+  return value === "claude" || value === "codex" ? value : null;
 }
 
 function formatMissionTime(value: string): string {
