@@ -8525,6 +8525,39 @@ button.git-badge:hover {
   gap: 6px;
 }
 
+.meetings-apply-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--line-soft));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel-raised));
+  padding: 10px;
+  color: var(--ink);
+}
+
+.meetings-apply-result svg {
+  color: var(--accent);
+}
+
+.meetings-apply-result div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.meetings-apply-result strong {
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.meetings-apply-result span {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .meetings-review-summary span,
 .meetings-run-card-actions > span {
   display: inline-flex;
@@ -8771,6 +8804,13 @@ button.git-badge:hover {
 .meetings-run-panel {
   position: sticky;
   top: 0;
+}
+
+.meetings-run-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .meetings-run-card {

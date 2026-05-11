@@ -18,6 +18,7 @@ import {
   Search,
   Settings,
   Square,
+  Trash2,
   WandSparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -797,6 +798,13 @@ interface MeetingReviewBundle {
   followups: MeetingFollowupCandidate[];
 }
 
+interface MeetingApplyResult {
+  runId: string;
+  files: number;
+  followups: number;
+  appliedAt: string;
+}
+
 function MeetingsSkillWorkbench({
   sourceKind,
   workPath,
@@ -835,12 +843,17 @@ function MeetingsSkillWorkbench({
   const [reviewLoading, setReviewLoading] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
   const [bundle, setBundle] = useState<MeetingReviewBundle | null>(null);
+  const [applyResult, setApplyResult] = useState<MeetingApplyResult | null>(null);
   const [appliedRunIds, setAppliedRunIds] = useState<Set<string>>(() => new Set());
   const [localRuns, setLocalRuns] = useState<MissionRecord[]>([]);
+  const [clearedRunIds, setClearedRunIds] = useState<Set<string>>(() => new Set());
   const isExternal = sourceKind === "external";
   const hasSource = paths.length > 0 || note.trim().length > 0;
   const canRun = Boolean(workPath && hasSource);
-  const visibleMissions = useMemo(() => mergeMeetingsMissions(missions, localRuns), [localRuns, missions]);
+  const visibleMissions = useMemo(
+    () => mergeMeetingsMissions(missions, localRuns).filter((mission) => !clearedRunIds.has(mission.id)),
+    [clearedRunIds, localRuns, missions],
+  );
   const sourceTitle = isExternal ? t("meetings.external.title") : t("meetings.transcript.title");
   const sourceDescription = isExternal
     ? t("meetings.external.description")
@@ -906,6 +919,7 @@ function MeetingsSkillWorkbench({
         }),
         ...current.filter((mission) => mission.id !== invocationId),
       ]);
+      setApplyResult(null);
       onMissionStarted(invocationId);
       onRefreshMissions();
     } catch (err) {
@@ -947,6 +961,7 @@ function MeetingsSkillWorkbench({
         checks: createMeetingReviewChecks(review),
         followups: review.followups,
       });
+      setApplyResult(null);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -957,8 +972,9 @@ function MeetingsSkillWorkbench({
   const checksComplete = bundle ? meetingReviewChecksComplete(bundle.checks) : false;
   const selectedFiles = bundle ? selectedProposalFileCount(bundle.files) : 0;
   const selectedFollowups = bundle ? selectedMeetingFollowupCount(bundle.followups) : 0;
+  const appliedCurrentRun = Boolean(bundle && appliedRunIds.has(bundle.runId));
   const canApply = bundle
-    ? meetingReviewCanApply({
+    ? !appliedCurrentRun && meetingReviewCanApply({
       proposal: bundle.proposal,
       files: bundle.files,
       followups: bundle.followups,
@@ -1009,6 +1025,12 @@ function MeetingsSkillWorkbench({
           onMissionStarted,
         });
       }
+      setApplyResult({
+        runId: bundle.runId,
+        files: proposal?.files.length ?? 0,
+        followups: selectedFollowupItems.length,
+        appliedAt: new Date().toISOString(),
+      });
       setAppliedRunIds((current) => new Set([...current, bundle.runId]));
       onApplied();
       onRefreshMissions();
@@ -1093,6 +1115,7 @@ function MeetingsSkillWorkbench({
           loading={reviewLoading}
           applyBusy={applyBusy}
           canApply={canApply}
+          applyResult={applyResult?.runId === bundle?.runId ? applyResult : null}
           onApply={() => void applyReview()}
           onUpdateFile={(id, patch) => {
             setBundle((current) => current ? {
@@ -1125,6 +1148,9 @@ function MeetingsSkillWorkbench({
           loadingReview={reviewLoading}
           onRefresh={onRefreshMissions}
           onStopMission={onStopMission}
+          onClearMission={(id) =>
+            setClearedRunIds((current) => new Set([...current, id]))
+          }
           onReviewResult={(mission) => void loadReviewResult(mission)}
         />
       </div>
@@ -1186,6 +1212,7 @@ function MeetingReviewPanel({
   loading,
   applyBusy,
   canApply,
+  applyResult,
   onApply,
   onUpdateFile,
   onUpdateCheck,
@@ -1195,6 +1222,7 @@ function MeetingReviewPanel({
   loading: boolean;
   applyBusy: boolean;
   canApply: boolean;
+  applyResult: MeetingApplyResult | null;
   onApply: () => void;
   onUpdateFile: (id: string, patch: Partial<MeetingProposalFileDraft>) => void;
   onUpdateCheck: (id: string, patch: Partial<MeetingReviewCheck>) => void;
@@ -1240,6 +1268,20 @@ function MeetingReviewPanel({
             <span>{t("meetings.review.files", { count: bundle.files.length })}</span>
             <span>{t("meetings.review.pending", { count: pendingRequired })}</span>
           </div>
+
+          {applyResult ? (
+            <div className="meetings-apply-result">
+              <CheckCircle2 size={16} />
+              <div>
+                <strong>{t("meetings.review.applyDoneTitle")}</strong>
+                <span>{t("meetings.review.applyDoneDescription", {
+                  files: applyResult.files,
+                  followups: applyResult.followups,
+                  time: formatMissionTime(applyResult.appliedAt),
+                })}</span>
+              </div>
+            </div>
+          ) : null}
 
           <div className="meetings-proposal-files">
             {bundle.files.length === 0 ? (
@@ -1367,6 +1409,11 @@ function MeetingReviewPanel({
             <span>
               {pendingRequired > 0
                 ? t("meetings.review.applyBlocked", { count: pendingRequired })
+                : applyResult
+                  ? t("meetings.review.applyDoneDetailed", {
+                    files: applyResult.files,
+                    followups: applyResult.followups,
+                  })
                 : t("meetings.review.applyReadyDetailed", {
                   files: selectedFiles,
                   followups: selectedFollowups,
@@ -1374,7 +1421,7 @@ function MeetingReviewPanel({
             </span>
             <button type="button" className="primary-button" disabled={!canApply} onClick={onApply}>
               {applyBusy ? <Loader2 size={14} className="spin" /> : <CheckCircle2 size={14} />}
-              {t("meetings.review.apply")}
+              {applyResult ? t("meetings.review.applied") : t("meetings.review.apply")}
             </button>
           </div>
         </>
@@ -1392,6 +1439,7 @@ function MeetingsRunPanel({
   loadingReview,
   onRefresh,
   onStopMission,
+  onClearMission,
   onReviewResult,
 }: {
   missions: MissionRecord[];
@@ -1402,6 +1450,7 @@ function MeetingsRunPanel({
   loadingReview: boolean;
   onRefresh: () => void;
   onStopMission: (id: string) => void;
+  onClearMission: (id: string) => void;
   onReviewResult: (mission: MissionRecord) => void;
 }) {
   const { t } = useTranslation();
@@ -1414,9 +1463,25 @@ function MeetingsRunPanel({
           <h2>{t("meetings.progress.title")}</h2>
           <p>{t("meetings.progress.count", { count: missions.length })}</p>
         </div>
-        <button type="button" className="icon-button" onClick={onRefresh} title={t("meetings.refresh")} aria-label={t("meetings.refresh")}>
-          <RefreshCcw size={14} />
-        </button>
+        <div className="meetings-run-header-actions">
+          <button type="button" className="icon-button" onClick={onRefresh} title={t("meetings.refresh")} aria-label={t("meetings.refresh")}>
+            <RefreshCcw size={14} />
+          </button>
+          {missions.some((mission) => mission.status !== "running" && mission.status !== "idle") ? (
+            <button
+              type="button"
+              className="button button-ghost button-sm"
+              onClick={() => {
+                for (const mission of missions) {
+                  if (mission.status !== "running" && mission.status !== "idle") onClearMission(mission.id);
+                }
+              }}
+            >
+              <Trash2 size={12} />
+              <span>{t("meetings.progress.clearDone")}</span>
+            </button>
+          ) : null}
+        </div>
       </header>
       <div className="meetings-run-list">
         {missions.length === 0 ? (
@@ -1455,7 +1520,12 @@ function MeetingsRunPanel({
                     <Square size={12} />
                     <span>{t("meetings.progress.stop")}</span>
                   </button>
-                ) : null}
+                ) : (
+                  <button type="button" className="button button-ghost button-sm" onClick={() => onClearMission(mission.id)}>
+                    <Trash2 size={12} />
+                    <span>{t("meetings.progress.clear")}</span>
+                  </button>
+                )}
               </div>
               <div className="meetings-run-meta">
                 <span>{meetingMissionRuntime(mission)}</span>
