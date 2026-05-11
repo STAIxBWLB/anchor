@@ -145,6 +145,13 @@ export function MeetingsPane({
   const [selectedRelPath, setSelectedRelPath] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<MeetingMetadata | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
+  const clearedRunStorageKey = useMemo(
+    () => `anchor:meetings:cleared-runs:${workPath ?? "no-workspace"}`,
+    [workPath],
+  );
+  const [clearedRunIds, setClearedRunIds] = useState<Set<string>>(() =>
+    readClearedMeetingRunIds(clearedRunStorageKey),
+  );
 
   const entries = useMemo(() => rowsToMeetingEntries(rows), [rows]);
   const availableTypes = useMemo(
@@ -170,6 +177,24 @@ export function MeetingsPane({
     () => activeMeetingsMissions(processingMissions),
     [processingMissions],
   );
+  const visibleMeetingsMissions = useMemo(
+    () => meetingsMissions.filter((mission) => !clearedRunIds.has(mission.id)),
+    [clearedRunIds, meetingsMissions],
+  );
+
+  useEffect(() => {
+    setClearedRunIds(readClearedMeetingRunIds(clearedRunStorageKey));
+  }, [clearedRunStorageKey]);
+
+  const clearMeetingMission = useCallback((id: string) => {
+    setClearedRunIds((current) => {
+      if (current.has(id)) return current;
+      const next = new Set(current);
+      next.add(id);
+      writeClearedMeetingRunIds(clearedRunStorageKey, next);
+      return next;
+    });
+  }, [clearedRunStorageKey]);
 
   const refresh = useCallback(async () => {
     if (!workPath || !effectiveSettings.enabled) {
@@ -259,10 +284,11 @@ export function MeetingsPane({
             workPath={workPath}
             settings={effectiveSettings}
             skills={skills}
-            missions={meetingsMissions}
+            missions={visibleMeetingsMissions}
             logLines={processingLogLines}
             onMissionStarted={onMissionStarted}
             onStopMission={onStopMission}
+            onClearMission={clearMeetingMission}
             onRefreshMissions={onRefreshMissions}
             onConfirmApproval={onConfirmApproval}
             onApplied={() => void refresh()}
@@ -273,10 +299,11 @@ export function MeetingsPane({
             workPath={workPath}
             settings={effectiveSettings}
             skills={skills}
-            missions={meetingsMissions}
+            missions={visibleMeetingsMissions}
             logLines={processingLogLines}
             onMissionStarted={onMissionStarted}
             onStopMission={onStopMission}
+            onClearMission={clearMeetingMission}
             onRefreshMissions={onRefreshMissions}
             onConfirmApproval={onConfirmApproval}
             onApplied={() => void refresh()}
@@ -350,7 +377,7 @@ export function MeetingsPane({
         )}
         {view === "transcript" || view === "external" ? null : (
           <MeetingsProgressDock
-            missions={meetingsMissions}
+            missions={visibleMeetingsMissions}
             logLines={processingLogLines}
             onStopMission={onStopMission}
           />
@@ -708,6 +735,7 @@ function MeetingsTranscriptFlow({
   logLines,
   onMissionStarted,
   onStopMission,
+  onClearMission,
   onRefreshMissions,
   onConfirmApproval,
   onApplied,
@@ -720,6 +748,7 @@ function MeetingsTranscriptFlow({
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
   onStopMission: (id: string) => void;
+  onClearMission: (id: string) => void;
   onRefreshMissions: () => void;
   onConfirmApproval: MeetingsPaneProps["onConfirmApproval"];
   onApplied: () => void;
@@ -735,6 +764,7 @@ function MeetingsTranscriptFlow({
       logLines={logLines}
       onMissionStarted={onMissionStarted}
       onStopMission={onStopMission}
+      onClearMission={onClearMission}
       onRefreshMissions={onRefreshMissions}
       onConfirmApproval={onConfirmApproval}
       onApplied={onApplied}
@@ -751,6 +781,7 @@ function MeetingsExternalFlow({
   logLines,
   onMissionStarted,
   onStopMission,
+  onClearMission,
   onRefreshMissions,
   onConfirmApproval,
   onApplied,
@@ -763,6 +794,7 @@ function MeetingsExternalFlow({
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
   onStopMission: (id: string) => void;
+  onClearMission: (id: string) => void;
   onRefreshMissions: () => void;
   onConfirmApproval: MeetingsPaneProps["onConfirmApproval"];
   onApplied: () => void;
@@ -778,6 +810,7 @@ function MeetingsExternalFlow({
       logLines={logLines}
       onMissionStarted={onMissionStarted}
       onStopMission={onStopMission}
+      onClearMission={onClearMission}
       onRefreshMissions={onRefreshMissions}
       onConfirmApproval={onConfirmApproval}
       onApplied={onApplied}
@@ -815,6 +848,7 @@ function MeetingsSkillWorkbench({
   logLines,
   onMissionStarted,
   onStopMission,
+  onClearMission,
   onRefreshMissions,
   onConfirmApproval,
   onApplied,
@@ -828,6 +862,7 @@ function MeetingsSkillWorkbench({
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
   onStopMission: (id: string) => void;
+  onClearMission: (id: string) => void;
   onRefreshMissions: () => void;
   onConfirmApproval: MeetingsPaneProps["onConfirmApproval"];
   onApplied: () => void;
@@ -847,13 +882,12 @@ function MeetingsSkillWorkbench({
   const [applyResult, setApplyResult] = useState<MeetingApplyResult | null>(null);
   const [appliedRunIds, setAppliedRunIds] = useState<Set<string>>(() => new Set());
   const [localRuns, setLocalRuns] = useState<MissionRecord[]>([]);
-  const [clearedRunIds, setClearedRunIds] = useState<Set<string>>(() => new Set());
   const isExternal = sourceKind === "external";
   const hasSource = paths.length > 0 || note.trim().length > 0;
   const canRun = Boolean(workPath && hasSource);
   const visibleMissions = useMemo(
-    () => mergeMeetingsMissions(missions, localRuns).filter((mission) => !clearedRunIds.has(mission.id)),
-    [clearedRunIds, localRuns, missions],
+    () => mergeMeetingsMissions(missions, localRuns),
+    [localRuns, missions],
   );
   const sourceTitle = isExternal ? t("meetings.external.title") : t("meetings.transcript.title");
   const sourceDescription = isExternal
@@ -1163,9 +1197,7 @@ function MeetingsSkillWorkbench({
           loadingReview={reviewLoading}
           onRefresh={onRefreshMissions}
           onStopMission={onStopMission}
-          onClearMission={(id) =>
-            setClearedRunIds((current) => new Set([...current, id]))
-          }
+          onClearMission={onClearMission}
           onReviewResult={(mission) => void loadReviewResult(mission)}
         />
       </div>
@@ -1642,6 +1674,27 @@ function MeetingsProgressDock({
       </div>
     </section>
   );
+}
+
+function readClearedMeetingRunIds(key: string): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeClearedMeetingRunIds(key: string, ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(Array.from(ids).slice(-200)));
+  } catch {
+    // Non-critical UI state; ignore storage failures such as private-mode quota errors.
+  }
 }
 
 function findSkill(skills: SkillRecord[], name: string): SkillRecord | null {
