@@ -432,9 +432,22 @@ export interface InboxProcessMissionMetadata {
   inputPaths: string[];
   workspacePath?: string | null;
   skillName?: string | null;
+  runtime?: string | null;
+  sourceKind?: string | null;
+  parentRunId?: string | null;
 }
 
-export type MissionMetadata = InboxProcessMissionMetadata | Record<string, unknown>;
+export interface SkillMissionMetadata {
+  origin?: string | null;
+  skillName?: string | null;
+  runtime?: string | null;
+  workspacePath?: string | null;
+  inputPaths?: string[];
+  sourceKind?: string | null;
+  parentRunId?: string | null;
+}
+
+export type MissionMetadata = InboxProcessMissionMetadata | SkillMissionMetadata | Record<string, unknown>;
 
 export interface MissionRecord {
   id: string;

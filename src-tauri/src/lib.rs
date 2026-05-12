@@ -77,7 +77,8 @@ use skill_host::{
     skills_env_bootstrap, skills_env_repair, skills_env_status, skills_install_skill,
     skills_list_installs, skills_list_skills, skills_list_sources, skills_read_skill,
     skills_read_skill_file, skills_remove_source, skills_rescan_source, skills_reset_registry,
-    skills_save_skill_as, skills_save_skill_file, skills_sync_source, skills_uninstall_skill,
+    skills_runtime_status, skills_save_skill_as, skills_save_skill_file, skills_sync_source,
+    skills_uninstall_skill,
 };
 use sys_import::{apply_sys_import, plan_sys_import};
 use tauri::Manager;
@@ -246,6 +247,7 @@ pub fn run() {
             skills_dispatch_compose,
             skills_dispatch_terminal,
             skills_dispatch_background,
+            skills_runtime_status,
             agent_read_run_events,
             agent_replay_run_summary,
             agent_export_redacted_run_summary,

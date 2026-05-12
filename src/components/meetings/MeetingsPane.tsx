@@ -89,8 +89,10 @@ import {
   agentParseSkillProposal,
   agentReadRunEvents,
   skillsDispatchBackground,
+  skillsRuntimeStatus,
   type SkillDispatchRuntime,
   type SkillContextItem,
+  type SkillRuntimeStatus,
   type SkillProposal,
   type SkillRecord,
 } from "../../lib/skills";
@@ -109,6 +111,7 @@ interface MeetingsPaneProps {
   settings: MeetingsSettings;
   effectiveSettings: MeetingsSettings;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   processingMissions: MissionRecord[];
   processingLogLines: Record<string, string[]>;
   onRefreshMissions: () => void;
@@ -144,6 +147,7 @@ export function MeetingsPane({
   settings,
   effectiveSettings,
   skills,
+  runtimeCommands,
   processingMissions,
   processingLogLines,
   onRefreshMissions,
@@ -206,6 +210,7 @@ export function MeetingsPane({
 
   useEffect(() => {
     setClearedRunIds(readClearedMeetingRunIds(clearedRunStorageKey));
+    setLastClearedMissionId(null);
   }, [clearedRunStorageKey]);
 
   const clearMeetingMission = useCallback((id: string) => {
@@ -355,6 +360,7 @@ export function MeetingsPane({
             workPath={workPath}
             settings={effectiveSettings}
             skills={skills}
+            runtimeCommands={runtimeCommands}
             missions={visibleMeetingsMissions}
             logLines={processingLogLines}
             onMissionStarted={onMissionStarted}
@@ -372,6 +378,7 @@ export function MeetingsPane({
             workPath={workPath}
             settings={effectiveSettings}
             skills={skills}
+            runtimeCommands={runtimeCommands}
             missions={visibleMeetingsMissions}
             logLines={processingLogLines}
             onMissionStarted={onMissionStarted}
@@ -826,7 +833,7 @@ function MeetingsActivityPane({
   const [activeEvents, setActiveEvents] = useState<Set<string>>(
     () => new Set(ACTIVITY_EVENT_FILTERS),
   );
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const refresh = useCallback(async () => {
     if (!workPath) {
@@ -931,11 +938,11 @@ function MeetingsActivityPane({
               <h3>{t(`meetings.activity.group.${groupLabel}`)}</h3>
               <ul>
                 {items.map((entry) => {
-                  const detailIndex = entries.indexOf(entry);
-                  const expandedRow = expanded.has(detailIndex);
+                  const entryId = activityEntryId(entry);
+                  const expandedRow = expanded.has(entryId);
                   return (
                     <li
-                      key={`${entry.ts ?? "no-ts"}-${detailIndex}`}
+                      key={entryId}
                       data-event={entry.event}
                       data-legacy={entry.legacy ? "true" : "false"}
                     >
@@ -946,8 +953,8 @@ function MeetingsActivityPane({
                         onClick={() =>
                           setExpanded((current) => {
                             const next = new Set(current);
-                            if (next.has(detailIndex)) next.delete(detailIndex);
-                            else next.add(detailIndex);
+                            if (next.has(entryId)) next.delete(entryId);
+                            else next.add(entryId);
                             return next;
                           })
                         }
@@ -995,11 +1002,11 @@ function groupActivityByDay(
   const weekKey = formatIsoDay(weekStart);
   const groups = new Map<string, MeetingsLogLineRecord[]>();
   for (const entry of entries) {
-    const day = entry.ts ? entry.ts.slice(0, 10) : "—";
+    const day = entry.ts ? entry.ts.slice(0, 10) : null;
     let label: string;
     if (day === todayKey) label = "today";
     else if (day === yesterdayKey) label = "yesterday";
-    else if (day >= weekKey) label = "thisWeek";
+    else if (day && day >= weekKey) label = "thisWeek";
     else label = "earlier";
     const bucket = groups.get(label) ?? [];
     bucket.push(entry);
@@ -1009,6 +1016,17 @@ function groupActivityByDay(
   return order
     .filter((key) => groups.has(key))
     .map((key) => [key, groups.get(key)!] as [string, MeetingsLogLineRecord[]]);
+}
+
+function activityEntryId(entry: MeetingsLogLineRecord): string {
+  return [
+    entry.ts ?? "no-ts",
+    entry.event,
+    entry.runId ?? "",
+    entry.skill ?? "",
+    entry.target ?? "",
+    entry.raw,
+  ].join("|");
 }
 
 function formatIsoDay(date: Date): string {
@@ -1022,6 +1040,7 @@ function MeetingsTranscriptFlow(props: {
   workPath: string | null;
   settings: MeetingsSettings;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   missions: MissionRecord[];
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
@@ -1041,6 +1060,7 @@ function MeetingsExternalFlow({
   workPath,
   settings,
   skills,
+  runtimeCommands,
   missions,
   logLines,
   onMissionStarted,
@@ -1056,6 +1076,7 @@ function MeetingsExternalFlow({
   workPath: string | null;
   settings: MeetingsSettings;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   missions: MissionRecord[];
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
@@ -1074,6 +1095,7 @@ function MeetingsExternalFlow({
       workPath={workPath}
       settings={settings}
       skills={skills}
+      runtimeCommands={runtimeCommands}
       missions={missions}
       logLines={logLines}
       onMissionStarted={onMissionStarted}
@@ -1115,6 +1137,7 @@ function MeetingsSkillWorkbench({
   workPath,
   settings,
   skills,
+  runtimeCommands,
   missions,
   logLines,
   onMissionStarted,
@@ -1131,6 +1154,7 @@ function MeetingsSkillWorkbench({
   workPath: string | null;
   settings: MeetingsSettings;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   missions: MissionRecord[];
   logLines: Record<string, string[]>;
   onMissionStarted: (invocationId: string) => void;
@@ -1151,6 +1175,10 @@ function MeetingsSkillWorkbench({
   const [detail, setDetail] = useState("");
   const [busy, setBusy] = useState(false);
   const [runtimeChooserOpen, setRuntimeChooserOpen] = useState(false);
+  const [runtimeStatuses, setRuntimeStatuses] = useState<
+    Partial<Record<SkillDispatchRuntime, SkillRuntimeStatus>>
+  >({});
+  const [runtimeStatusLoading, setRuntimeStatusLoading] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [applyBusy, setApplyBusy] = useState(false);
   const [bundle, setBundle] = useState<MeetingReviewBundle | null>(null);
@@ -1191,8 +1219,45 @@ function MeetingsSkillWorkbench({
     return () => window.removeEventListener("keydown", onKey);
   }, [runtimeChooserOpen]);
 
+  useEffect(() => {
+    if (!runtimeChooserOpen) return;
+    let cancelled = false;
+    setRuntimeStatusLoading(true);
+    Promise.all(
+      (["claude", "codex"] as SkillDispatchRuntime[]).map(async (runtime) => {
+        const status = await skillsRuntimeStatus({
+          runtime,
+          commandOverride: runtimeCommands[runtime] ?? null,
+        });
+        return [runtime, status] as const;
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          setRuntimeStatuses(Object.fromEntries(entries));
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) onError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setRuntimeStatusLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [onError, runtimeChooserOpen, runtimeCommands]);
+
   const run = async (runtime: SkillDispatchRuntime) => {
     if (!workPath || !canRun) return;
+    const status = runtimeStatuses[runtime] ?? await skillsRuntimeStatus({
+      runtime,
+      commandOverride: runtimeCommands[runtime] ?? null,
+    });
+    if (!status.available) {
+      onError([status.message, status.suggestedAction].filter(Boolean).join(" "));
+      return;
+    }
     const skill = findSkill(skills, "meeting-notes");
     if (!skill) {
       onError(t("meetings.error.skillMissing", { skill: "meeting-notes" }));
@@ -1217,6 +1282,7 @@ function MeetingsSkillWorkbench({
         cwd: workPath,
         prompt,
         context: paths.map((path) => ({ path, kind: "file" })),
+        commandOverride: runtimeCommands[runtime] ?? null,
         metadata: {
           origin: sourceKind === "transcript"
             ? "meetingNotesFromTranscript"
@@ -1391,6 +1457,7 @@ function MeetingsSkillWorkbench({
         await dispatchSelectedFollowups({
           workPath,
           skills,
+          runtimeCommands,
           bundle,
           onMissionStarted,
         });
@@ -1399,6 +1466,7 @@ function MeetingsSkillWorkbench({
         await dispatchApprovedFollowupContinuation({
           workPath,
           skills,
+          runtimeCommands,
           bundle,
           onMissionStarted,
         });
@@ -1458,6 +1526,7 @@ function MeetingsSkillWorkbench({
           <div className="meetings-source-input">
             <textarea
               className="meetings-textarea compact"
+              aria-label={sourceTitle}
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder={pastePlaceholder}
@@ -1499,12 +1568,24 @@ function MeetingsSkillWorkbench({
                 <strong>{t("meetings.runtime.title")}</strong>
                 <span>{t("meetings.runtime.description")}</span>
               </div>
-              <div className="meetings-runtime-actions">
-                <button type="button" className="secondary-button" onClick={() => void run("claude")}>
+          <div className="meetings-runtime-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={runtimeStatusUnavailable(runtimeStatuses.claude)}
+                  onClick={() => void run("claude")}
+                >
                   {t("meetings.runtime.claude")}
+                  <small>{runtimeStatusLabel(runtimeStatuses.claude, runtimeStatusLoading, t)}</small>
                 </button>
-                <button type="button" className="secondary-button" onClick={() => void run("codex")}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={runtimeStatusUnavailable(runtimeStatuses.codex)}
+                  onClick={() => void run("codex")}
+                >
                   {t("meetings.runtime.codex")}
+                  <small>{runtimeStatusLabel(runtimeStatuses.codex, runtimeStatusLoading, t)}</small>
                 </button>
               </div>
             </div>
@@ -1920,10 +2001,12 @@ function MeetingReviewPanel({
               {pendingRequired > 0
                 ? t("meetings.review.applyBlocked", { count: pendingRequired })
                 : applied
-                  ? t("meetings.review.applyDoneDetailed", {
-                    files: applyResult?.files ?? 0,
-                    followups: applyResult?.followups ?? 0,
-                  })
+                  ? applyResult
+                    ? t("meetings.review.applyDoneDetailed", {
+                      files: applyResult.files,
+                      followups: applyResult.followups,
+                    })
+                    : t("meetings.review.applyDoneTitle")
                 : t("meetings.review.applyReadyDetailed", {
                   files: selectedFiles,
                   followups: selectedFollowups + (continuationAvailable && continuationSelected ? 1 : 0),
@@ -2279,8 +2362,12 @@ function buildMeetingNotesPrompt({
   guides: Awaited<ReturnType<typeof readMeetingGuides>> | null;
 }): string {
   const action = sourceKind === "transcript"
-    ? "Convert the selected transcript file(s) into a polished meeting note."
+    ? "Convert the pasted transcript text and/or selected transcript file(s) into a polished meeting note."
     : "Refine the external note into the workspace meeting-note standard.";
+  const missingHints = [
+    topic.trim() ? null : "topic",
+    detail.trim() ? null : "detail",
+  ].filter(Boolean).join(" and ");
   return [
     action,
     "",
@@ -2298,7 +2385,9 @@ function buildMeetingNotesPrompt({
     `Type: ${type}`,
     topic.trim() ? `Topic: ${topic.trim()}` : null,
     detail.trim() ? `Detail: ${detail.trim()}` : null,
-    !topic.trim() || !detail.trim() ? "Infer topic/detail from the transcript or note body." : null,
+    missingHints
+      ? `Infer only the missing ${missingHints} from the transcript or note body; preserve any provided hint.`
+      : null,
     "Use the six-section meeting note structure, normalized tags, and wiki-link conventions.",
     guides ? formatGuide("QUICK_START", guides.quickStart) : null,
     guides ? formatGuide("GLOSSARY", guides.glossary) : null,
@@ -2336,11 +2425,13 @@ async function readProposalBeforeContent(
 async function dispatchSelectedFollowups({
   workPath,
   skills,
+  runtimeCommands,
   bundle,
   onMissionStarted,
 }: {
   workPath: string;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   bundle: MeetingReviewBundle;
   onMissionStarted: (invocationId: string) => void;
 }) {
@@ -2368,6 +2459,7 @@ async function dispatchSelectedFollowups({
         appliedPaths.length > 0 ? `Meeting note path(s):\n${appliedPaths.join("\n")}` : null,
       ].filter(Boolean).join("\n"),
       context: appliedPaths.map((path) => ({ path, kind: "document" })),
+      commandOverride: runtimeCommands[runtime] ?? null,
       metadata: {
         origin: followupOrigin(followup.skill),
         runtime,
@@ -2386,11 +2478,13 @@ async function dispatchSelectedFollowups({
 async function dispatchApprovedFollowupContinuation({
   workPath,
   skills,
+  runtimeCommands,
   bundle,
   onMissionStarted,
 }: {
   workPath: string;
   skills: SkillRecord[];
+  runtimeCommands: Partial<Record<SkillDispatchRuntime, string | null>>;
   bundle: MeetingReviewBundle;
   onMissionStarted: (invocationId: string) => void;
 }) {
@@ -2416,6 +2510,7 @@ async function dispatchApprovedFollowupContinuation({
       bundle.rawOutput,
     ].filter(Boolean).join("\n\n"),
     context: [],
+    commandOverride: runtimeCommands[runtime] ?? null,
     metadata: {
       origin: followupOrigin(skillName),
       runtime,
@@ -2524,6 +2619,25 @@ function meetingMissionRuntimeValue(mission: MissionRecord): string | null {
   if (!metadata) return null;
   const runtime = metadata.runtime ?? metadata.parentRuntime;
   return typeof runtime === "string" && runtime.trim() ? runtime : null;
+}
+
+function runtimeStatusUnavailable(status: SkillRuntimeStatus | undefined): boolean {
+  return status?.available === false;
+}
+
+function runtimeStatusLabel(
+  status: SkillRuntimeStatus | undefined,
+  loading: boolean,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (!status && loading) return t("skills.runtime.checking");
+  if (!status) return t("skills.runtime.notChecked");
+  if (status.available) return t("skills.runtime.readyShort");
+  return status.errorKind === "auth_required"
+    ? t("skills.runtime.authRequired")
+    : status.errorKind === "cli_missing"
+      ? t("skills.runtime.cliMissing")
+      : t("skills.runtime.unavailable");
 }
 
 function meetingMissionSkillName(mission: MissionRecord): string | null {

@@ -6816,10 +6816,58 @@ button.git-badge:hover {
   height: 13px;
 }
 
+.compose-run-groups .segmented-control button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .compose-label {
   color: var(--muted);
   font-size: 11.5px;
   font-weight: 700;
+}
+
+.compose-runtime-status,
+.compose-mode-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.compose-runtime-status {
+  display: grid;
+  gap: 2px;
+  min-height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--panel);
+  padding: 7px 8px;
+}
+
+.compose-runtime-status > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.compose-runtime-status small {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.compose-runtime-status[data-state="ready"] {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line-soft));
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  color: var(--accent);
+}
+
+.compose-runtime-status[data-state="blocked"] {
+  border-color: color-mix(in srgb, var(--danger) 34%, var(--line-soft));
+  background: color-mix(in srgb, var(--danger) 7%, var(--panel));
+  color: var(--danger);
 }
 
 .compose-skill-summary {
@@ -6899,6 +6947,191 @@ button.git-badge:hover {
   background: var(--panel-2);
   padding: 10px;
   white-space: pre-wrap;
+}
+
+.skills-pane-stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.skill-runs-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 10px;
+}
+
+.skill-runs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-runs-head span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.skill-runs-head h3 {
+  margin: 1px 0 0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.skill-runs-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  border: 1px dashed var(--line-soft);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  padding: 9px;
+}
+
+.skill-runs-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skill-run-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.skill-run-card.running,
+.skill-run-card.queued {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line-soft));
+}
+
+.skill-run-card.failed {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--line-soft));
+}
+
+.skill-run-card.applied {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+
+.skill-run-card-head,
+.skill-run-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skill-run-card-head > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.skill-run-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-run-card-head span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-run-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.skill-run-logline {
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  padding-left: 8px;
+}
+
+.skill-run-logline[data-severity="warn"] {
+  border-left-color: var(--warn);
+  color: var(--warn);
+}
+
+.skill-run-logline[data-severity="error"] {
+  border-left-color: var(--danger);
+  color: var(--danger);
+}
+
+.skill-run-log {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.skill-run-footer {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.skill-run-footer .secondary-button,
+.skill-run-footer .primary-button {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+
+.skill-run-proposal {
+  display: grid;
+  gap: 3px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line-soft));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel-2));
+  padding: 8px;
+}
+
+.skill-run-proposal strong {
+  color: var(--accent);
+  font-size: 11.5px;
+}
+
+.skill-run-proposal span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 @media (max-width: 1180px) {
@@ -8489,8 +8722,22 @@ button.git-badge:hover {
 }
 
 .meetings-runtime-actions .secondary-button {
+  display: grid;
   justify-content: center;
   min-height: 34px;
+  gap: 3px;
+  padding: 6px 9px;
+}
+
+.meetings-runtime-actions .secondary-button small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meetings-review-card {

@@ -95,6 +95,17 @@ export interface SkillsEnvStatus {
   healthy: boolean;
 }
 
+export interface SkillRuntimeStatus {
+  runtime: SkillDispatchRuntime;
+  available: boolean;
+  binaryPath?: string | null;
+  version?: string | null;
+  authStatus: string;
+  errorKind?: string | null;
+  message: string;
+  suggestedAction?: string | null;
+}
+
 export interface SkillContextItem {
   path: string;
   kind?: "file" | "directory" | "document" | "folder" | string | null;
@@ -359,6 +370,25 @@ export async function skillsEnvRepair(workPath: string | null): Promise<string> 
   return invoke<string>("skills_env_repair", { workPath });
 }
 
+export async function skillsRuntimeStatus(params: {
+  runtime: SkillDispatchRuntime;
+  commandOverride?: string | null;
+}): Promise<SkillRuntimeStatus> {
+  if (!isTauri()) {
+    return {
+      runtime: params.runtime,
+      available: true,
+      binaryPath: `mock://${params.runtime}`,
+      version: `${params.runtime} mock`,
+      authStatus: "authenticated",
+      errorKind: null,
+      message: `${params.runtime} runtime ready`,
+      suggestedAction: null,
+    };
+  }
+  return invoke<SkillRuntimeStatus>("skills_runtime_status", params);
+}
+
 export async function skillsDispatchCompose(params: {
   skillId: string;
   prompt: string;
@@ -375,6 +405,7 @@ export async function skillsDispatchTerminal(params: {
   prompt: string;
   cwd?: string | null;
   context?: SkillContextItem[] | null;
+  commandOverride?: string | null;
 }): Promise<TerminalDispatchSpec> {
   if (!isTauri()) throw new Error("Skill terminal dispatch requires the Tauri shell.");
   return invoke<TerminalDispatchSpec>("skills_dispatch_terminal", params);
@@ -387,6 +418,7 @@ export async function skillsDispatchBackground(params: {
   cwd?: string | null;
   context?: SkillContextItem[] | null;
   metadata?: MissionMetadata | null;
+  commandOverride?: string | null;
 }): Promise<string> {
   if (!isTauri()) return `mock-skill-run-${params.runtime}-${Date.now()}`;
   return invoke<string>("skills_dispatch_background", params);
