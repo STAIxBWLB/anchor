@@ -1034,6 +1034,7 @@ pub fn get_skill(skill_id: &str) -> Result<SkillRecord, String> {
 pub fn env_vars_for_runs() -> Result<BTreeMap<String, String>, String> {
     let env_root = host_fs::env_root()?;
     let bin = env_root.join(".venv").join("bin");
+    let node_modules = env_root.join("node_modules");
     let mut vars = BTreeMap::new();
     vars.insert(
         "ANCHOR_SKILLS_ENV".to_string(),
@@ -1048,6 +1049,13 @@ pub fn env_vars_for_runs() -> Result<BTreeMap<String, String>, String> {
     vars.insert(
         "PATH".to_string(),
         merged_path.to_string_lossy().to_string(),
+    );
+    let existing_node_path = std::env::var_os("NODE_PATH");
+    let merged_node_path =
+        merge_path_env(Some(node_modules.as_os_str()), existing_node_path.as_deref());
+    vars.insert(
+        "NODE_PATH".to_string(),
+        merged_node_path.to_string_lossy().to_string(),
     );
     Ok(vars)
 }
@@ -2110,6 +2118,31 @@ mod tests {
         path.to_string_lossy().to_string()
     }
 
+    #[test]
+    fn env_vars_for_runs_exposes_python_and_node_runtime_paths() {
+        let home = test_home();
+        let env_root = home._dir.path().join(".anchor").join("env");
+
+        let vars = env_vars_for_runs().unwrap();
+
+        assert_eq!(
+            vars.get("ANCHOR_SKILLS_ENV").unwrap(),
+            &path_string(&env_root)
+        );
+        assert_eq!(
+            vars.get("VIRTUAL_ENV").unwrap(),
+            &path_string(&env_root.join(".venv"))
+        );
+        let path_entries: Vec<_> = std::env::split_paths(vars.get("PATH").unwrap()).collect();
+        assert_eq!(path_entries.first(), Some(&env_root.join(".venv").join("bin")));
+        let node_path_entries: Vec<_> =
+            std::env::split_paths(vars.get("NODE_PATH").unwrap()).collect();
+        assert_eq!(
+            node_path_entries.first(),
+            Some(&env_root.join("node_modules"))
+        );
+    }
+
     fn write_workspace_config(work: &Path, public_root: &Path, private_root: &Path) {
         fs::create_dir_all(public_root.join("skills")).unwrap();
         fs::create_dir_all(private_root.join("skills")).unwrap();
@@ -2473,7 +2506,6 @@ mod tests {
             .iter()
             .filter(|skill| skill.source_id == BUILTIN_SOURCE_ID)
             .collect();
-
         assert_eq!(builtin.len(), embedded_builtin_skill_count());
         assert!(builtin
             .iter()
