@@ -5,10 +5,12 @@ export type WorkspaceFileFilter = "all" | "tracked" | "binary";
 export type FileQueueDefaultOperation = "copy" | "move";
 export type TerminalLauncherId = "claude" | "codex" | "shell";
 export type ThemeMode = "system" | "light" | "dark";
-export type AnchorAppMode = "pkm" | "inbox" | "comms" | "meetings";
+export type AnchorAppMode = "pkm" | "inbox" | "comms" | "meetings" | "tasks";
 export type WorkspaceVisibilitySetting = "private" | "public";
 export type EditorViewModeSetting = "rich" | "source" | "preview";
 export type RightPaneTab = "outline" | "files" | "memo" | "info" | "skills";
+export type TasksDefaultView = "list" | "month" | "week" | "day";
+export type WeekStartsOn = 0 | 1;
 
 export interface DocumentViewDefinition {
   id: string;
@@ -119,6 +121,7 @@ export interface AnchorSettings {
   ai: Record<string, unknown>;
   comms: CommsSettings;
   meetings: MeetingsSettings;
+  tasks: TasksSettings;
   inboxChannels: Record<string, unknown>;
   connectors: Record<string, unknown>;
 }
@@ -163,12 +166,30 @@ export interface MeetingsSettings {
   calendarStartHour: number;
 }
 
+export interface TasksSettings {
+  enabled: boolean;
+  root: string | null;
+  timezone: string | null;
+  gwsBinary: string | null;
+  defaultView: TasksDefaultView;
+  weekStartsOn: WeekStartsOn;
+  calendarStartHour: number;
+  defaultTaskList: string | null;
+  defaultCalendar: string | null;
+  hooks: {
+    autoVaultExtract: boolean;
+    appendVaultLog: boolean;
+  };
+}
+
 export const COMMS_PROVIDER_RESULTS_MIN = 1;
 export const COMMS_PROVIDER_RESULTS_MAX = 200;
 export const TELEGRAM_POLL_INTERVAL_MIN_SECONDS = 30;
 export const TELEGRAM_POLL_INTERVAL_MAX_SECONDS = 86400;
 export const MEETINGS_CALENDAR_START_HOUR_MIN = 0;
 export const MEETINGS_CALENDAR_START_HOUR_MAX = 23;
+export const TASKS_CALENDAR_START_HOUR_MIN = 0;
+export const TASKS_CALENDAR_START_HOUR_MAX = 23;
 
 export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
   version: 1,
@@ -271,6 +292,21 @@ export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
     defaultTypes: ["회의", "상담", "강의", "워크숍", "발표"],
     calendarStartHour: 8,
   },
+  tasks: {
+    enabled: true,
+    root: "tasks",
+    timezone: "Asia/Seoul",
+    gwsBinary: null,
+    defaultView: "list",
+    weekStartsOn: 1,
+    calendarStartHour: 8,
+    defaultTaskList: null,
+    defaultCalendar: null,
+    hooks: {
+      autoVaultExtract: false,
+      appendVaultLog: true,
+    },
+  },
   inboxChannels: {},
   connectors: {},
 };
@@ -339,6 +375,7 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
     ai: normalizeFutureAi(value.ai),
     comms: normalizeCommsSettings(value.comms),
     meetings: normalizeMeetingsSettings(value.meetings),
+    tasks: normalizeTasksSettings(value.tasks),
     inboxChannels: isRecord(value.inboxChannels) ? value.inboxChannels : {},
     connectors: isRecord(value.connectors) ? value.connectors : {},
   };
@@ -525,6 +562,84 @@ export function applyWorkspaceMeetingsOverrides(
   };
 }
 
+export function applyWorkspaceTasksOverrides(
+  settings: TasksSettings,
+  workspaceConfig: Record<string, unknown> | null,
+): TasksSettings {
+  const taskManagement = isRecord(workspaceConfig?.task_management)
+    ? workspaceConfig.task_management
+    : isRecord(workspaceConfig?.tasks)
+      ? workspaceConfig.tasks
+      : null;
+  const google = isRecord(taskManagement?.google)
+    ? taskManagement.google
+    : isRecord(workspaceConfig?.google)
+      ? workspaceConfig.google
+      : null;
+  const googleTasks = isRecord(google?.tasks) ? google.tasks : null;
+  const googleCalendar = isRecord(google?.calendar) ? google.calendar : null;
+  const hooks = isRecord(taskManagement?.hooks) ? taskManagement.hooks : null;
+  if (!taskManagement && !googleTasks && !googleCalendar) return settings;
+  return {
+    ...settings,
+    enabled: readBoolean(taskManagement, ["enabled"], settings.enabled),
+    root: readOptionalString(taskManagement, ["root", "path"], settings.root),
+    timezone: readOptionalString(
+      taskManagement,
+      ["timezone", "time_zone", "tz"],
+      settings.timezone,
+    ),
+    gwsBinary: readOptionalString(
+      taskManagement,
+      ["gwsBinary", "gws_binary", "gwsPath", "gws_path", "command", "commandPath"],
+      settings.gwsBinary,
+    ),
+    defaultView:
+      parseTasksDefaultView(readKey(taskManagement, ["defaultView", "default_view", "view"]))
+      ?? settings.defaultView,
+    weekStartsOn:
+      parseWeekStartsOn(readKey(taskManagement, ["weekStartsOn", "week_starts_on"]))
+      ?? settings.weekStartsOn,
+    calendarStartHour: readInteger(
+      taskManagement,
+      ["calendarStartHour", "calendar_start_hour"],
+      settings.calendarStartHour,
+      TASKS_CALENDAR_START_HOUR_MIN,
+      TASKS_CALENDAR_START_HOUR_MAX,
+    ),
+    defaultTaskList: readOptionalString(
+      googleTasks,
+      ["defaultList", "default_list", "list", "listKey", "list_key"],
+      readOptionalString(
+        taskManagement,
+        ["defaultTaskList", "default_task_list"],
+        settings.defaultTaskList,
+      ),
+    ),
+    defaultCalendar: readOptionalString(
+      googleCalendar,
+      ["defaultCalendar", "default_calendar", "calendar", "calendarKey", "calendar_key"],
+      readOptionalString(
+        taskManagement,
+        ["defaultCalendar", "default_calendar"],
+        settings.defaultCalendar,
+      ),
+    ),
+    hooks: {
+      autoVaultExtract: readBoolean(
+        hooks,
+        ["autoVaultExtract", "auto_vault_extract"],
+        settings.hooks.autoVaultExtract,
+      ),
+      appendVaultLog: readBoolean(
+        hooks,
+        ["appendVaultLog", "append_vault_log"],
+        settings.hooks.appendVaultLog,
+      ),
+    },
+  };
+}
+
 function cloneDefaultSettings(): AnchorSettings {
   return {
     ...DEFAULT_ANCHOR_SETTINGS,
@@ -564,6 +679,10 @@ function cloneDefaultSettings(): AnchorSettings {
       guides: { ...DEFAULT_ANCHOR_SETTINGS.meetings.guides },
       hooks: { ...DEFAULT_ANCHOR_SETTINGS.meetings.hooks },
       defaultTypes: [...DEFAULT_ANCHOR_SETTINGS.meetings.defaultTypes],
+    },
+    tasks: {
+      ...DEFAULT_ANCHOR_SETTINGS.tasks,
+      hooks: { ...DEFAULT_ANCHOR_SETTINGS.tasks.hooks },
     },
     inboxChannels: {},
     connectors: {},
@@ -672,6 +791,48 @@ function normalizeMeetingsSettings(value: unknown): MeetingsSettings {
   };
 }
 
+function normalizeTasksSettings(value: unknown): TasksSettings {
+  const tasks = isRecord(value) ? value : {};
+  const hooks = isRecord(tasks.hooks) ? tasks.hooks : {};
+  return {
+    enabled:
+      typeof tasks.enabled === "boolean"
+        ? tasks.enabled
+        : DEFAULT_ANCHOR_SETTINGS.tasks.enabled,
+    root:
+      typeof tasks.root === "undefined"
+        ? DEFAULT_ANCHOR_SETTINGS.tasks.root
+        : normalizeOptionalString(tasks.root),
+    timezone:
+      typeof tasks.timezone === "undefined"
+        ? DEFAULT_ANCHOR_SETTINGS.tasks.timezone
+        : normalizeOptionalString(tasks.timezone),
+    gwsBinary: normalizeOptionalString(tasks.gwsBinary),
+    defaultView:
+      parseTasksDefaultView(tasks.defaultView) ?? DEFAULT_ANCHOR_SETTINGS.tasks.defaultView,
+    weekStartsOn:
+      parseWeekStartsOn(tasks.weekStartsOn) ?? DEFAULT_ANCHOR_SETTINGS.tasks.weekStartsOn,
+    calendarStartHour: normalizeInteger(
+      tasks.calendarStartHour,
+      DEFAULT_ANCHOR_SETTINGS.tasks.calendarStartHour,
+      TASKS_CALENDAR_START_HOUR_MIN,
+      TASKS_CALENDAR_START_HOUR_MAX,
+    ),
+    defaultTaskList: normalizeOptionalString(tasks.defaultTaskList),
+    defaultCalendar: normalizeOptionalString(tasks.defaultCalendar),
+    hooks: {
+      autoVaultExtract:
+        typeof hooks.autoVaultExtract === "boolean"
+          ? hooks.autoVaultExtract
+          : DEFAULT_ANCHOR_SETTINGS.tasks.hooks.autoVaultExtract,
+      appendVaultLog:
+        typeof hooks.appendVaultLog === "boolean"
+          ? hooks.appendVaultLog
+          : DEFAULT_ANCHOR_SETTINGS.tasks.hooks.appendVaultLog,
+    },
+  };
+}
+
 function providerConfig(
   providers: Record<string, unknown>,
   ...names: string[]
@@ -756,8 +917,21 @@ function parseBrowserMode(value: unknown): DocumentBrowserMode | null {
 
 function parseAnchorAppMode(value: unknown): AnchorAppMode | null {
   return value === "pkm" || value === "inbox" || value === "comms" || value === "meetings"
+    || value === "tasks"
     ? value
     : null;
+}
+
+function parseTasksDefaultView(value: unknown): TasksDefaultView | null {
+  return value === "list" || value === "month" || value === "week" || value === "day"
+    ? value
+    : null;
+}
+
+function parseWeekStartsOn(value: unknown): WeekStartsOn | null {
+  if (value === 0 || value === "0" || value === "sunday" || value === "sun") return 0;
+  if (value === 1 || value === "1" || value === "monday" || value === "mon") return 1;
+  return null;
 }
 
 function parseWorkspaceVisibilitySetting(value: unknown): WorkspaceVisibilitySetting | null {

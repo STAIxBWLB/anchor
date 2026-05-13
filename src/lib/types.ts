@@ -504,6 +504,48 @@ export interface MeetingsLogLineRecord {
   legacy: boolean;
 }
 
+export type TaskBucket = "active" | "backlog" | "archive" | "calendar";
+export type TaskStatus = "active" | "in-progress" | "done" | "cancelled" | "backlog";
+
+export interface TaskNoteRow {
+  path: string;
+  relPath: string;
+  fileName: string;
+  bucket: TaskBucket;
+  sizeBytes: number;
+  updatedAt: string | null;
+  frontmatter: Record<string, unknown>;
+}
+
+export interface TaskMetadata {
+  relPath: string;
+  frontmatter: Record<string, unknown>;
+  preview: string;
+  lineCount: number;
+  charCount: number;
+  tags: string[];
+}
+
+export interface CreateTaskDraft {
+  slug: string;
+  title: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+  bucket: TaskBucket;
+}
+
+export interface TasksLogLineRecord {
+  raw: string;
+  ts: string | null;
+  event: string;
+  runId: string | null;
+  status: string | null;
+  skill: string | null;
+  target: string | null;
+  payload: Record<string, unknown> | null;
+  legacy: boolean;
+}
+
 /** Per-workspace inbox configuration persisted at `<workspace>/.anchor/inbox.json`. */
 export interface InboxSettings {
   /** Workspace-relative path to the inbox root directory. */

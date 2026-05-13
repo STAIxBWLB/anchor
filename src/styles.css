@@ -9730,6 +9730,434 @@ button.git-badge:hover {
   line-height: 1.6;
 }
 
+.tasks-pane {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) minmax(300px, 360px);
+  min-width: 0;
+  min-height: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-2) 72%, var(--bg)) 0, var(--bg) 260px);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.tasks-sidebar {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  padding: 18px 12px;
+}
+
+.tasks-sidebar-section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.tasks-sidebar-label {
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.tasks-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 0 8px;
+  text-align: left;
+  font-weight: 650;
+}
+
+.tasks-filter-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tasks-filter:hover,
+.task-row:hover {
+  border-color: var(--line-soft);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.tasks-filter.active,
+.task-row.selected {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: var(--active-surface);
+  box-shadow:
+    inset 2px 0 0 var(--accent),
+    var(--shadow-sm);
+}
+
+.tasks-count {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tasks-main {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 15px;
+  border-bottom: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+}
+
+.tasks-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.tasks-header p {
+  margin: 4px 0 0;
+}
+
+.tasks-header-actions,
+.tasks-toolbar,
+.task-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-toolbar {
+  padding: 14px 22px 11px;
+}
+
+.tasks-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 220px;
+  max-width: 420px;
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 0 10px;
+}
+
+.tasks-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.tasks-toolbar select {
+  height: 34px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 0 10px;
+}
+
+.tasks-loading,
+.tasks-list-empty,
+.tasks-calendar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 28px;
+}
+
+.tasks-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 22px 18px;
+}
+
+.tasks-group {
+  margin-bottom: 16px;
+}
+
+.tasks-group header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 8px 11px;
+  text-align: left;
+}
+
+.task-check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  color: var(--accent);
+}
+
+.task-row-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.task-row-main strong,
+.task-row-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-row-main span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.task-priority,
+.task-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.task-priority.priority-highest,
+.task-calendar-event.priority-highest {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.task-priority.priority-high,
+.task-calendar-event.priority-high {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.task-priority.priority-medium,
+.task-calendar-event.priority-medium {
+  color: var(--info);
+  background: var(--info-soft);
+}
+
+.tasks-calendar-shell {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 22px 18px;
+}
+
+.tasks-calendar-shell .rbc-calendar {
+  height: 100%;
+  min-height: 520px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  padding: 8px;
+}
+
+.task-detail-drawer {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 13px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--line-soft);
+  background: var(--panel-raised);
+  padding: 14px;
+}
+
+.task-detail-drawer.empty {
+  place-items: center;
+  color: var(--muted);
+}
+
+.task-detail-header {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.task-detail-header h2 {
+  margin: 2px 0;
+  font-size: 18px;
+  line-height: 1.22;
+}
+
+.task-detail-header p,
+.task-detail-header span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.task-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.task-detail-meta div,
+.task-frontmatter-list div {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
+  padding: 8px;
+}
+
+.task-detail-meta dt,
+.task-frontmatter-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-detail-meta dd {
+  margin: 3px 0 0;
+}
+
+.task-detail-section h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.task-frontmatter-list {
+  display: grid;
+  gap: 6px;
+}
+
+.task-frontmatter-list code {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.task-preview {
+  min-height: 160px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
+  padding: 12px;
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tasks-runs {
+  border-top: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  padding: 10px 22px;
+}
+
+.tasks-runs header,
+.tasks-run-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tasks-run-row {
+  min-height: 26px;
+  color: var(--muted);
+}
+
+.tasks-run-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-new-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(560px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-lg);
+  padding: 18px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: var(--overlay);
+  padding: 16px;
+}
+
+.task-new-dialog header,
+.task-new-dialog footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-new-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.task-new-dialog p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
 .meetings-flow h2,
 .meetings-flow p {
   margin: 0;
@@ -9841,11 +10269,14 @@ button.git-badge:hover {
 
 @media (max-width: 980px) {
   .meetings-pane,
-  .meetings-content-grid {
+  .meetings-content-grid,
+  .tasks-pane {
     grid-template-columns: 1fr;
   }
 
-  .meetings-sidebar {
+  .meetings-sidebar,
+  .tasks-sidebar,
+  .task-detail-drawer {
     border-right: 0;
     border-bottom: 1px solid var(--line-soft);
   }

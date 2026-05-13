@@ -22,6 +22,7 @@ mod outlook_mso;
 mod shelf;
 mod skill_host;
 mod sys_import;
+mod tasks;
 mod telegram_io;
 mod terminal;
 mod vault;
@@ -81,6 +82,10 @@ use skill_host::{
     skills_uninstall_skill,
 };
 use sys_import::{apply_sys_import, plan_sys_import};
+use tasks::{
+    append_tasks_log, create_task_note, move_task_note, read_task_metadata, read_tasks_log,
+    scan_task_notes, update_task_status,
+};
 use tauri::Manager;
 use telegram_io::{
     accept_telegram_item, fetch_telegram_recent, reject_telegram_item, start_telegram_polling,
@@ -161,6 +166,13 @@ pub fn run() {
             read_meeting_guides,
             append_meetings_log,
             read_meetings_log,
+            scan_task_notes,
+            read_task_metadata,
+            create_task_note,
+            update_task_status,
+            move_task_note,
+            append_tasks_log,
+            read_tasks_log,
             store_shelf_files,
             store_shelf_files_as,
             list_memos,

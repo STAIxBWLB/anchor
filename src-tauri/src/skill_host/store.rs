@@ -2141,6 +2141,35 @@ mod tests {
         skill
     }
 
+    fn embedded_builtin_skill_count() -> usize {
+        BUILTIN_DIR
+            .dirs()
+            .find(|dir| {
+                dir.path()
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name == "skills")
+            })
+            .map(|skills_dir| {
+                skills_dir
+                    .dirs()
+                    .filter(|skill_dir| {
+                        skill_dir.files().any(|file| {
+                            file.path()
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .is_some_and(|name| name == "SKILL.md")
+                        }) && skill_dir
+                            .path()
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| !name.starts_with("design-"))
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
     #[test]
     fn source_id_validation_rejects_path_like_values() {
         assert!(normalize_source_id("stai-public").is_ok());
@@ -2445,7 +2474,7 @@ mod tests {
             .filter(|skill| skill.source_id == BUILTIN_SOURCE_ID)
             .collect();
 
-        assert_eq!(builtin.len(), 32);
+        assert_eq!(builtin.len(), embedded_builtin_skill_count());
         assert!(builtin
             .iter()
             .all(|skill| !skill.name.starts_with("design-")));

@@ -3,6 +3,7 @@ import {
   DEFAULT_ANCHOR_SETTINGS,
   applyWorkspaceCommsOverrides,
   applyWorkspaceMeetingsOverrides,
+  applyWorkspaceTasksOverrides,
   normalizeAnchorSettings,
   parseBinaryFileIncludePatternsText,
 } from "./settings";
@@ -192,6 +193,42 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.meetings.calendarStartHour).toBe(23);
   });
 
+  it("parses tasks mode and normalizes tasks settings", () => {
+    const settings = normalizeAnchorSettings({
+      ui: {
+        activeAppMode: "tasks",
+      },
+      tasks: {
+        enabled: false,
+        root: " tasks ",
+        timezone: " Asia/Seoul ",
+        gwsBinary: " /opt/bin/gws ",
+        defaultView: "week",
+        weekStartsOn: 0,
+        calendarStartHour: 99,
+        defaultTaskList: " personal ",
+        defaultCalendar: " work ",
+        hooks: {
+          autoVaultExtract: true,
+          appendVaultLog: false,
+        },
+      },
+    });
+
+    expect(settings.ui.activeAppMode).toBe("tasks");
+    expect(settings.tasks.enabled).toBe(false);
+    expect(settings.tasks.root).toBe("tasks");
+    expect(settings.tasks.timezone).toBe("Asia/Seoul");
+    expect(settings.tasks.gwsBinary).toBe("/opt/bin/gws");
+    expect(settings.tasks.defaultView).toBe("week");
+    expect(settings.tasks.weekStartsOn).toBe(0);
+    expect(settings.tasks.calendarStartHour).toBe(23);
+    expect(settings.tasks.defaultTaskList).toBe("personal");
+    expect(settings.tasks.defaultCalendar).toBe("work");
+    expect(settings.tasks.hooks.autoVaultExtract).toBe(true);
+    expect(settings.tasks.hooks.appendVaultLog).toBe(false);
+  });
+
   it("applies workspace io provider overrides without rewriting base comms defaults", () => {
     const base = normalizeAnchorSettings({
       comms: {
@@ -274,6 +311,53 @@ describe("normalizeAnchorSettings", () => {
     expect(effective.calendarStartHour).toBe(7);
   });
 
+  it("applies workspace task-management overrides without rewriting base tasks defaults", () => {
+    const base = normalizeAnchorSettings({
+      tasks: {
+        root: "tasks",
+        defaultView: "list",
+        hooks: { appendVaultLog: true },
+      },
+    }).tasks;
+
+    const effective = applyWorkspaceTasksOverrides(base, {
+      task_management: {
+        enabled: false,
+        root: "ops/tasks",
+        timezone: "Asia/Seoul",
+        gws_binary: "/usr/local/bin/gws",
+        default_view: "day",
+        week_starts_on: "sunday",
+        calendar_start_hour: 7,
+        hooks: {
+          auto_vault_extract: true,
+          append_vault_log: false,
+        },
+        google: {
+          tasks: {
+            default_list: "work",
+          },
+          calendar: {
+            default_calendar: "teaching",
+          },
+        },
+      },
+    });
+
+    expect(base.root).toBe("tasks");
+    expect(effective.enabled).toBe(false);
+    expect(effective.root).toBe("ops/tasks");
+    expect(effective.timezone).toBe("Asia/Seoul");
+    expect(effective.gwsBinary).toBe("/usr/local/bin/gws");
+    expect(effective.defaultView).toBe("day");
+    expect(effective.weekStartsOn).toBe(0);
+    expect(effective.calendarStartHour).toBe(7);
+    expect(effective.defaultTaskList).toBe("work");
+    expect(effective.defaultCalendar).toBe("teaching");
+    expect(effective.hooks.autoVaultExtract).toBe(true);
+    expect(effective.hooks.appendVaultLog).toBe(false);
+  });
+
   it("defaults first-run terminal layout to collapsed shell autoload", () => {
     const settings = normalizeAnchorSettings({});
 
@@ -284,6 +368,8 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.rightPaneTab).toBe("outline");
     expect(settings.ui.workspaceFileFilter).toBe("all");
     expect(settings.meetings.root).toBe("meetings");
+    expect(settings.tasks.root).toBe("tasks");
+    expect(settings.tasks.defaultView).toBe("list");
     expect(settings.meetings.defaultTypes).toEqual(
       DEFAULT_ANCHOR_SETTINGS.meetings.defaultTypes,
     );
