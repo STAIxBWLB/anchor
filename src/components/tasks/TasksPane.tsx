@@ -65,6 +65,7 @@ interface TasksPaneProps {
     context: SkillContextItem[],
     prompt?: string,
     cwd?: string | null,
+    onDispatched?: () => void | Promise<void>,
   ) => void;
   onRevealPath?: (path: string) => void;
   onError: (message: string | null) => void;
@@ -199,6 +200,10 @@ export function TasksPane({
   }, [load]);
 
   useEffect(() => {
+    setDisplayView(effectiveSettings.defaultView);
+  }, [effectiveSettings.defaultView]);
+
+  useEffect(() => {
     const nextRelPath = selectVisibleTask(selectableEntries, selectedRelPath)?.relPath ?? null;
     if (nextRelPath !== selectedRelPath) {
       setSelectedRelPath(nextRelPath);
@@ -238,7 +243,12 @@ export function TasksPane({
   const setStatus = async (entry: TaskEntry, status: TaskStatus) => {
     if (!workPath) return;
     try {
-      const updated = await updateTaskStatus(workPath, entry.relPath, status);
+      const updated = await updateTaskStatus(
+        workPath,
+        entry.relPath,
+        status,
+        effectiveSettings.root,
+      );
       setRows((current) => current.map((row) => (row.relPath === entry.relPath ? updated : row)));
       setSelectedRelPath(updated.relPath);
     } catch (err) {
@@ -262,41 +272,42 @@ export function TasksPane({
     const skill = findSkill(skills, "task-management");
     const context = selectedEntry ? [{ path: selectedEntry.absPath, kind: "document" }] : [];
     const target = selectedEntry?.relPath ?? effectiveSettings.root ?? "tasks";
-    if (workPath && effectiveSettings.hooks.appendVaultLog) {
-      const payload = JSON.stringify({ skill: "task-management", target });
-      await appendTasksLog(
-        workPath,
-        `- ${new Date().toISOString()} [sync] ${payload}`,
-      ).catch((err) => onError(err instanceof Error ? err.message : String(err)));
-    }
     onOpenSkillCompose(
       skill,
       context,
       `Sync local markdown tasks with the configured task-management workflow for ${target}.`,
       workPath,
+      taskLogCallback("sync", { skill: "task-management", target }),
     );
   };
 
   const openNaturalScheduleSkill = async (rawText: string) => {
     const skill = findSkill(skills, "task-management");
     const root = effectiveSettings.root ?? "tasks";
-    if (workPath && effectiveSettings.hooks.appendVaultLog) {
-      const payload = JSON.stringify({
-        skill: "task-management",
-        target: root,
-        textLength: rawText.trim().length,
-      });
-      await appendTasksLog(
-        workPath,
-        `- ${new Date().toISOString()} [natural-schedule] ${payload}`,
-      ).catch((err) => onError(err instanceof Error ? err.message : String(err)));
-    }
     onOpenSkillCompose(
       skill,
       [],
       buildTaskManagementSchedulePrompt(rawText, effectiveSettings),
       workPath,
+      taskLogCallback("natural-schedule", {
+        skill: "task-management",
+        target: root,
+        textLength: rawText.trim().length,
+      }),
     );
+  };
+
+  const taskLogCallback = (
+    event: "sync" | "natural-schedule",
+    payload: Record<string, string | number>,
+  ) => {
+    if (!workPath || !effectiveSettings.hooks.appendVaultLog) return undefined;
+    return async () => {
+      await appendTasksLog(
+        workPath,
+        `- ${new Date().toISOString()} [${event}] ${JSON.stringify(payload)}`,
+      ).catch((err) => onError(err instanceof Error ? err.message : String(err)));
+    };
   };
 
   if (!workPath) {

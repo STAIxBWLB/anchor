@@ -253,10 +253,12 @@ pub fn update_task_status(
     work_path: String,
     rel_path: String,
     status: TaskStatus,
+    root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
     assert_anchor_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
+    let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
     let original =
         fs::read_to_string(&path).map_err(|err| format!("Cannot read task note: {err}"))?;
     let updated = update_frontmatter_content(
@@ -268,12 +270,12 @@ pub fn update_task_status(
         fs::write(&path, &updated).map_err(|err| format!("Cannot update task status: {err}"))?;
     }
     let target_bucket = status.target_bucket();
-    let current_bucket = bucket_from_rel_path(&rel_path).unwrap_or(TaskBucket::Active);
+    let current_bucket = bucket_from_task_path(&tasks_root, &path)?;
     if current_bucket == target_bucket {
         return task_row_for_path(&work, &path, current_bucket);
     }
     assert_anchor_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
-    let target = conflict_free_path(&target_path_for_bucket(&work, &rel_path, target_bucket)?);
+    let target = conflict_free_path(&target_path_for_bucket(&tasks_root, &path, target_bucket)?);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("Cannot create task target: {err}"))?;
     }
@@ -311,15 +313,17 @@ pub fn move_task_note(
     work_path: String,
     rel_path: String,
     target_bucket: TaskBucket,
+    root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
     assert_anchor_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
-    let current_bucket = bucket_from_rel_path(&rel_path).unwrap_or(TaskBucket::Active);
+    let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
+    let current_bucket = bucket_from_task_path(&tasks_root, &path)?;
     if current_bucket == target_bucket {
         return task_row_for_path(&work, &path, current_bucket);
     }
-    let target = conflict_free_path(&target_path_for_bucket(&work, &rel_path, target_bucket)?);
+    let target = conflict_free_path(&target_path_for_bucket(&tasks_root, &path, target_bucket)?);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("Cannot create task target: {err}"))?;
     }
@@ -539,40 +543,46 @@ fn patch_optional_number_field(
 }
 
 fn target_path_for_bucket(
-    work: &Path,
-    rel_path: &str,
+    tasks_root: &Path,
+    path: &Path,
     target_bucket: TaskBucket,
 ) -> Result<PathBuf, String> {
-    let parts = rel_path
-        .replace('\\', "/")
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .map(ToString::to_string)
-        .collect::<Vec<_>>();
-    let Some(bucket_index) = parts
-        .iter()
-        .position(|part| TaskBucket::parse(part).is_some())
-    else {
+    let rel = path
+        .strip_prefix(tasks_root)
+        .map_err(|_| "task_not_under_tasks_root".to_string())?;
+    let mut components = rel.components();
+    let Some(Component::Normal(bucket_segment)) = components.next() else {
         return Err("task_bucket_not_found".to_string());
     };
-    let file_name = parts
-        .last()
-        .ok_or_else(|| "task_file_name_missing".to_string())?;
-    let mut target = work.to_path_buf();
-    for part in &parts[..bucket_index] {
-        target.push(part);
+    let bucket_text = bucket_segment.to_string_lossy();
+    if TaskBucket::parse(&bucket_text).is_none() {
+        return Err("task_bucket_not_found".to_string());
     }
+    let mut target = tasks_root.to_path_buf();
     target.push(target_bucket.as_str());
-    for part in &parts[bucket_index + 1..parts.len().saturating_sub(1)] {
-        target.push(part);
+    for component in components {
+        match component {
+            Component::Normal(part) => target.push(part),
+            _ => return Err("task_target_escapes_workspace".to_string()),
+        }
     }
-    target.push(file_name);
     let normalized = lexical_normalize(&target);
-    if normalized.starts_with(work) {
+    if normalized.starts_with(tasks_root) {
         Ok(normalized)
     } else {
         Err("task_target_escapes_workspace".to_string())
     }
+}
+
+fn bucket_from_task_path(tasks_root: &Path, path: &Path) -> Result<TaskBucket, String> {
+    let rel = path
+        .strip_prefix(tasks_root)
+        .map_err(|_| "task_not_under_tasks_root".to_string())?;
+    let Some(Component::Normal(bucket_segment)) = rel.components().next() else {
+        return Err("task_bucket_not_found".to_string());
+    };
+    TaskBucket::parse(&bucket_segment.to_string_lossy())
+        .ok_or_else(|| "task_bucket_not_found".to_string())
 }
 
 fn bucket_from_rel_path(rel_path: &str) -> Option<TaskBucket> {
@@ -776,6 +786,7 @@ mod tests {
             tmp.path().to_string_lossy().to_string(),
             "tasks/active/task.md".to_string(),
             TaskStatus::Done,
+            None,
         )
         .unwrap();
 
@@ -904,10 +915,38 @@ mod tests {
             tmp.path().to_string_lossy().to_string(),
             "tasks/active/task.md".to_string(),
             TaskBucket::Backlog,
+            None,
         )
         .unwrap();
 
         assert_eq!(row.rel_path, "tasks/backlog/task-2.md");
+    }
+
+    #[test]
+    fn move_task_note_uses_bucket_relative_to_tasks_root() {
+        let tmp = tempdir().unwrap();
+        let task = tmp
+            .path()
+            .join("work/active/tasks/active/project/active/task.md");
+        fs::create_dir_all(task.parent().unwrap()).unwrap();
+        fs::write(&task, "---\nstatus: active\n---\n# A").unwrap();
+
+        let row = move_task_note(
+            tmp.path().to_string_lossy().to_string(),
+            "work/active/tasks/active/project/active/task.md".to_string(),
+            TaskBucket::Archive,
+            Some("work/active/tasks".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(
+            row.rel_path,
+            "work/active/tasks/archive/project/active/task.md",
+        );
+        assert!(tmp
+            .path()
+            .join("work/active/tasks/archive/project/active/task.md")
+            .exists());
     }
 
     #[test]

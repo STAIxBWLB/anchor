@@ -3393,6 +3393,7 @@ function MainApp() {
       contextOverride?: SkillContextItem[],
       prompt?: string,
       cwdOverride?: string | null,
+      onDispatched?: ComposeDialogSeed["onDispatched"],
     ) => {
       const context =
         contextOverride ??
@@ -3412,6 +3413,7 @@ function MainApp() {
         context,
         prompt,
         cwd: cwdOverride ?? activeDocumentWorkspacePath ?? explorerWorkspacePath ?? settingsWorkPath,
+        onDispatched,
       });
     },
     [
@@ -5153,16 +5155,13 @@ function MainApp() {
     };
   }, [runMenuCommand]);
 
-  const modeClass =
-    appMode === "inbox"
-      ? " inbox-mode"
-      : appMode === "comms"
-        ? " comms-mode"
-        : appMode === "meetings"
-          ? " meetings-mode"
-          : appMode === "tasks"
-            ? " tasks-mode"
-          : "";
+  const modeClassByAppMode: Partial<Record<AppMode, string>> = {
+    inbox: " inbox-mode",
+    comms: " comms-mode",
+    meetings: " meetings-mode",
+    tasks: " tasks-mode",
+  };
+  const modeClass = modeClassByAppMode[appMode] ?? "";
   const terminalMaximizedClass =
     anchorSettings.ui.layout.terminalOpen && anchorSettings.ui.layout.terminalMaximized
       ? " terminal-maximized"
@@ -5718,8 +5717,8 @@ function MainApp() {
             processingLogLines={processingLogLines}
             onRefreshMissions={refreshProcessingMissions}
             onOpenSettings={openTasksSettings}
-            onOpenSkillCompose={(skill, context, prompt, cwd) =>
-              openSkillCompose(skill, context, prompt, cwd)
+            onOpenSkillCompose={(skill, context, prompt, cwd, onDispatched) =>
+              openSkillCompose(skill, context, prompt, cwd, onDispatched)
             }
             onRevealPath={(path) => {
               if (inboxWorkspacePath) void revealInFileManager(inboxWorkspacePath, path);

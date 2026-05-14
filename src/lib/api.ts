@@ -323,9 +323,15 @@ export async function updateTaskStatus(
   workPath: string,
   relPath: string,
   status: TaskStatus,
+  root?: string | null,
 ): Promise<TaskNoteRow> {
   if (!isTauri()) return mockTaskNoteRows(workPath)[0];
-  return invoke<TaskNoteRow>("update_task_status", { workPath, relPath, status });
+  return invoke<TaskNoteRow>("update_task_status", {
+    workPath,
+    relPath,
+    status,
+    root: root ?? null,
+  });
 }
 
 export async function updateTaskScheduleFields(
@@ -341,9 +347,15 @@ export async function moveTaskNote(
   workPath: string,
   relPath: string,
   targetBucket: TaskBucket,
+  root?: string | null,
 ): Promise<TaskNoteRow> {
   if (!isTauri()) return mockTaskNoteRows(workPath)[0];
-  return invoke<TaskNoteRow>("move_task_note", { workPath, relPath, targetBucket });
+  return invoke<TaskNoteRow>("move_task_note", {
+    workPath,
+    relPath,
+    targetBucket,
+    root: root ?? null,
+  });
 }
 
 export async function appendTasksLog(workPath: string, line: string): Promise<void> {
