@@ -285,6 +285,15 @@ export async function readMeetingsLog(
   });
 }
 
+export async function searchCalendarNotes(
+  workPath: string,
+  roots: string[],
+  query: string,
+): Promise<string[]> {
+  if (!isTauri()) return [];
+  return invoke<string[]>("search_calendar_notes", { workPath, roots, query });
+}
+
 export async function scanTaskNotes(
   workPath: string,
   root?: string | null,

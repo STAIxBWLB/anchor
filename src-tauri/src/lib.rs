@@ -3,6 +3,7 @@ mod ai_router;
 mod anchor_dir;
 mod app_menu;
 mod approval;
+mod calendar_search;
 mod cli_path;
 mod document;
 mod file_manager;
@@ -43,6 +44,7 @@ use anchor_dir::{
     save_anchor_settings, save_anchor_skills, save_anchor_template, update_anchor_workspace,
 };
 use approval::{prepare_approval, record_approval, ApprovalState};
+use calendar_search::search_calendar_notes;
 use document::{
     create_document, create_version, duplicate_document, move_document, read_document,
     save_document, trash_document, update_frontmatter_field,
@@ -166,6 +168,7 @@ pub fn run() {
             read_meeting_guides,
             append_meetings_log,
             read_meetings_log,
+            search_calendar_notes,
             scan_task_notes,
             read_task_metadata,
             create_task_note,

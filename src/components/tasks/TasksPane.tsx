@@ -1,5 +1,3 @@
-import "react-big-calendar/lib/css/react-big-calendar.css";
-
 import {
   Calendar,
   CheckCircle2,
@@ -12,20 +10,13 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Calendar as BigCalendar,
-  dateFnsLocalizer,
-  type EventPropGetter,
-  type View,
-} from "react-big-calendar";
-import { format, getDay, parse, startOfWeek } from "date-fns";
-import { enUS } from "date-fns/locale/en-US";
-import { ko } from "date-fns/locale/ko";
+import { format } from "date-fns";
 import {
   appendTasksLog,
   createTaskNote,
   readTaskMetadata,
   scanTaskNotes,
+  searchCalendarNotes,
   updateTaskScheduleFields,
   updateTaskStatus,
 } from "../../lib/api";
@@ -38,8 +29,6 @@ import {
   groupTasksByStatus,
   rowsToTaskEntries,
   selectVisibleTask,
-  tasksToCalendarEvents,
-  type TaskCalendarEvent,
   type TaskEntry,
   type TaskPriority,
 } from "../../lib/tasks";
@@ -55,6 +44,10 @@ import { Button } from "../ui/Button";
 import { NewTaskDialog } from "./NewTaskDialog";
 import { TaskDetailDrawer } from "./TaskDetailDrawer";
 import { TasksSidebar, type TasksFilterView } from "./TasksSidebar";
+import { UnifiedCalendarView } from "../calendar/UnifiedCalendarView";
+import { toUnifiedTaskEvents } from "../../lib/calendar/fromEntries";
+import type { CalendarView } from "../../lib/calendar/types";
+import { useDebouncedValue } from "../../lib/useDebouncedValue";
 
 interface TasksPaneProps {
   workPath: string | null;
@@ -74,10 +67,7 @@ interface TasksPaneProps {
 }
 
 type TasksDisplayView = "month" | "week" | "day" | "list";
-type CalendarDisplayView = Exclude<TasksDisplayView, "list">;
 
-const locales = { ko, en: enUS };
-const calendarViews: CalendarDisplayView[] = ["month", "week", "day"];
 const viewButtons: TasksDisplayView[] = ["month", "week", "day", "list"];
 
 export function TasksPane({
@@ -105,16 +95,32 @@ export function TasksPane({
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [viewDate, setViewDate] = useState<Date>(() => new Date());
+  const [bodyHits, setBodyHits] = useState<Set<string>>(() => new Set());
+  const debouncedQuery = useDebouncedValue(query, 250);
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const todayDate = useMemo(() => new Date(), []);
   const entries = useMemo(() => rowsToTaskEntries(rows), [rows]);
   const visibleEntries = useMemo(() => {
-    return filterTasksByQuery(entries, query, {
+    const titleMatches = filterTasksByQuery(entries, query, {
       ...filtersForView(view),
       projects: projectFilter === "all" ? [] : [projectFilter],
       priorities: priorityFilter === "all" ? [] : [priorityFilter],
       today,
     });
-  }, [entries, projectFilter, priorityFilter, query, today, view]);
+    if (bodyHits.size === 0) return titleMatches;
+    const bodyMatched = filterTasksByQuery(
+      entries.filter((entry) => bodyHits.has(entry.relPath)),
+      "",
+      {
+        ...filtersForView(view),
+        projects: projectFilter === "all" ? [] : [projectFilter],
+        priorities: priorityFilter === "all" ? [] : [priorityFilter],
+        today,
+      },
+    );
+    return mergeTaskEntries(titleMatches, bodyMatched);
+  }, [entries, projectFilter, priorityFilter, query, today, view, bodyHits]);
   const unscheduledEntries = useMemo(() => {
     return filterTasksByQuery(entries, query, {
       statuses: ["active", "in-progress"],
@@ -136,24 +142,36 @@ export function TasksPane({
     [selectableEntries, selectedRelPath],
   );
   const grouped = useMemo(() => groupTasksByStatus(visibleEntries), [visibleEntries]);
-  const calendarEvents = useMemo(() => tasksToCalendarEvents(visibleEntries), [visibleEntries]);
-  const calendarView = displayView === "list" ? "week" : displayView;
-  const localizer = useMemo(
-    () =>
-      dateFnsLocalizer({
-        format,
-        parse,
-        startOfWeek: (date: Date) =>
-          startOfWeek(date, { weekStartsOn: effectiveSettings.weekStartsOn }),
-        getDay,
-        locales,
-      }),
-    [effectiveSettings.weekStartsOn],
-  );
+  const calendarEvents = useMemo(() => toUnifiedTaskEvents(visibleEntries), [visibleEntries]);
+  const calendarView: CalendarView =
+    displayView === "list" ? "month" : (displayView as CalendarView);
   const tasksMissions = useMemo(
     () => activeTasksMissions(processingMissions),
     [processingMissions],
   );
+
+  useEffect(() => {
+    if (!workPath) {
+      setBodyHits(new Set());
+      return;
+    }
+    const trimmed = debouncedQuery.trim();
+    if (trimmed.length < 2) {
+      setBodyHits(new Set());
+      return;
+    }
+    let cancelled = false;
+    void searchCalendarNotes(workPath, [effectiveSettings.root ?? "tasks"], trimmed)
+      .then((paths) => {
+        if (!cancelled) setBodyHits(new Set(paths));
+      })
+      .catch((err) => {
+        if (!cancelled) onError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, workPath, effectiveSettings.root, onError]);
 
   const load = useCallback(async () => {
     if (!workPath || !effectiveSettings.enabled) {
@@ -342,20 +360,26 @@ export function TasksPane({
             t={t}
           />
         ) : (
-          <TaskCalendar
+          <UnifiedCalendarView<TaskEntry>
             events={calendarEvents}
-            localizer={localizer}
-            locale={locale}
             view={calendarView}
-            onView={(next) => {
-              if (calendarViews.includes(next as CalendarDisplayView)) {
-                setDisplayView(next as CalendarDisplayView);
-              }
+            viewDate={viewDate}
+            weekStartsOn={effectiveSettings.weekStartsOn}
+            locale={locale}
+            today={todayDate}
+            query={query}
+            onQueryChange={setQuery}
+            onViewChange={(next) => setDisplayView(next)}
+            onViewDateChange={setViewDate}
+            onSelectEvent={(event) => setSelectedRelPath(event.resource.relPath)}
+            onSelectDate={(date) => {
+              if (displayView === "month") setDisplayView("day");
+              setViewDate(date);
             }}
-            onSelect={(entry) => setSelectedRelPath(entry.relPath)}
+            searchPlaceholder={t("tasks.search")}
+            emptyLabel={t("tasks.calendar.empty")}
             startHour={effectiveSettings.calendarStartHour}
-            unscheduledEntries={unscheduledEntries}
-            selectedRelPath={selectedEntry?.relPath ?? null}
+            loadingLabel={t("tasks.loading")}
           />
         )}
         {tasksMissions.length > 0 ? (
@@ -451,88 +475,6 @@ function TaskList({
           ))}
         </section>
       ))}
-    </div>
-  );
-}
-
-function TaskCalendar({
-  events,
-  localizer,
-  locale,
-  view,
-  onView,
-  onSelect,
-  startHour,
-  unscheduledEntries,
-  selectedRelPath,
-}: {
-  events: TaskCalendarEvent[];
-  localizer: ReturnType<typeof dateFnsLocalizer>;
-  locale: "ko" | "en";
-  view: CalendarDisplayView;
-  onView: (view: View) => void;
-  onSelect: (entry: TaskEntry) => void;
-  startHour: number;
-  unscheduledEntries: TaskEntry[];
-  selectedRelPath: string | null;
-}) {
-  const { t } = useTranslation();
-  const eventPropGetter: EventPropGetter<TaskCalendarEvent> = (event) => ({
-    className: `task-calendar-event priority-${event.resource.priority}`,
-  });
-  return (
-    <div className="tasks-calendar-shell">
-      <section className="tasks-calendar-frame">
-        {events.length === 0 ? (
-          <div className="tasks-calendar-empty">{t("tasks.calendar.empty")}</div>
-        ) : null}
-        <BigCalendar<TaskCalendarEvent>
-          localizer={localizer}
-          culture={locale === "ko" ? "ko" : "en"}
-          events={events}
-          startAccessor="start"
-          endAccessor="end"
-          view={view}
-          onView={onView}
-          views={["month", "week", "day"]}
-          onSelectEvent={(event) => onSelect(event.resource)}
-          eventPropGetter={eventPropGetter}
-          min={new Date(1970, 0, 1, startHour, 0, 0)}
-          messages={{
-            today: t("tasks.calendar.today"),
-            previous: t("tasks.calendar.previous"),
-            next: t("tasks.calendar.next"),
-            month: t("tasks.calendar.month"),
-            week: t("tasks.calendar.week"),
-            day: t("tasks.calendar.day"),
-            agenda: t("tasks.calendar.agenda"),
-          }}
-        />
-      </section>
-      <aside className="tasks-unscheduled-tray">
-        <header>
-          <strong>{t("tasks.calendar.unscheduled")}</strong>
-          <span>{unscheduledEntries.length}</span>
-        </header>
-        <p>{t("tasks.calendar.unscheduledDescription")}</p>
-        <div className="tasks-unscheduled-list">
-          {unscheduledEntries.length === 0 ? (
-            <span className="muted">{t("tasks.calendar.noUnscheduled")}</span>
-          ) : (
-            unscheduledEntries.slice(0, 24).map((entry) => (
-              <button
-                type="button"
-                key={entry.relPath}
-                className={selectedRelPath === entry.relPath ? "unscheduled-task selected" : "unscheduled-task"}
-                onClick={() => onSelect(entry)}
-              >
-                <strong>{entry.title}</strong>
-                <span>{entry.project ?? entry.relPath}</span>
-              </button>
-            ))
-          )}
-        </div>
-      </aside>
     </div>
   );
 }
