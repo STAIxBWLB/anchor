@@ -10,6 +10,8 @@ import {
   mockMeetingGuides,
   mockMeetingMetadata,
   mockMeetingNoteRows,
+  mockTaskMetadata,
+  mockTaskNoteRows,
   mockMoveDocument,
   mockSetActiveWorkspaceRoot,
   mockTrashDocument,
@@ -63,6 +65,13 @@ import type {
   MemoEntry,
   MemoFormat,
   StoredFileOutcome,
+  CreateTaskDraft,
+  TaskBucket,
+  TaskMetadata,
+  TaskNoteRow,
+  TaskSchedulePatch,
+  TaskStatus,
+  TasksLogLineRecord,
   ScanOptions,
   VaultEntry,
   WorkspaceFileEntry,
@@ -270,6 +279,96 @@ export async function readMeetingsLog(
 ): Promise<MeetingsLogLineRecord[]> {
   if (!isTauri()) return [];
   return invoke<MeetingsLogLineRecord[]>("read_meetings_log", {
+    workPath,
+    limit: options?.limit ?? null,
+    eventFilter: options?.eventFilter ?? null,
+  });
+}
+
+export async function searchCalendarNotes(
+  workPath: string,
+  roots: string[],
+  query: string,
+): Promise<string[]> {
+  if (!isTauri()) return [];
+  return invoke<string[]>("search_calendar_notes", { workPath, roots, query });
+}
+
+export async function scanTaskNotes(
+  workPath: string,
+  root?: string | null,
+): Promise<TaskNoteRow[]> {
+  if (!isTauri()) return mockTaskNoteRows(workPath);
+  return invoke<TaskNoteRow[]>("scan_task_notes", { workPath, root: root ?? null });
+}
+
+export async function readTaskMetadata(
+  workPath: string,
+  relPath: string,
+): Promise<TaskMetadata> {
+  if (!isTauri()) return mockTaskMetadata(relPath);
+  return invoke<TaskMetadata>("read_task_metadata", { workPath, relPath });
+}
+
+export async function createTaskNote(
+  workPath: string,
+  draft: CreateTaskDraft,
+  root?: string | null,
+): Promise<TaskNoteRow> {
+  if (!isTauri()) return mockTaskNoteRows(workPath)[0];
+  return invoke<TaskNoteRow>("create_task_note", { workPath, draft, root: root ?? null });
+}
+
+export async function updateTaskStatus(
+  workPath: string,
+  relPath: string,
+  status: TaskStatus,
+  root?: string | null,
+): Promise<TaskNoteRow> {
+  if (!isTauri()) return mockTaskNoteRows(workPath)[0];
+  return invoke<TaskNoteRow>("update_task_status", {
+    workPath,
+    relPath,
+    status,
+    root: root ?? null,
+  });
+}
+
+export async function updateTaskScheduleFields(
+  workPath: string,
+  relPath: string,
+  fields: TaskSchedulePatch,
+): Promise<TaskNoteRow> {
+  if (!isTauri()) return mockTaskNoteRows(workPath)[0];
+  return invoke<TaskNoteRow>("update_task_schedule_fields", { workPath, relPath, fields });
+}
+
+export async function moveTaskNote(
+  workPath: string,
+  relPath: string,
+  targetBucket: TaskBucket,
+  root?: string | null,
+): Promise<TaskNoteRow> {
+  if (!isTauri()) return mockTaskNoteRows(workPath)[0];
+  return invoke<TaskNoteRow>("move_task_note", {
+    workPath,
+    relPath,
+    targetBucket,
+    root: root ?? null,
+  });
+}
+
+export async function appendTasksLog(workPath: string, line: string): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("append_tasks_log", { workPath, line });
+}
+
+export async function readTasksLog(
+  workPath: string,
+  options?: { limit?: number | null; eventFilter?: string[] | null },
+): Promise<TasksLogLineRecord[]> {
+  if (!isTauri()) return [];
+  return invoke<TasksLogLineRecord[]>("read_tasks_log", {
     workPath,
     limit: options?.limit ?? null,
     eventFilter: options?.eventFilter ?? null,

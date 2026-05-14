@@ -6,6 +6,8 @@ import type {
   MeetingGuides,
   MeetingMetadata,
   MeetingNoteRow,
+  TaskMetadata,
+  TaskNoteRow,
   VaultEntry,
   WorkspaceFileEntry,
   WorkspaceRegistry,
@@ -421,5 +423,58 @@ export function mockMeetingGuides(): MeetingGuides {
     people: "# People\n\nYoung Joon Lee.",
     tagStandards: "# Tags\n\n#회의록",
     notesGuidelines: "# Notes Guidelines\n\nUse concise Korean.",
+  };
+}
+
+export function mockTaskNoteRows(rootPath = MOCK_VAULT_PATH): TaskNoteRow[] {
+  return [
+    {
+      path: `${rootPath}/tasks/active/260514-anchor-tasks-mode.md`,
+      relPath: "tasks/active/260514-anchor-tasks-mode.md",
+      fileName: "260514-anchor-tasks-mode.md",
+      bucket: "active",
+      sizeBytes: 320,
+      updatedAt: now,
+      frontmatter: {
+        title: "Anchor tasks mode",
+        status: "active",
+        priority: "high",
+        due: "2026-05-14",
+        project: "Anchor",
+        topics: ["tasks", "ui"],
+      },
+    },
+    {
+      path: `${rootPath}/tasks/backlog/260515-google-sync-review.md`,
+      relPath: "tasks/backlog/260515-google-sync-review.md",
+      fileName: "260515-google-sync-review.md",
+      bucket: "backlog",
+      sizeBytes: 210,
+      updatedAt: "2026-05-13T11:00:00+09:00",
+      frontmatter: {
+        title: "Google sync review",
+        status: "backlog",
+        priority: "medium",
+        project: "Anchor",
+      },
+    },
+  ];
+}
+
+export function mockTaskMetadata(relPath: string): TaskMetadata {
+  return {
+    relPath,
+    frontmatter: {
+      title: "Anchor tasks mode",
+      status: "active",
+      priority: "high",
+      due: "2026-05-14",
+      project: "Anchor",
+      tags: ["tasks", "anchor"],
+    },
+    tags: ["tasks", "anchor"],
+    preview: "# Anchor tasks mode\n\nAdd first-class task management.",
+    lineCount: 4,
+    charCount: 58,
   };
 }

@@ -55,6 +55,7 @@ import type {
 import {
   applyWorkspaceCommsOverrides,
   applyWorkspaceMeetingsOverrides,
+  applyWorkspaceTasksOverrides,
   formatBinaryFileIncludePatterns,
   normalizeAnchorSettings,
   normalizeDotFolderIncludes,
@@ -103,6 +104,7 @@ import {
 import { openSkillEditorWindow } from "../lib/windowLayout";
 import { CommsSettingsTab } from "./comms/CommsSettingsTab";
 import { MeetingsSettingsTab } from "./meetings/MeetingsSettingsTab";
+import { TasksSettingsTab } from "./tasks/TasksSettingsTab";
 import { Button } from "./ui/Button";
 
 type SystemTab =
@@ -111,6 +113,7 @@ type SystemTab =
   | "terminal"
   | "comms"
   | "meetings"
+  | "tasks"
   | "inbox-channels"
   | "connectors"
   | "rules"
@@ -127,6 +130,7 @@ function isSystemTab(value: string | null | undefined): value is SystemTab {
     value === "terminal" ||
     value === "comms" ||
     value === "meetings" ||
+    value === "tasks" ||
     value === "inbox-channels" ||
     value === "connectors" ||
     value === "rules" ||
@@ -203,6 +207,7 @@ export function SystemPane({
             ["terminal", "system.tab.terminal"],
             ["comms", "system.tab.comms"],
             ["meetings", "system.tab.meetings"],
+            ["tasks", "system.tab.tasks"],
             ["inbox-channels", "system.tab.inboxChannels"],
             ["connectors", "system.tab.connectors"],
             ["rules", "system.tab.rules"],
@@ -268,6 +273,13 @@ export function SystemPane({
         ) : null}
         {tab === "meetings" ? (
           <MeetingsSettingsSystemTab
+            workPath={workPath}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+          />
+        ) : null}
+        {tab === "tasks" ? (
+          <TasksSettingsSystemTab
             workPath={workPath}
             settings={settings}
             onSettingsChange={onSettingsChange}
@@ -566,6 +578,104 @@ function MeetingsSettingsSystemTab({
         effectiveSettings={effectiveMeetings}
         onSettingsChange={(meetings) => {
           setDraftMeetings(meetings);
+          setStatus(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function TasksSettingsSystemTab({
+  workPath,
+  settings,
+  onSettingsChange,
+}: {
+  workPath: string;
+  settings: AnchorSettings;
+  onSettingsChange: (settings: AnchorSettings) => void;
+}) {
+  const { t } = useTranslation();
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null);
+  const [draftTasks, setDraftTasks] = useState(settings.tasks);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const effectiveTasks = useMemo(
+    () => applyWorkspaceTasksOverrides(settings.tasks, workspaceConfig),
+    [settings.tasks, workspaceConfig],
+  );
+  const dirty = JSON.stringify(draftTasks) !== JSON.stringify(settings.tasks);
+
+  useEffect(() => {
+    setDraftTasks(settings.tasks);
+  }, [settings.tasks]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readWorkspaceConfig(workPath)
+      .then((next) => {
+        if (!cancelled) setWorkspaceConfig(next);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaceConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workPath]);
+
+  const save = () => {
+    setError(null);
+    setStatus(null);
+    try {
+      onSettingsChange(
+        normalizeAnchorSettings({
+          ...settings,
+          tasks: draftTasks,
+        }),
+      );
+      setStatus(t("system.rules.saved"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="system-detail" style={{ width: "100%" }}>
+      <div className="system-detail-actions">
+        <strong>{t("system.tab.tasks")}</strong>
+        <span style={{ flex: 1 }} />
+        <span className={dirty ? "save-state dirty" : "save-state saved"}>
+          {dirty ? t("system.rules.dirty") : t("system.rules.saved")}
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setDraftTasks(settings.tasks);
+            setStatus(null);
+            setError(null);
+          }}
+          icon={<RefreshCcw size={14} />}
+        >
+          Refresh
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={!dirty}
+          onClick={save}
+          icon={<Save size={14} />}
+        >
+          {t("system.rules.save")}
+        </Button>
+      </div>
+      {error ? <div className="inbox-error">{error}</div> : null}
+      {status ? <div className="save-state saved">{status}</div> : null}
+      <TasksSettingsTab
+        settings={draftTasks}
+        effectiveSettings={effectiveTasks}
+        onSettingsChange={(tasks) => {
+          setDraftTasks(tasks);
           setStatus(null);
         }}
       />

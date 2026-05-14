@@ -6,6 +6,7 @@ import {
   Command,
   FileText,
   Inbox,
+  ListTodo,
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,6 +25,7 @@ import { EditorPane, type EditorViewMode } from "./components/EditorPane";
 import { GitStatusBadge } from "./components/GitStatusBadge";
 import { InboxPane } from "./components/InboxPane";
 import { MeetingsPane } from "./components/meetings/MeetingsPane";
+import { TasksPane } from "./components/tasks/TasksPane";
 import { MissionBadge } from "./components/MissionBadge";
 import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
@@ -210,6 +212,7 @@ import {
   DEFAULT_ANCHOR_SETTINGS,
   applyWorkspaceCommsOverrides,
   applyWorkspaceMeetingsOverrides,
+  applyWorkspaceTasksOverrides,
   normalizeAnchorSettings,
   type AnchorSettings,
   type AnchorAppMode,
@@ -222,6 +225,7 @@ import {
   type WorkspaceVisibilitySetting,
 } from "./lib/settings";
 import { activeMeetingsMissions } from "./lib/meetings";
+import { activeTasksMissions } from "./lib/tasks";
 import { applyThemePreference, applyThemeVars, buildThemeVars } from "./lib/theme";
 import {
   openSettingsWindow,
@@ -1136,6 +1140,10 @@ function MainApp() {
   const effectiveMeetingsSettings = useMemo(
     () => applyWorkspaceMeetingsOverrides(anchorSettings.meetings, workspaceConfig),
     [anchorSettings.meetings, workspaceConfig],
+  );
+  const effectiveTasksSettings = useMemo(
+    () => applyWorkspaceTasksOverrides(anchorSettings.tasks, workspaceConfig),
+    [anchorSettings.tasks, workspaceConfig],
   );
   const dirty = useMemo(
     () => Boolean(document && draftContent !== document.content),
@@ -2742,7 +2750,7 @@ function MainApp() {
 
   useEffect(() => {
     if (appMode === "inbox") void refreshProcessedItems();
-    if (appMode === "inbox" || appMode === "meetings" || rightPaneTab === "skills") {
+    if (appMode === "inbox" || appMode === "meetings" || appMode === "tasks" || rightPaneTab === "skills") {
       void refreshProcessingMissions();
     }
   }, [appMode, refreshProcessedItems, refreshProcessingMissions, rightPaneTab]);
@@ -3380,7 +3388,13 @@ function MainApp() {
   );
 
   const openSkillCompose = useCallback(
-    (skill: SkillRecord | null = null, contextOverride?: SkillContextItem[], prompt?: string) => {
+    (
+      skill: SkillRecord | null = null,
+      contextOverride?: SkillContextItem[],
+      prompt?: string,
+      cwdOverride?: string | null,
+      onDispatched?: ComposeDialogSeed["onDispatched"],
+    ) => {
       const context =
         contextOverride ??
         (selectedEntry
@@ -3398,7 +3412,8 @@ function MainApp() {
         skill,
         context,
         prompt,
-        cwd: activeDocumentWorkspacePath ?? explorerWorkspacePath ?? settingsWorkPath,
+        cwd: cwdOverride ?? activeDocumentWorkspacePath ?? explorerWorkspacePath ?? settingsWorkPath,
+        onDispatched,
       });
     },
     [
@@ -4074,6 +4089,10 @@ function MainApp() {
     setPersistedAppMode("meetings");
   }, [setPersistedAppMode]);
 
+  const openTasks = useCallback(() => {
+    setPersistedAppMode("tasks");
+  }, [setPersistedAppMode]);
+
   const closeCommandPalette = useCallback(() => {
     setCommandPaletteOpen(false);
   }, []);
@@ -4103,6 +4122,12 @@ function MainApp() {
 
   const openMeetingsSettings = useCallback(() => {
     void openSettingsWindow(settingsWorkPath, "meetings").catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }, [settingsWorkPath]);
+
+  const openTasksSettings = useCallback(() => {
+    void openSettingsWindow(settingsWorkPath, "tasks").catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
     });
   }, [settingsWorkPath]);
@@ -4176,6 +4201,8 @@ function MainApp() {
     } else if (appMode === "comms") {
       void refreshCommsProviders({ force: true });
     } else if (appMode === "meetings") {
+      void refreshProcessingMissions();
+    } else if (appMode === "tasks") {
       void refreshProcessingMissions();
     } else if (anchorSettings.ui.explorerPaneMode === "files" && explorerWorkspacePath) {
       void refreshWorkspaceFiles(explorerWorkspacePath);
@@ -4877,6 +4904,9 @@ function MainApp() {
         case "open-meetings":
           openMeetings();
           break;
+        case "open-tasks":
+          openTasks();
+          break;
         case "open-docs":
           setPersistedAppMode("pkm");
           break;
@@ -4905,6 +4935,7 @@ function MainApp() {
       openInboxAndFocus,
       openComms,
       openMeetings,
+      openTasks,
       checkForUpdates,
       splitEditorRight,
       closeAllCleanTabs,
@@ -4926,6 +4957,7 @@ function MainApp() {
       "mod+d": splitActiveSurfaceRight,
       "mod+i": openInboxAndFocus,
       "mod+shift+m": openComms,
+      "mod+shift+t": openTasks,
       "mod+k": () => setCommandPaletteOpen((v) => !v),
       "mod+shift+k": () => openSkillCompose(null),
       "mod+p": () =>
@@ -4955,6 +4987,7 @@ function MainApp() {
       focusSearch,
       openInboxAndFocus,
       openComms,
+      openTasks,
       toggleLocale,
       refreshActiveSurface,
       navigateBack,
@@ -5122,14 +5155,13 @@ function MainApp() {
     };
   }, [runMenuCommand]);
 
-  const modeClass =
-    appMode === "inbox"
-      ? " inbox-mode"
-      : appMode === "comms"
-        ? " comms-mode"
-        : appMode === "meetings"
-          ? " meetings-mode"
-          : "";
+  const modeClassByAppMode: Partial<Record<AppMode, string>> = {
+    inbox: " inbox-mode",
+    comms: " comms-mode",
+    meetings: " meetings-mode",
+    tasks: " tasks-mode",
+  };
+  const modeClass = modeClassByAppMode[appMode] ?? "";
   const terminalMaximizedClass =
     anchorSettings.ui.layout.terminalOpen && anchorSettings.ui.layout.terminalMaximized
       ? " terminal-maximized"
@@ -5507,6 +5539,15 @@ function MainApp() {
           </button>
           <button
             type="button"
+            className={appMode === "tasks" ? "activity-button active" : "activity-button"}
+            onClick={openTasks}
+            title={t("mode.tasks")}
+            aria-label={t("mode.tasks")}
+          >
+            <ListTodo size={20} strokeWidth={1.9} />
+          </button>
+          <button
+            type="button"
             className="activity-button"
             onClick={openCommandPalette}
             title={t("sidebar.commandPalette")}
@@ -5662,6 +5703,23 @@ function MainApp() {
             onMissionStarted={handleMeetingsMissionStarted}
             onStopMission={(id) => void stopProcessingMission(id)}
             onConfirmApproval={approvalGate.confirmApproval}
+            onRevealPath={(path) => {
+              if (inboxWorkspacePath) void revealInFileManager(inboxWorkspacePath, path);
+            }}
+            onError={setError}
+          />
+        ) : appMode === "tasks" ? (
+          <TasksPane
+            workPath={inboxWorkspacePath}
+            effectiveSettings={effectiveTasksSettings}
+            skills={skills}
+            processingMissions={activeTasksMissions(processingMissions)}
+            processingLogLines={processingLogLines}
+            onRefreshMissions={refreshProcessingMissions}
+            onOpenSettings={openTasksSettings}
+            onOpenSkillCompose={(skill, context, prompt, cwd, onDispatched) =>
+              openSkillCompose(skill, context, prompt, cwd, onDispatched)
+            }
             onRevealPath={(path) => {
               if (inboxWorkspacePath) void revealInFileManager(inboxWorkspacePath, path);
             }}

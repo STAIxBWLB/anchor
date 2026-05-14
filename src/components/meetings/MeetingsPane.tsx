@@ -1,5 +1,3 @@
-import "react-big-calendar/lib/css/react-big-calendar.css";
-
 import {
   AlertTriangle,
   Calendar as CalendarIcon,
@@ -29,15 +27,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Calendar,
-  dateFnsLocalizer,
-  type EventPropGetter,
-  type View,
-} from "react-big-calendar";
-import { format, getDay, parse, startOfWeek } from "date-fns";
-import { ko } from "date-fns/locale/ko";
-import { enUS } from "date-fns/locale/en-US";
-import {
   appendMeetingsLog,
   chooseFiles,
   readDocument,
@@ -45,6 +34,7 @@ import {
   readMeetingMetadata,
   readMeetingsLog,
   scanMeetingNotes,
+  searchCalendarNotes,
 } from "../../lib/api";
 import {
   logLinePhase,
@@ -78,11 +68,13 @@ import {
 import {
   activeMeetingsMissions,
   filterMeetingsByQuery,
-  meetingsToCalendarEvents,
   rowsToMeetingEntries,
-  type MeetingCalendarEvent,
   type MeetingNoteEntry,
 } from "../../lib/meetings";
+import { UnifiedCalendarView } from "../calendar/UnifiedCalendarView";
+import { toUnifiedMeetingEvents } from "../../lib/calendar/fromEntries";
+import type { CalendarView as UnifiedCalendarViewMode } from "../../lib/calendar/types";
+import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import type { MeetingsSettings } from "../../lib/settings";
 import {
   agentApplySkillProposal,
@@ -133,15 +125,6 @@ interface MeetingsPaneProps {
   onError: (message: string | null) => void;
 }
 
-const locales = { ko, en: enUS };
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek: (date: Date) => startOfWeek(date, { weekStartsOn: 1 }),
-  getDay,
-  locales,
-});
-
 export function MeetingsPane({
   workPath,
   settings,
@@ -162,9 +145,13 @@ export function MeetingsPane({
   const { t, locale } = useTranslation();
   const [view, setView] = useState<MeetingsView>("all");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("list");
+  const [calendarView, setCalendarView] = useState<UnifiedCalendarViewMode>("month");
+  const [viewDate, setViewDate] = useState<Date>(() => new Date());
+  const [bodyHits, setBodyHits] = useState<Set<string>>(() => new Set());
   const [rows, setRows] = useState<MeetingNoteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 250);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [lookupDate, setLookupDate] = useState(() => todayIso());
   const [selectedRelPath, setSelectedRelPath] = useState<string | null>(null);
@@ -196,9 +183,24 @@ export function MeetingsPane({
         : view === "date"
           ? entries.filter((entry) => entry.date === lookupDate)
           : entries;
-    return filterMeetingsByQuery(scoped, query, typeFilter === "all" ? [] : [typeFilter]);
-  }, [entries, lookupDate, monthKey, query, typeFilter, view]);
-  const calendarEvents = useMemo(() => meetingsToCalendarEvents(viewEntries), [viewEntries]);
+    const titleMatches = filterMeetingsByQuery(scoped, query, typeFilter === "all" ? [] : [typeFilter]);
+    if (bodyHits.size === 0) return titleMatches;
+    const bodyMatched = filterMeetingsByQuery(
+      scoped.filter((entry) => bodyHits.has(entry.relPath)),
+      "",
+      typeFilter === "all" ? [] : [typeFilter],
+    );
+    const seen = new Set<string>();
+    const merged: MeetingNoteEntry[] = [];
+    for (const entry of [...titleMatches, ...bodyMatched]) {
+      if (seen.has(entry.relPath)) continue;
+      seen.add(entry.relPath);
+      merged.push(entry);
+    }
+    return merged;
+  }, [entries, lookupDate, monthKey, query, typeFilter, view, bodyHits]);
+  const calendarEvents = useMemo(() => toUnifiedMeetingEvents(viewEntries), [viewEntries]);
+  const todayDate = useMemo(() => new Date(), []);
   const meetingsMissions = useMemo(
     () => activeMeetingsMissions(processingMissions),
     [processingMissions],
@@ -212,6 +214,29 @@ export function MeetingsPane({
     setClearedRunIds(readClearedMeetingRunIds(clearedRunStorageKey));
     setLastClearedMissionId(null);
   }, [clearedRunStorageKey]);
+
+  useEffect(() => {
+    if (!workPath) {
+      setBodyHits(new Set());
+      return;
+    }
+    const trimmed = debouncedQuery.trim();
+    if (trimmed.length < 2) {
+      setBodyHits(new Set());
+      return;
+    }
+    let cancelled = false;
+    void searchCalendarNotes(workPath, [effectiveSettings.root ?? "meetings"], trimmed)
+      .then((paths) => {
+        if (!cancelled) setBodyHits(new Set(paths));
+      })
+      .catch((err) => {
+        if (!cancelled) onError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, workPath, effectiveSettings.root, onError]);
 
   const clearMeetingMission = useCallback((id: string) => {
     setClearedRunIds((current) => {
@@ -427,12 +452,27 @@ export function MeetingsPane({
             <div className="meetings-content-grid">
               <section className="meetings-browser">
                 {displayMode === "calendar" ? (
-                  <MeetingsCalendarView
+                  <UnifiedCalendarView<MeetingNoteEntry>
                     events={calendarEvents}
+                    loading={loading}
+                    view={calendarView}
+                    viewDate={viewDate}
+                    weekStartsOn={1}
                     locale={locale}
+                    today={todayDate}
+                    query={query}
+                    onQueryChange={setQuery}
+                    onViewChange={setCalendarView}
+                    onViewDateChange={setViewDate}
+                    onSelectEvent={(event) => setSelectedRelPath(event.resource.relPath)}
+                    onSelectDate={(date) => {
+                      if (calendarView === "month") setCalendarView("day");
+                      setViewDate(date);
+                    }}
+                    searchPlaceholder={t("meetings.search")}
+                    emptyLabel={t("meetings.calendar.empty")}
                     startHour={effectiveSettings.calendarStartHour}
-                    defaultDate={selectedEntry ? new Date(`${selectedEntry.date}T00:00:00`) : new Date()}
-                    onSelect={(entry) => setSelectedRelPath(entry.relPath)}
+                    loadingLabel={t("meetings.loading")}
                   />
                 ) : (
                   <MeetingsListView
@@ -612,52 +652,6 @@ function MeetingsListView({
           {entry.detail ? <span>{entry.detail}</span> : null}
         </button>
       ))}
-    </div>
-  );
-}
-
-function MeetingsCalendarView({
-  events,
-  locale,
-  startHour,
-  defaultDate,
-  onSelect,
-}: {
-  events: MeetingCalendarEvent[];
-  locale: "ko" | "en";
-  startHour: number;
-  defaultDate: Date;
-  onSelect: (entry: MeetingNoteEntry) => void;
-}) {
-  const { t } = useTranslation();
-  const eventPropGetter: EventPropGetter<MeetingCalendarEvent> = (event) => ({
-    className: `meeting-event meeting-type-${hashType(event.resource.type)}`,
-  });
-  return (
-    <div className="meetings-calendar">
-      <Calendar<MeetingCalendarEvent>
-        localizer={localizer}
-        culture={locale}
-        events={events}
-        defaultDate={defaultDate}
-        defaultView={"month" as View}
-        views={["month", "agenda"]}
-        startAccessor="start"
-        endAccessor="end"
-        popup
-        step={60}
-        min={new Date(1970, 0, 1, startHour, 0, 0)}
-        messages={{
-          today: t("meetings.calendar.today"),
-          previous: t("meetings.calendar.previous"),
-          next: t("meetings.calendar.next"),
-          month: t("meetings.calendar.month"),
-          agenda: t("meetings.calendar.agenda"),
-          noEventsInRange: t("meetings.calendar.empty"),
-        }}
-        eventPropGetter={eventPropGetter}
-        onSelectEvent={(event) => onSelect(event.resource)}
-      />
     </div>
   );
 }
@@ -2663,11 +2657,6 @@ function formatMissionTime(value: string): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function hashType(type: string): number {
-  let hash = 0;
-  for (const char of type) hash = (hash + char.charCodeAt(0)) % 5;
-  return hash + 1;
-}
 
 function todayIso(): string {
   const now = new Date();

@@ -3,6 +3,7 @@ mod ai_router;
 mod anchor_dir;
 mod app_menu;
 mod approval;
+mod calendar_search;
 mod cli_path;
 mod document;
 mod file_manager;
@@ -22,6 +23,7 @@ mod outlook_mso;
 mod shelf;
 mod skill_host;
 mod sys_import;
+mod tasks;
 mod telegram_io;
 mod terminal;
 mod vault;
@@ -42,6 +44,7 @@ use anchor_dir::{
     save_anchor_settings, save_anchor_skills, save_anchor_template, update_anchor_workspace,
 };
 use approval::{prepare_approval, record_approval, ApprovalState};
+use calendar_search::search_calendar_notes;
 use document::{
     create_document, create_version, duplicate_document, move_document, read_document,
     save_document, trash_document, update_frontmatter_field,
@@ -81,6 +84,10 @@ use skill_host::{
     skills_uninstall_skill,
 };
 use sys_import::{apply_sys_import, plan_sys_import};
+use tasks::{
+    append_tasks_log, create_task_note, move_task_note, read_task_metadata, read_tasks_log,
+    scan_task_notes, update_task_schedule_fields, update_task_status,
+};
 use tauri::Manager;
 use telegram_io::{
     accept_telegram_item, fetch_telegram_recent, reject_telegram_item, start_telegram_polling,
@@ -161,6 +168,15 @@ pub fn run() {
             read_meeting_guides,
             append_meetings_log,
             read_meetings_log,
+            search_calendar_notes,
+            scan_task_notes,
+            read_task_metadata,
+            create_task_note,
+            update_task_status,
+            update_task_schedule_fields,
+            move_task_note,
+            append_tasks_log,
+            read_tasks_log,
             store_shelf_files,
             store_shelf_files_as,
             list_memos,

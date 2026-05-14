@@ -22,6 +22,13 @@ export interface ComposeDialogSeed {
   context?: SkillContextItem[];
   cwd?: string | null;
   prompt?: string;
+  onDispatched?: (event: ComposeDialogDispatchEvent) => void | Promise<void>;
+}
+
+export interface ComposeDialogDispatchEvent {
+  mode: "terminal" | "background";
+  runtime: SkillDispatchRuntime;
+  invocationId: string | null;
 }
 
 interface ComposeDialogProps {
@@ -163,6 +170,7 @@ export function ComposeDialog({
     setBusy(true);
     onError(null);
     try {
+      let dispatchEvent: ComposeDialogDispatchEvent;
       if (mode === "terminal") {
         const spec = await skillsDispatchTerminal({
           skillId: selectedSkill.id,
@@ -173,6 +181,7 @@ export function ComposeDialog({
           commandOverride: runtimeCommands[runtime] ?? null,
         });
         onTerminalDispatch(spec);
+        dispatchEvent = { mode: "terminal", runtime, invocationId: null };
       } else {
         const invocationId = await skillsDispatchBackground({
           skillId: selectedSkill.id,
@@ -190,8 +199,14 @@ export function ComposeDialog({
           },
         });
         onBackgroundDispatch?.(invocationId);
+        dispatchEvent = { mode: "background", runtime, invocationId };
       }
       writeLastSkillRuntime(runtime);
+      try {
+        await seed?.onDispatched?.(dispatchEvent);
+      } catch (err) {
+        onError(err instanceof Error ? err.message : String(err));
+      }
       onClose();
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
