@@ -104,6 +104,7 @@ import {
   updateFrontmatterField,
   type LegacyLaunchdService,
 } from "./lib/api";
+import { exportPlan, type ExportFormat } from "./lib/export";
 import {
   readAnchorSettings,
   readWorkspaceConfig,
@@ -4900,6 +4901,32 @@ function MainApp() {
     });
   }, [focusedEditorGroup, setPersistedEditorViewMode]);
 
+  const exportActiveDocumentBundle = useCallback(async (): Promise<void> => {
+    const workspaceRoot = activeDocumentWorkspacePath;
+    const sourceAbs = document?.path;
+    const sourceRel = document?.relPath;
+    if (!workspaceRoot || !sourceAbs || !sourceRel) {
+      setError(t("export.error.noDocument"));
+      return;
+    }
+    try {
+      const formats: ExportFormat[] = ["docx", "hwpx", "pdf"];
+      const resp = await exportPlan({
+        workspaceRoot,
+        sourcePath: sourceRel,
+        formats,
+      });
+      setError(
+        t("export.success", {
+          count: String(resp.manifest.outputs.length),
+          manifest: resp.manifest_path,
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [activeDocumentWorkspacePath, document, t]);
+
   const runCommand = useCallback(
     (id: string) => {
       if (id.startsWith("skill:")) {
@@ -4916,6 +4943,9 @@ function MainApp() {
           break;
         case "open-catalog":
           setPersistedAppMode("catalog");
+          break;
+        case "export-bundle":
+          void exportActiveDocumentBundle();
           break;
         case "save":
           void saveCurrent();
@@ -4992,6 +5022,7 @@ function MainApp() {
       outlineOpen,
       openSkillCompose,
       skills,
+      exportActiveDocumentBundle,
     ],
   );
 

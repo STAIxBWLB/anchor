@@ -7,6 +7,7 @@ mod calendar_search;
 mod cli_path;
 mod document;
 mod e2e_flow;
+mod export;
 mod file_manager;
 mod filename_rules;
 mod frontmatter;
@@ -53,6 +54,7 @@ use document::{
     save_document, trash_document, update_frontmatter_field,
 };
 use e2e_flow::{anchor_e2e_read, anchor_e2e_run};
+use export::{export_manifest_load, export_plan, export_validate};
 use file_manager::reveal_in_file_manager;
 use git::{git_changes, git_commit, git_diff, git_status, git_status_fast};
 use gmail_gws::{decide_gmail_item, decide_gmail_items, fetch_gmail_unread};
@@ -293,6 +295,10 @@ pub fn run() {
             hub_fetch_catalog,
             hub_submit_gate,
             hub_poll_gate,
+            // M4 Export Pipeline (Phase 4 W8)
+            export_plan,
+            export_manifest_load,
+            export_validate,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Anchor")
