@@ -187,6 +187,73 @@ pub fn save_manifest(path: &Path, manifest: &ExportManifest) -> io::Result<()> {
     std::fs::write(path, yaml)
 }
 
+// ---------------------------------------------------------------- transitions
+
+fn entry_mut<'a>(
+    manifest: &'a mut ExportManifest,
+    format: ExportFormat,
+) -> io::Result<&'a mut ExportOutputEntry> {
+    manifest
+        .outputs
+        .iter_mut()
+        .find(|entry| entry.format == format)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("manifest has no entry for format {:?}", format),
+            )
+        })
+}
+
+/// Move an entry to `pending` — the converter has started.
+pub fn record_output_pending(
+    manifest_path: &Path,
+    format: ExportFormat,
+) -> io::Result<ExportManifest> {
+    let mut manifest = load_manifest(manifest_path)?;
+    let entry = entry_mut(&mut manifest, format)?;
+    entry.status = ExportOutputStatus::Pending;
+    entry.reason = None;
+    save_manifest(manifest_path, &manifest)?;
+    Ok(manifest)
+}
+
+/// Record a successful conversion. `output_abs_path` must point at the
+/// generated artifact; the function hashes it and stores sha256 +
+/// byte_size + `status: ready`. The recorded `path` on the entry is left
+/// untouched so the entry keeps its workspace-relative form.
+pub fn record_output_success(
+    manifest_path: &Path,
+    format: ExportFormat,
+    output_abs_path: &Path,
+) -> io::Result<ExportManifest> {
+    let (sha, size) = compute_source_sha256(output_abs_path)?;
+    let mut manifest = load_manifest(manifest_path)?;
+    let entry = entry_mut(&mut manifest, format)?;
+    entry.status = ExportOutputStatus::Ready;
+    entry.sha256 = Some(sha);
+    entry.byte_size = Some(size);
+    entry.reason = None;
+    save_manifest(manifest_path, &manifest)?;
+    Ok(manifest)
+}
+
+/// Mark an entry as failed with a human-readable reason.
+pub fn record_output_failure(
+    manifest_path: &Path,
+    format: ExportFormat,
+    reason: &str,
+) -> io::Result<ExportManifest> {
+    let mut manifest = load_manifest(manifest_path)?;
+    let entry = entry_mut(&mut manifest, format)?;
+    entry.status = ExportOutputStatus::Failed;
+    entry.sha256 = None;
+    entry.byte_size = None;
+    entry.reason = Some(reason.to_string());
+    save_manifest(manifest_path, &manifest)?;
+    Ok(manifest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,5 +334,99 @@ mod tests {
             None,
         );
         assert!(res.is_err());
+    }
+
+    fn fresh_bundle() -> (TempDir, PathBuf, PathBuf) {
+        let (tmp, source) = setup_workspace();
+        let (manifest_path, _) = plan_bundle(
+            tmp.path(),
+            source.to_string_lossy().as_ref(),
+            &[ExportFormat::Docx, ExportFormat::Hwpx],
+            None,
+        )
+        .unwrap();
+        (tmp, source, manifest_path)
+    }
+
+    #[test]
+    fn record_pending_transitions_status() {
+        let (_tmp, _source, manifest_path) = fresh_bundle();
+        let manifest = record_output_pending(&manifest_path, ExportFormat::Docx).unwrap();
+        let docx = manifest
+            .outputs
+            .iter()
+            .find(|o| o.format == ExportFormat::Docx)
+            .unwrap();
+        assert_eq!(docx.status, ExportOutputStatus::Pending);
+        assert!(docx.sha256.is_none());
+
+        // The other format must stay untouched.
+        let hwpx = manifest
+            .outputs
+            .iter()
+            .find(|o| o.format == ExportFormat::Hwpx)
+            .unwrap();
+        assert_eq!(hwpx.status, ExportOutputStatus::Planned);
+    }
+
+    #[test]
+    fn record_success_writes_sha_and_size() {
+        let (tmp, _source, manifest_path) = fresh_bundle();
+        let output = tmp.path().join("draft.exports/draft.docx");
+        std::fs::create_dir_all(output.parent().unwrap()).unwrap();
+        std::fs::write(&output, b"fake docx bytes").unwrap();
+        let manifest =
+            record_output_success(&manifest_path, ExportFormat::Docx, &output).unwrap();
+        let docx = manifest
+            .outputs
+            .iter()
+            .find(|o| o.format == ExportFormat::Docx)
+            .unwrap();
+        assert_eq!(docx.status, ExportOutputStatus::Ready);
+        assert_eq!(docx.byte_size, Some("fake docx bytes".len() as u64));
+        assert_eq!(docx.sha256.as_deref().map(str::len), Some(64));
+    }
+
+    #[test]
+    fn record_failure_stores_reason() {
+        let (_tmp, _source, manifest_path) = fresh_bundle();
+        let manifest =
+            record_output_failure(&manifest_path, ExportFormat::Hwpx, "skill timeout").unwrap();
+        let hwpx = manifest
+            .outputs
+            .iter()
+            .find(|o| o.format == ExportFormat::Hwpx)
+            .unwrap();
+        assert_eq!(hwpx.status, ExportOutputStatus::Failed);
+        assert_eq!(hwpx.reason.as_deref(), Some("skill timeout"));
+        assert!(hwpx.sha256.is_none());
+    }
+
+    #[test]
+    fn record_rejects_unknown_format_in_manifest() {
+        let (_tmp, _source, manifest_path) = fresh_bundle();
+        // Manifest only has docx + hwpx — recording pdf must error.
+        let res = record_output_pending(&manifest_path, ExportFormat::Pdf);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn record_success_overrides_prior_failure() {
+        // Idempotent + recovery: a failed entry can be re-marked successful
+        // on the next conversion attempt without manual cleanup.
+        let (tmp, _source, manifest_path) = fresh_bundle();
+        record_output_failure(&manifest_path, ExportFormat::Docx, "first attempt failed")
+            .unwrap();
+        let output = tmp.path().join("draft.exports/draft.docx");
+        std::fs::create_dir_all(output.parent().unwrap()).unwrap();
+        std::fs::write(&output, b"retry").unwrap();
+        let manifest = record_output_success(&manifest_path, ExportFormat::Docx, &output).unwrap();
+        let docx = manifest
+            .outputs
+            .iter()
+            .find(|o| o.format == ExportFormat::Docx)
+            .unwrap();
+        assert_eq!(docx.status, ExportOutputStatus::Ready);
+        assert!(docx.reason.is_none());
     }
 }

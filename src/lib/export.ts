@@ -69,3 +69,62 @@ export interface ValidationReport {
 export async function exportValidate(manifestPath: string): Promise<ValidationReport> {
   return invoke<ValidationReport>("export_validate", { manifestPath });
 }
+
+// ---------- W9 transition wrappers ----------
+
+export async function exportRecordPending(
+  manifestPath: string,
+  format: ExportFormat,
+): Promise<ExportManifest> {
+  return invoke<ExportManifest>("export_record_pending", {
+    req: { manifest_path: manifestPath, format },
+  });
+}
+
+export async function exportRecordSuccess(
+  manifestPath: string,
+  format: ExportFormat,
+  outputPath: string,
+): Promise<ExportManifest> {
+  return invoke<ExportManifest>("export_record_success", {
+    req: {
+      manifest_path: manifestPath,
+      format,
+      output_path: outputPath,
+    },
+  });
+}
+
+export async function exportRecordFailure(
+  manifestPath: string,
+  format: ExportFormat,
+  reason: string,
+): Promise<ExportManifest> {
+  return invoke<ExportManifest>("export_record_failure", {
+    req: {
+      manifest_path: manifestPath,
+      format,
+      reason,
+    },
+  });
+}
+
+/**
+ * Summary string for a ValidationReport (palette/status surfaces).
+ */
+export function summarizeValidation(report: ValidationReport): string {
+  const counts: Record<ValidationStatus, number> = {
+    pass: 0,
+    missing: 0,
+    "hash-mismatch": 0,
+    skipped: 0,
+  };
+  for (const entry of report.entries) counts[entry.status]++;
+  return [
+    `source: ${report.source_status}`,
+    `pass: ${counts.pass}`,
+    `missing: ${counts.missing}`,
+    `hash-mismatch: ${counts["hash-mismatch"]}`,
+    `skipped: ${counts.skipped}`,
+  ].join(" · ");
+}

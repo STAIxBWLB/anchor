@@ -54,7 +54,10 @@ use document::{
     save_document, trash_document, update_frontmatter_field,
 };
 use e2e_flow::{anchor_e2e_read, anchor_e2e_run};
-use export::{export_manifest_load, export_plan, export_validate};
+use export::{
+    export_manifest_load, export_plan, export_record_failure, export_record_pending,
+    export_record_success, export_validate,
+};
 use file_manager::reveal_in_file_manager;
 use git::{git_changes, git_commit, git_diff, git_status, git_status_fast};
 use gmail_gws::{decide_gmail_item, decide_gmail_items, fetch_gmail_unread};
@@ -295,10 +298,13 @@ pub fn run() {
             hub_fetch_catalog,
             hub_submit_gate,
             hub_poll_gate,
-            // M4 Export Pipeline (Phase 4 W8)
+            // M4 Export Pipeline (Phase 4 W8-W9)
             export_plan,
             export_manifest_load,
             export_validate,
+            export_record_pending,
+            export_record_success,
+            export_record_failure,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Anchor")

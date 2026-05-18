@@ -104,7 +104,7 @@ import {
   updateFrontmatterField,
   type LegacyLaunchdService,
 } from "./lib/api";
-import { exportPlan, type ExportFormat } from "./lib/export";
+import { exportPlan, exportValidate, summarizeValidation, type ExportFormat } from "./lib/export";
 import {
   readAnchorSettings,
   readWorkspaceConfig,
@@ -745,6 +745,7 @@ function MainApp() {
     docType?: string | null;
     openLibrary?: boolean;
   } | null>(null);
+  const [lastExportManifestPath, setLastExportManifestPath] = useState<string | null>(null);
   const [addWorkspaceOpen, setAddWorkspaceOpen] = useState(false);
   const [addWorkspaceDefaultVisibility, setAddWorkspaceDefaultVisibility] =
     useState<WorkspaceVisibility>("private");
@@ -4916,6 +4917,7 @@ function MainApp() {
         sourcePath: sourceRel,
         formats,
       });
+      setLastExportManifestPath(resp.manifest_path);
       setError(
         t("export.success", {
           count: String(resp.manifest.outputs.length),
@@ -4926,6 +4928,23 @@ function MainApp() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, [activeDocumentWorkspacePath, document, t]);
+
+  const validateLastExportBundle = useCallback(async (): Promise<void> => {
+    if (!lastExportManifestPath) {
+      setError(t("export.error.noManifest"));
+      return;
+    }
+    try {
+      const report = await exportValidate(lastExportManifestPath);
+      setError(
+        t("export.validate.success", {
+          summary: summarizeValidation(report),
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [lastExportManifestPath, t]);
 
   const runCommand = useCallback(
     (id: string) => {
@@ -4946,6 +4965,9 @@ function MainApp() {
           break;
         case "export-bundle":
           void exportActiveDocumentBundle();
+          break;
+        case "export-validate":
+          void validateLastExportBundle();
           break;
         case "save":
           void saveCurrent();
@@ -5023,6 +5045,7 @@ function MainApp() {
       openSkillCompose,
       skills,
       exportActiveDocumentBundle,
+      validateLastExportBundle,
     ],
   );
 

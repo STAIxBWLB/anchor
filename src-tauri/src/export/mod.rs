@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub use manifest::{
-    compute_source_sha256, plan_bundle, ExportFormat, ExportManifest, ExportOutputEntry,
-    ExportOutputStatus,
+    compute_source_sha256, plan_bundle, record_output_failure, record_output_pending,
+    record_output_success, ExportFormat, ExportManifest, ExportOutputEntry, ExportOutputStatus,
 };
 pub use validate::{validate_manifest, ValidationReport, ValidationStatus};
 
@@ -89,4 +89,51 @@ pub fn export_manifest_load(manifest_path: String) -> Result<ExportManifest, Str
 #[tauri::command]
 pub fn export_validate(manifest_path: String) -> Result<ValidationReport, String> {
     validate_manifest(&PathBuf::from(manifest_path)).map_err(|e| e.to_string())
+}
+
+// ---------- W9 transition commands ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportRecordPendingRequest {
+    pub manifest_path: String,
+    pub format: String,
+}
+
+#[tauri::command]
+pub fn export_record_pending(req: ExportRecordPendingRequest) -> Result<ExportManifest, String> {
+    let format = ExportFormat::parse(&req.format)?;
+    record_output_pending(&PathBuf::from(req.manifest_path), format).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportRecordSuccessRequest {
+    pub manifest_path: String,
+    pub format: String,
+    /// Absolute path to the generated output file.
+    pub output_path: String,
+}
+
+#[tauri::command]
+pub fn export_record_success(req: ExportRecordSuccessRequest) -> Result<ExportManifest, String> {
+    let format = ExportFormat::parse(&req.format)?;
+    record_output_success(
+        &PathBuf::from(req.manifest_path),
+        format,
+        &PathBuf::from(req.output_path),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportRecordFailureRequest {
+    pub manifest_path: String,
+    pub format: String,
+    pub reason: String,
+}
+
+#[tauri::command]
+pub fn export_record_failure(req: ExportRecordFailureRequest) -> Result<ExportManifest, String> {
+    let format = ExportFormat::parse(&req.format)?;
+    record_output_failure(&PathBuf::from(req.manifest_path), format, &req.reason)
+        .map_err(|e| e.to_string())
 }
