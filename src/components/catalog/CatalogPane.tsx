@@ -1,10 +1,13 @@
-// M1 Operations Catalog UI pane (Phase 3 scaffold).
+// M1 Operations Catalog UI pane.
 // Spec: plan §M1 — 3-column layout (마감 임박 / 결재 진행 / 미연결 증빙).
 //
-// Phase 3 W1: render skeleton + load entries via Tauri commands.
-// Phase 3 W3-W4: real data pipeline + drilldown dialog.
+// W1: render skeleton.
+// W3: load entries via Tauri commands.
+// W4: drilldown dialog + notify watcher auto-refresh.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   CatalogEntry,
   CatalogItemKind,
@@ -12,9 +15,11 @@ import type {
   DocCategory,
 } from "../../lib/catalog";
 import { catalogQuery, catalogScan } from "../../lib/catalog";
+import { DrilldownDialog } from "./DrilldownDialog";
 
 interface CatalogPaneProps {
   workspaceRoot: string | null;
+  onReveal?: (path: string) => void;
 }
 
 const ALL_CATEGORIES: { value: DocCategory | "all"; label: string }[] = [
@@ -25,40 +30,66 @@ const ALL_CATEGORIES: { value: DocCategory | "all"; label: string }[] = [
   { value: "operations", label: "운영문서" },
 ];
 
-export function CatalogPane({ workspaceRoot }: CatalogPaneProps) {
+export function CatalogPane({ workspaceRoot, onReveal }: CatalogPaneProps) {
   const [report, setReport] = useState<CatalogScanReport | null>(null);
   const [entries, setEntries] = useState<CatalogEntry[]>([]);
   const [selectedBu, setSelectedBu] = useState<string>("all");
   const [selectedCategory, setSelectedCategory] = useState<DocCategory | "all">("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drilldownEntry, setDrilldownEntry] = useState<CatalogEntry | null>(null);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refresh = useCallback(
+    async (force = false): Promise<void> => {
+      if (!workspaceRoot) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const report = await catalogScan(workspaceRoot, force);
+        setReport(report);
+        const list = await catalogQuery({ workspaceRoot });
+        setEntries(list);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [workspaceRoot],
+  );
 
   useEffect(() => {
     if (!workspaceRoot) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    catalogScan(workspaceRoot, false)
-      .then((r) => {
-        if (cancelled) return;
-        setReport(r);
-        return catalogQuery({ workspaceRoot });
-      })
-      .then((list) => {
-        if (cancelled || !list) return;
-        setEntries(list);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(String(e));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    void refresh(false).catch(() => {
+      /* refresh sets error */
+    });
+    // Start the notify watcher; debounce-coalesced refreshes hop through
+    // catalog://refresh and we re-run the cheap query.
+    void invoke<boolean>("catalog_watcher_start", { workspaceRoot }).catch((err) => {
+      // Watcher failures are non-fatal; UI still works via manual refresh.
+      console.warn("catalog_watcher_start failed", err);
+    });
+
+    const unlistenPromise = listen("catalog://refresh", () => {
+      if (cancelled) return;
+      // Debounce front-end so a burst of fs events results in one scan call.
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        void refresh(false).catch(() => {
+          /* swallowed; reporter already set */
+        });
+      }, 300);
+    });
+
     return () => {
       cancelled = true;
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      void invoke("catalog_watcher_stop").catch(() => undefined);
+      void unlistenPromise.then((un) => un()).catch(() => undefined);
     };
-  }, [workspaceRoot]);
+  }, [workspaceRoot, refresh]);
 
   const filtered = useMemo(() => {
     return entries.filter((e) => {
@@ -114,9 +145,24 @@ export function CatalogPane({ workspaceRoot }: CatalogPaneProps) {
       {error && <div className="catalog-pane__error">오류: {error}</div>}
 
       <div className="catalog-pane__columns">
-        <CatalogColumn title="마감 임박" entries={deadlines} kind="deadline-due" />
-        <CatalogColumn title="결재 진행 중" entries={approvals} kind="approval-in-flight" />
-        <CatalogColumn title="미연결 증빙" entries={evidence} kind="evidence-unlinked" />
+        <CatalogColumn
+          title="마감 임박"
+          entries={deadlines}
+          kind="deadline-due"
+          onSelect={setDrilldownEntry}
+        />
+        <CatalogColumn
+          title="결재 진행 중"
+          entries={approvals}
+          kind="approval-in-flight"
+          onSelect={setDrilldownEntry}
+        />
+        <CatalogColumn
+          title="미연결 증빙"
+          entries={evidence}
+          kind="evidence-unlinked"
+          onSelect={setDrilldownEntry}
+        />
       </div>
 
       {report && (
@@ -127,6 +173,13 @@ export function CatalogPane({ workspaceRoot }: CatalogPaneProps) {
           )}
         </footer>
       )}
+
+      <DrilldownDialog
+        workspaceRoot={workspaceRoot}
+        entry={drilldownEntry}
+        onClose={() => setDrilldownEntry(null)}
+        onReveal={onReveal}
+      />
     </div>
   );
 }
@@ -135,9 +188,10 @@ interface CatalogColumnProps {
   title: string;
   entries: CatalogEntry[];
   kind: CatalogItemKind;
+  onSelect: (entry: CatalogEntry) => void;
 }
 
-function CatalogColumn({ title, entries, kind: _kind }: CatalogColumnProps) {
+function CatalogColumn({ title, entries, kind: _kind, onSelect }: CatalogColumnProps) {
   return (
     <section className="catalog-column">
       <h3>
@@ -149,18 +203,27 @@ function CatalogColumn({ title, entries, kind: _kind }: CatalogColumnProps) {
         <ul className="catalog-column__list">
           {entries.map((e) => (
             <li key={e.path} className="catalog-entry">
-              <div className="catalog-entry__title">{e.title || e.path}</div>
-              <div className="catalog-entry__meta">
-                {e.business_unit && <span className="catalog-entry__bu">{e.business_unit}</span>}
-                {e.deadline && <span className="catalog-entry__deadline">~{e.deadline}</span>}
-                {e.approval_status && (
-                  <span className="catalog-entry__status">{e.approval_status}</span>
-                )}
-                {e.evidence_kind && (
-                  <span className="catalog-entry__evidence">{e.evidence_kind}</span>
-                )}
-              </div>
-              <div className="catalog-entry__path">{e.path}</div>
+              <button
+                type="button"
+                className="catalog-entry__button"
+                onClick={() => onSelect(e)}
+                aria-label={`${e.title || e.path} 상세 보기`}
+              >
+                <div className="catalog-entry__title">{e.title || e.path}</div>
+                <div className="catalog-entry__meta">
+                  {e.business_unit && (
+                    <span className="catalog-entry__bu">{e.business_unit}</span>
+                  )}
+                  {e.deadline && <span className="catalog-entry__deadline">~{e.deadline}</span>}
+                  {e.approval_status && (
+                    <span className="catalog-entry__status">{e.approval_status}</span>
+                  )}
+                  {e.evidence_kind && (
+                    <span className="catalog-entry__evidence">{e.evidence_kind}</span>
+                  )}
+                </div>
+                <div className="catalog-entry__path">{e.path}</div>
+              </button>
             </li>
           ))}
         </ul>

@@ -9,6 +9,7 @@
 
 pub mod scan;
 pub mod index;
+pub mod watcher;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

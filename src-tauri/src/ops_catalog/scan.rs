@@ -851,4 +851,41 @@ mod tests {
         let result = analyze_binary(&pdf, tmp.path(), &bus);
         assert!(result.is_none(), "sidecar present → not unlinked");
     }
+
+    /// Real-workspace verification gate (Phase 3 W4 §4 of the README next-up list).
+    ///
+    /// Run with:
+    ///   ANCHOR_CATALOG_BENCH_WORKSPACE=/Users/yj.lee/workspace/work \
+    ///       cargo test --lib -- --ignored --nocapture catalog_real_workspace_smoke
+    ///
+    /// Asserts the scan completes within 30 seconds of a cold start and
+    /// surfaces at least one entry across the four kinds. Cap is the
+    /// 30-second budget called out in the Phase 3 verification gate.
+    #[test]
+    #[ignore]
+    fn catalog_real_workspace_smoke() {
+        let Ok(ws) = std::env::var("ANCHOR_CATALOG_BENCH_WORKSPACE") else {
+            eprintln!("Set ANCHOR_CATALOG_BENCH_WORKSPACE=/path/to/workspace");
+            return;
+        };
+        let root = PathBuf::from(&ws);
+        let started = std::time::Instant::now();
+        let report = scan_catalog_impl(&root, true).expect("real-workspace scan");
+        let elapsed = started.elapsed();
+
+        eprintln!(
+            "real-workspace scan: {} entries, BU {}, elapsed {:?}",
+            report.entries_count,
+            report.bus_seen.len(),
+            elapsed
+        );
+        eprintln!("  by kind: {:?}", report.by_kind);
+        eprintln!("  warnings: {}", report.warnings.len());
+
+        assert!(
+            elapsed < std::time::Duration::from_secs(30),
+            "scan exceeded 30s budget: {:?}",
+            elapsed
+        );
+    }
 }

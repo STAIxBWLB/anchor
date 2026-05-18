@@ -5663,7 +5663,13 @@ function MainApp() {
             onError={setError}
           />
         ) : visibleAppMode === "catalog" ? (
-          <CatalogPane workspaceRoot={inboxWorkspacePath ?? settingsWorkPath} />
+          <CatalogPane
+            workspaceRoot={inboxWorkspacePath ?? settingsWorkPath}
+            onReveal={(path) => {
+              const root = inboxWorkspacePath ?? settingsWorkPath;
+              if (root) void revealInFileManager(root, path);
+            }}
+          />
         ) : visibleAppMode === "inbox" ? (
           <InboxPane
             items={inboxItems}

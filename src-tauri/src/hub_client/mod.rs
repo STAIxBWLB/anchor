@@ -5,8 +5,9 @@
 //
 // Spec: ~/workspace/work/_sys/rules/hub-sync.md + plan §M7
 
-pub mod catalog;
 pub mod cache;
+pub mod catalog;
+pub mod http;
 pub mod safety;
 
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,13 @@ pub struct HubConfig {
     pub enabled: bool,
     pub cache_root: PathBuf,
     pub timeout_ms: u64,
+    pub cache_ttl_seconds: u64,
+}
+
+impl HubConfig {
+    pub fn cache_ttl_seconds(&self) -> u64 {
+        self.cache_ttl_seconds
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,16 +56,36 @@ pub fn hub_status(workspace_root: String) -> Result<HubStatus, String> {
     let cfg = load_hub_config(&root).map_err(|e| e.to_string())?;
     let cached = cache::list_cached_etags(&cfg.cache_root).unwrap_or_default();
     let queue_depth = cache::queue_depth(&root).unwrap_or(0);
+    let reachable = if cfg.enabled {
+        probe_health(&cfg).unwrap_or(false)
+    } else {
+        false
+    };
 
     Ok(HubStatus {
         enabled: cfg.enabled,
         endpoint: cfg.endpoint.clone(),
         deployment_mode: cfg.deployment_mode,
-        reachable: false, // 실제 health check은 W4에 구현
+        reachable,
         cached_etags_count: cached.len(),
         last_fetch_at: cache::last_fetch_at(&cfg.cache_root).ok(),
         queue_depth,
     })
+}
+
+fn probe_health(cfg: &HubConfig) -> Option<bool> {
+    let client = http::build_client(cfg).ok()?;
+    // `/health` lives at the deployment root, not under /api/v1. Strip the
+    // /api/v1 suffix if present so the probe lands on the FastAPI health endpoint.
+    let base = cfg
+        .endpoint
+        .strip_suffix("/api/v1")
+        .or_else(|| cfg.endpoint.strip_suffix("/api/v1/"))
+        .unwrap_or(&cfg.endpoint)
+        .trim_end_matches('/');
+    let url = format!("{}/health", base);
+    let resp = client.get(&url).send().ok()?;
+    Some(resp.status().is_success())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,15 +115,21 @@ pub fn hub_fetch_catalog(req: HubFetchRequest) -> Result<HubFetchResponse, Strin
     let cfg = load_hub_config(&root).map_err(|e| e.to_string())?;
 
     if !cfg.enabled {
-        // Disabled — 캐시만 반환
+        // Disabled — 캐시만 반환 (오프라인 fallback).
         return cache::load_cached_resource(&cfg.cache_root, &req.resource, &req.params)
             .map_err(|e| e.to_string());
     }
 
-    // 실제 fetch는 W3-W4에 구현 (reqwest 의존성 추가 필요)
-    // 현재 stub: 캐시 반환
-    cache::load_cached_resource(&cfg.cache_root, &req.resource, &req.params)
-        .map_err(|e| e.to_string())
+    // Online path — HTTP GET with ETag revalidation. On error, fall back to
+    // the cache so the UI keeps working when the Hub is unreachable.
+    match http::fetch_with_cache(&cfg, &req.resource, &req.params, req.revalidate) {
+        Ok(resp) => Ok(resp),
+        Err(err) => {
+            eprintln!("[hub_client] fetch error ({}): {}", req.resource, err);
+            cache::load_cached_resource(&cfg.cache_root, &req.resource, &req.params)
+                .map_err(|e| format!("hub fetch failed and cache empty: hub={} cache={}", err, e))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +218,11 @@ fn load_hub_config(workspace_root: &std::path::Path) -> std::io::Result<HubConfi
         .and_then(|h| h.get("timeout_ms"))
         .and_then(|v| v.as_u64())
         .unwrap_or(8000);
+    let cache_ttl_seconds = hub
+        .and_then(|h| h.get("cache"))
+        .and_then(|c| c.get("ttl_seconds"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3600);
     let api_token_ref = hub
         .and_then(|h| h.get("api_token_ref"))
         .and_then(|v| v.as_str());
@@ -204,6 +243,7 @@ fn load_hub_config(workspace_root: &std::path::Path) -> std::io::Result<HubConfi
         enabled,
         cache_root,
         timeout_ms,
+        cache_ttl_seconds,
     })
 }
 

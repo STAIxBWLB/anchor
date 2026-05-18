@@ -74,7 +74,10 @@ use meetings::{
     scan_meeting_notes,
 };
 use mission_state::{list_ai_missions, read_ai_mission_log, stop_ai_mission, MissionState};
-use ops_catalog::{catalog_drilldown, catalog_query, catalog_scan};
+use ops_catalog::{
+    catalog_drilldown, catalog_query, catalog_scan,
+    watcher::{catalog_watcher_start, catalog_watcher_stop, CatalogWatcherState},
+};
 use outlook_mso::{decide_outlook_item, decide_outlook_items, fetch_outlook_unread};
 use shelf::{
     delete_memo, list_memos, read_memo, save_memo, save_memo_as, store_shelf_files,
@@ -128,6 +131,7 @@ pub fn run() {
         .manage(TerminalState::default())
         .manage(ApprovalState::default())
         .manage(MissionState::default())
+        .manage(CatalogWatcherState::default())
         .invoke_handler(tauri::generate_handler![
             default_vault_path,
             sample_vault_path,
@@ -282,6 +286,8 @@ pub fn run() {
             catalog_scan,
             catalog_query,
             catalog_drilldown,
+            catalog_watcher_start,
+            catalog_watcher_stop,
             // M7 Hub Connector (Phase 3 read, Phase 6 write)
             hub_status,
             hub_fetch_catalog,
