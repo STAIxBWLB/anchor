@@ -2,7 +2,7 @@
 
 AI workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
-## Status (2026-05-10)
+## Status (2026-05-19)
 
 | Phase | State | Outcome |
 |-------|-------|---------|
@@ -12,16 +12,17 @@ AI workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 | 1B — Rich editor / git | ✅ feature-complete | Git status badge + commit-from-app (file list + per-file diff + syntax color + auto-refresh on focus). Workspace scan rayon parallelism plus cache-backed warm startup for `~/workspace/work`: cached entries + active document render first, then authoritative scan reconciles in the background. Multi-tab editor (per-workspace persistence, ⌘1..⌘8 select, ⌘W close, dirty stash). BlockNote rich + source + preview 3-way toggle (frontmatter line preserved). Browser smoke e2e is in place. **Deferred**: monorepo extraction. |
 | 2 — Inbox + AI | ✅ write loop live | Backend (polling, watcher, date parser, Claude CLI bridge, classifier, Gmail via `gws` CLI) + UI (`InboxPane` with Configured Entries / Processing / Processed Items / Files / Gmail sections, classify/accept/reject/process) all shipped. The primary local inbox flow now reads `workspace.config.yaml` `inbox:` settings, stages dropped files into the configured `inbox.file_drop` channel/path, scans `inbox/drop/<channel>/` plus `items/pending/*/manifest.yaml`, and reads processed history from `items/{done,failed,duplicate}` using configured artifact filenames; legacy `inbox/downloads/<source>` remains compatible. Accept/reject runs through an approval gate, Gmail decisions apply Anchor labels, keyboard `a`/`r`/`p`, multi-select, bulk actions, dot folders are hidden unless allowlisted in Settings, and mission state/log/stop hooks are in place. |
 | 2.5 — Tree + Cursor shell + Terminal launchers | ✅ shipped | The Explorer pane now switches between Documents and Files. Documents keeps list/tree mode, type filters, filename/title labels, default-collapsed folders with persisted user-expanded folders, and Reveal in Finder. Files adds a VS Code-style workspace tree with workspace-safe scanning, All/Git tracked/Binary filters, search, multi-select, and add-to-queue actions; Binary is driven by configurable include patterns for artifact file types. The right Files pane is an explicit copy/move queue with destination selection, conflict-safe naming, Apply/Clear, and workspace capability gates. The shell now uses a Cursor-style activity rail, grouped Private/Public workspace switcher, split-right document and terminal panes (`⌘D`), clean-tab close-all, a right-edge utility rail, and bottom integrated terminal with maximize/restore. `~/.anchor/settings.json` stores user/global theme/accent/layout/window/split/terminal defaults, Explorer display defaults, file-queue defaults, and future AI defaults; `<workspace>/.anchor/workspace-state.json` stores workspace-only UI state and overrides. Claude, Codex, and Shell launch as real PTY tabs from the active workspace; first run starts with the terminal collapsed and restores the user's last layout afterward. Signed auto-update checks run at startup, and the native app menu exposes standard File/Edit/View/Go/Terminal/Workspace/Help commands. |
-| 3 — Built-in Skills + Agent OS-lite + Hub connector | 🚧 in progress | Command-palette skills, proposal-first Agent OS run contracts, local event audit logs, provider adapter seams, local MCP sidecar, and a read-only connector to the separate `anchor-hub` service. |
-| 4 — Document Edit Mode | 📋 planned | |
+| 3 — Unified document operations (7 modules) | 🚧 W1-W3 done | Phase 3 has been redefined as a 7-module roadmap covering 사업단/대학본부조직 document operations: **M1 Operations Catalog**, **M2 Document Studio**, **M3 Template/Form Filling**, **M4 Export Pipeline**, **M5 Evidence Binder**, **M6 Deck Studio**, **M7 Hub Connector**. W1: rule SSOTs (frontmatter-schema, bu-lifecycle, hub-sync, evidence-policy) + Rust `ops_catalog` + `hub_client` scaffolds + React `CatalogPane`. W2 (anchor-hub repo): 9 catalog endpoints + 21-template synthetic seed + 12 pytest covering each endpoint. W3: real `ops_catalog::scan` indexing across BU configs, inbox manifests, tasks frontmatter, document frontmatter, and evidence-zone binaries; `Catalog` mode wired into the activity rail + 3-column UI. 11 new Rust unit tests pass (6 ops_catalog + 5 hub_client safety) plus 317 lib tests overall and 191 vitest. |
+| 4 — Document Edit Mode (Studio + Templates) | 📋 planned | Folds anchor-editor into a 7-step Document Studio (source → template → guideline → sections → HWP fields → export → package) backed by M3 + M4. |
 
-## Next up (immediate)
+Plan reference (work repo internal): `~/.claude/plans/flickering-seeking-engelbart.md`. Rule SSOTs at `~/workspace/work/_sys/rules/{frontmatter-schema,bu-lifecycle,hub-sync,evidence-policy}.md`.
 
-Phase 2 now has the safe write/apply loop. The next work is verification depth plus the Phase 3 bridge:
+## Next up (Phase 3 W4-W6)
 
-1. **Real-workspace verification** — verify configured `inbox/drop/<channel>` processing, legacy dropped files, a safe unread Gmail item, Claude classification, `a`/`r`/`p`, bulk actions, and mission stop in one native Tauri session.
-2. **Phase 3 skill diffs** — background skills now run through an Agent OS-lite boundary and append `<workspace>/.anchor/runs/skills/<invocationId>/events.jsonl`; next is a richer proposal review pane over `proposal.created` events.
-3. **Hub connector POC** — keep shared workflow, evidence, KPI, and submission-gate features in the separate `anchor-hub` repo; Anchor only stores a connector endpoint and calls hub APIs/MCP tools when the user explicitly asks.
+1. **Catalog watcher + auto-refresh** — wire `notify`-based watchers on `inbox/`, `tasks/`, and `projects/**/02-admin-approvals/` so `ops_catalog::scan` re-indexes incrementally; emit `catalog://refresh` events for the React pane.
+2. **Hub catalog read path** — call the new `/api/v1/templates`, `/guidelines`, `/glossary` endpoints from `hub_client::catalog`, populate `<workspace>/.anchor/cache/hub/`, and surface a merged template catalog inside the Studio (Phase 4 entry).
+3. **Drilldown dialog + reveal** — Catalog row clicks open a drilldown dialog combining frontmatter / manifest / README snippets and link out to Reveal in Finder.
+4. **Real-workspace verification gate** — open the same `~/workspace/work` workspace, switch to Catalog mode, confirm Korean inbox manifests + frontmatter deadlines + unlinked-evidence candidates render within 30 seconds of cold start.
 
 ## Architecture
 

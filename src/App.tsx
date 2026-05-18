@@ -6,6 +6,7 @@ import {
   Command,
   FileText,
   Inbox,
+  LayoutGrid,
   ListTodo,
   MessageSquare,
   PanelLeftClose,
@@ -24,6 +25,7 @@ import { CommsPane } from "./components/CommsPane";
 import { DocumentList } from "./components/DocumentList";
 import { EditorPane, type EditorViewMode } from "./components/EditorPane";
 import { GitStatusBadge } from "./components/GitStatusBadge";
+import { CatalogPane } from "./components/catalog/CatalogPane";
 import { InboxPane } from "./components/InboxPane";
 import { E2EFlowPane } from "./components/e2e/E2EFlowPane";
 import { MeetingsPane } from "./components/meetings/MeetingsPane";
@@ -5170,6 +5172,7 @@ function MainApp() {
     comms: " comms-mode",
     meetings: " meetings-mode",
     tasks: " tasks-mode",
+    catalog: " catalog-mode",
     e2e: " e2e-mode",
   };
   const visibleAppMode: AppMode = appMode === "e2e" && !e2eFlowEnabled ? "pkm" : appMode;
@@ -5558,6 +5561,15 @@ function MainApp() {
           >
             <ListTodo size={20} strokeWidth={1.9} />
           </button>
+          <button
+            type="button"
+            className={visibleAppMode === "catalog" ? "activity-button active" : "activity-button"}
+            onClick={() => setPersistedAppMode("catalog")}
+            title={t("mode.catalog")}
+            aria-label={t("mode.catalog")}
+          >
+            <LayoutGrid size={20} strokeWidth={1.9} />
+          </button>
           {e2eFlowEnabled ? (
             <button
               type="button"
@@ -5650,6 +5662,8 @@ function MainApp() {
             }}
             onError={setError}
           />
+        ) : visibleAppMode === "catalog" ? (
+          <CatalogPane workspaceRoot={inboxWorkspacePath ?? settingsWorkPath} />
         ) : visibleAppMode === "inbox" ? (
           <InboxPane
             items={inboxItems}
