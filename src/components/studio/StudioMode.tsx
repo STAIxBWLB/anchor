@@ -513,7 +513,7 @@ export function StudioMode({
           hwpFields: {
             ...prev.hwpFields,
             status: "ready",
-            templatePath: configuredPath,
+            templatePath: response.templatePath || scanPath,
             fields: response.fields,
             values,
             formFilledCount: 0,

@@ -738,9 +738,13 @@ fn merge_field(
         .entry(normalized.clone())
         .and_modify(|field| {
             field.occurrences += 1;
-            if field.source != "placeholder" && source == "placeholder" {
+            if should_replace_field_metadata(field, source, confidence) {
+                field.label = trim_label(label);
                 field.source = source.to_string();
                 field.confidence = confidence;
+                field.matched_key = matched_key.clone();
+            } else if field.matched_key.is_none() && matched_key.is_some() {
+                field.matched_key = matched_key.clone();
             }
         })
         .or_insert_with(|| LiteField {
@@ -752,6 +756,23 @@ fn merge_field(
             confidence,
             matched_key,
         });
+}
+
+fn should_replace_field_metadata(field: &LiteField, source: &str, confidence: f32) -> bool {
+    let existing_rank = field_source_rank(&field.source);
+    let incoming_rank = field_source_rank(source);
+    incoming_rank > existing_rank
+        || (incoming_rank == existing_rank && confidence > field.confidence)
+}
+
+fn field_source_rank(source: &str) -> u8 {
+    match source {
+        "formLabel" => 3,
+        "inlineLabel" => 2,
+        "placeholder" => 1,
+        "" => 0,
+        _ => 2,
+    }
 }
 
 fn normalize_values(values: &BTreeMap<String, String>) -> BTreeMap<String, String> {
@@ -1058,13 +1079,20 @@ mod tests {
         let hwpx = tmp.path().join("form.hwpx");
         write_hwpx_fixture(
             &hwpx,
-            r#"<hp:sec><hp:p><hp:t>{{제목}}</hp:t></hp:p><hp:tbl><hp:tr><hp:tc><hp:p><hp:t>성명</hp:t></hp:p></hp:tc><hp:tc><hp:p><hp:t></hp:t></hp:p></hp:tc></hp:tr></hp:tbl></hp:sec>"#,
+            r#"<hp:sec><hp:p><hp:t>{{제목}}</hp:t></hp:p><hp:p><hp:t>{{성명}}</hp:t></hp:p><hp:tbl><hp:tr><hp:tc><hp:p><hp:t>성명</hp:t></hp:p></hp:tc><hp:tc><hp:p><hp:t></hp:t></hp:p></hp:tc></hp:tr></hp:tbl></hp:sec>"#,
         );
 
         let scan = scan_hwpx_fields(&hwpx).unwrap();
         let keys: BTreeSet<_> = scan.fields.iter().map(|field| field.key.as_str()).collect();
         assert!(keys.contains("제목"));
         assert!(keys.contains("성명"));
+        let field = scan
+            .fields
+            .iter()
+            .find(|field| field.key == "성명")
+            .unwrap();
+        assert_eq!(field.occurrences, 2);
+        assert_eq!(field.source, "formLabel");
     }
 
     #[test]

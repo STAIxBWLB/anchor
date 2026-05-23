@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use tempfile::NamedTempFile;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -224,19 +226,18 @@ pub fn template_fill_hwpx(
     }
 
     let hwpx = find_hwpx_tool().ok_or_else(|| "hwpx tool is not available".to_string())?;
-    let data_path = write_temp_values(&request.values)?;
+    let data_file = write_temp_values(&request.values)?;
     let fill_run = run_command(
         &hwpx,
         &[
             OsString::from("fill"),
             template_path.as_os_str().to_os_string(),
             OsString::from("--data"),
-            data_path.as_os_str().to_os_string(),
+            data_file.path().as_os_str().to_os_string(),
             OsString::from("-o"),
             output_path.as_os_str().to_os_string(),
         ],
     );
-    let _ = fs::remove_file(&data_path);
     let fill_output = fill_run?;
     let replaced_count = parse_replaced_count(&fill_output.stderr);
 
@@ -311,14 +312,38 @@ fn merge_template_field(fields: &mut BTreeMap<String, TemplateField>, field: Tem
         .entry(field.key.clone())
         .and_modify(|existing| {
             existing.occurrences += field.occurrences;
-            if existing.source.as_deref() != Some("placeholder")
-                && field.source.as_deref() == Some("placeholder")
-            {
+            existing.required = existing.required || field.required;
+            if should_replace_template_field_metadata(existing, &field) {
+                existing.label = field.label.clone();
                 existing.source = field.source.clone();
                 existing.confidence = field.confidence;
+                existing.matched_key = field.matched_key.clone();
+            } else if existing.matched_key.is_none() && field.matched_key.is_some() {
+                existing.matched_key = field.matched_key.clone();
             }
         })
         .or_insert(field);
+}
+
+fn should_replace_template_field_metadata(
+    existing: &TemplateField,
+    incoming: &TemplateField,
+) -> bool {
+    let existing_rank = template_field_source_rank(existing.source.as_deref());
+    let incoming_rank = template_field_source_rank(incoming.source.as_deref());
+    incoming_rank > existing_rank
+        || (incoming_rank == existing_rank
+            && incoming.confidence.unwrap_or(0.0) > existing.confidence.unwrap_or(0.0))
+}
+
+fn template_field_source_rank(source: Option<&str>) -> u8 {
+    match source {
+        Some("formLabel") => 3,
+        Some("inlineLabel") => 2,
+        Some("placeholder") => 1,
+        Some(_) => 2,
+        None => 0,
+    }
 }
 
 fn template_field_from_lite(field: LiteField) -> TemplateField {
@@ -430,13 +455,19 @@ fn sanitize_filename(value: &str) -> String {
         .to_string()
 }
 
-fn write_temp_values(values: &BTreeMap<String, String>) -> Result<PathBuf, String> {
-    let path =
-        std::env::temp_dir().join(format!("anchor-hwpx-values-{}.json", uuid::Uuid::new_v4()));
+fn write_temp_values(values: &BTreeMap<String, String>) -> Result<NamedTempFile, String> {
     let body =
         serde_json::to_string(values).map_err(|err| format!("Cannot serialize values: {err}"))?;
-    fs::write(&path, body).map_err(|err| format!("Cannot write temporary values: {err}"))?;
-    Ok(path)
+    let mut file = tempfile::Builder::new()
+        .prefix("anchor-hwpx-values-")
+        .suffix(".json")
+        .tempfile()
+        .map_err(|err| format!("Cannot create temporary values file: {err}"))?;
+    file.write_all(body.as_bytes())
+        .map_err(|err| format!("Cannot write temporary values: {err}"))?;
+    file.flush()
+        .map_err(|err| format!("Cannot flush temporary values: {err}"))?;
+    Ok(file)
 }
 
 fn parse_replaced_count(stderr: &[u8]) -> u32 {
@@ -546,6 +577,54 @@ mod tests {
         assert!(has_extension(Path::new("Template.HWPX"), "hwpx"));
         assert!(has_extension(Path::new("Template.HwPx"), "hwpx"));
         assert!(!has_extension(Path::new("Template.hwp"), "hwpx"));
+    }
+
+    #[test]
+    fn merge_template_field_prefers_form_metadata_over_placeholder() {
+        let mut fields = BTreeMap::new();
+        merge_template_field(
+            &mut fields,
+            TemplateField {
+                key: "성명".to_string(),
+                label: "성명".to_string(),
+                required: false,
+                occurrences: 1,
+                source: Some("placeholder".to_string()),
+                confidence: Some(1.0),
+                matched_key: None,
+            },
+        );
+        merge_template_field(
+            &mut fields,
+            TemplateField {
+                key: "성명".to_string(),
+                label: "성명 라벨".to_string(),
+                required: true,
+                occurrences: 1,
+                source: Some("formLabel".to_string()),
+                confidence: Some(0.72),
+                matched_key: Some("성명".to_string()),
+            },
+        );
+        merge_template_field(
+            &mut fields,
+            TemplateField {
+                key: "성명".to_string(),
+                label: "성명".to_string(),
+                required: false,
+                occurrences: 1,
+                source: Some("placeholder".to_string()),
+                confidence: Some(1.0),
+                matched_key: None,
+            },
+        );
+
+        let field = fields.get("성명").unwrap();
+        assert_eq!(field.occurrences, 3);
+        assert_eq!(field.label, "성명 라벨");
+        assert_eq!(field.source.as_deref(), Some("formLabel"));
+        assert_eq!(field.matched_key.as_deref(), Some("성명"));
+        assert!(field.required);
     }
 
     #[test]

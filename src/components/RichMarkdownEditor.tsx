@@ -138,12 +138,12 @@ function applyRichLintMarks(
     if (!node.isText || !node.text) return true;
     for (const issue of pending) {
       if (issue.used || !issue.text) continue;
-      const index = node.text.lastIndexOf(issue.text);
-      if (index < 0) continue;
+      const range = findIssueRangeInTextNode(node.text, issue);
+      if (!range) continue;
       issue.used = true;
       tr = tr.addMark(
-        pos + index,
-        pos + index + issue.text.length,
+        pos + range.from,
+        pos + range.to,
         markType.create({ stringValue: issue.rule }),
       );
       break;
@@ -158,4 +158,33 @@ function applyRichLintMarks(
   } finally {
     suppressChangeRef.current = false;
   }
+}
+
+function findIssueRangeInTextNode(
+  text: string,
+  issue: GaejosikLintIssue,
+): { from: number; to: number } | null {
+  const columnStart = Math.max(0, issue.column - 1);
+  const columnEnd = Math.max(columnStart, issue.endColumn - 1);
+  if (columnEnd <= text.length && text.slice(columnStart, columnEnd) === issue.text) {
+    return { from: columnStart, to: columnEnd };
+  }
+
+  const coreEnd = trimLintTrailingPunctuation(text);
+  const core = text.slice(0, coreEnd);
+  if (core.endsWith(issue.text)) {
+    return { from: coreEnd - issue.text.length, to: coreEnd };
+  }
+
+  return null;
+}
+
+function trimLintTrailingPunctuation(text: string): number {
+  let end = text.length;
+  while (end > 0) {
+    const ch = text[end - 1];
+    if (!/[\s.!?。！？)"'\]\}]/.test(ch)) break;
+    end -= 1;
+  }
+  return end;
 }
