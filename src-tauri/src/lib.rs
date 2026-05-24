@@ -351,6 +351,6 @@ pub fn run() {
         });
 }
 
-pub fn run_cli(args: Vec<String>) -> Option<i32> {
+pub fn run_cli(args: Vec<String>) -> i32 {
     cli::run_cli(args)
 }

@@ -88,6 +88,10 @@ tauri-build: install ## Native Tauri production build (cargo + bundle)
 	fi; \
 	$(PNPM) tauri:build
 
+.PHONY: cli-build
+cli-build: $(ICON_PATH) ## Build standalone Anchor CLI
+	cd $(TAURI_DIR) && $(CARGO) build --release --bin anchor-cli
+
 # ---------------------------------------------------------------------------
 # Test / quality
 # ---------------------------------------------------------------------------
@@ -106,6 +110,10 @@ test-ts: node_modules ## TypeScript / React unit tests (vitest)
 .PHONY: test-rust
 test-rust: $(ICON_PATH) ## Rust unit + integration tests (cargo test --lib)
 	cd $(TAURI_DIR) && $(CARGO) test --lib
+
+.PHONY: test-cli
+test-cli: $(ICON_PATH) ## Compile and test standalone Anchor CLI binary
+	cd $(TAURI_DIR) && $(CARGO) test --bin anchor-cli
 
 .PHONY: test-e2e
 test-e2e: node_modules ## Playwright e2e (requires browsers; run `pnpm playwright install` first)

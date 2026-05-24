@@ -5,12 +5,27 @@ use crate::skill_host::{
     skills_reconcile_skill,
 };
 
-pub fn run_cli(args: Vec<String>) -> Option<i32> {
-    let command = args.first()?.as_str();
+pub fn run_cli(args: Vec<String>) -> i32 {
+    let Some(command) = args.first().map(String::as_str) else {
+        eprintln!("{}", usage());
+        return 2;
+    };
     match command {
-        "doctor" => Some(run_doctor(&args[1..])),
-        "skills" => Some(run_skills(&args[1..])),
-        _ => None,
+        "--help" | "-h" | "help" => {
+            println!("{}", usage());
+            0
+        }
+        "--version" | "-V" | "version" => {
+            println!("anchor {}", env!("CARGO_PKG_VERSION"));
+            0
+        }
+        "doctor" => run_doctor(&args[1..]),
+        "skills" => run_skills(&args[1..]),
+        other => {
+            eprintln!("unknown command: {other}");
+            eprintln!("{}", usage());
+            2
+        }
     }
 }
 
@@ -271,17 +286,26 @@ fn skills_usage() -> &'static str {
     "usage: anchor skills dirty|reconcile|import|import-unmanage"
 }
 
+fn usage() -> &'static str {
+    "usage: anchor [--version] [--help] <command>\n\ncommands:\n  doctor [--json] [--quiet]\n  skills dirty [--json]\n  skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]\n  skills import <source-path> [--name <name>] [--copy|--link]\n  skills import-unmanage <name> [--delete-files]"
+}
+
 #[cfg(test)]
 mod tests {
     use super::run_cli;
 
     #[test]
-    fn unknown_cli_command_falls_through_to_tauri() {
-        assert_eq!(run_cli(vec!["--version".to_string()]), None);
+    fn version_command_returns_success() {
+        assert_eq!(run_cli(vec!["--version".to_string()]), 0);
+    }
+
+    #[test]
+    fn unknown_cli_command_is_error() {
+        assert_eq!(run_cli(vec!["not-a-command".to_string()]), 2);
     }
 
     #[test]
     fn missing_skills_subcommand_is_cli_error() {
-        assert_eq!(run_cli(vec!["skills".to_string()]), Some(2));
+        assert_eq!(run_cli(vec!["skills".to_string()]), 2);
     }
 }

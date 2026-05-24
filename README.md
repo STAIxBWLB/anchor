@@ -18,6 +18,28 @@ AI workspace desktop app. Tauri 2 + Rust + React 19 + TypeScript.
 
 Plan reference (work repo internal): `~/.claude/plans/flickering-seeking-engelbart.md`. Rule SSOTs at `~/workspace/work/_sys/rules/{frontmatter-schema,bu-lifecycle,hub-sync,evidence-policy}.md`.
 
+## Install
+
+Anchor ships the desktop app and CLI as separate artifacts. On macOS, both are
+distributed through the `STAIxBWLB/homebrew-cask` tap:
+
+```bash
+brew tap STAIxBWLB/homebrew-cask
+
+# Desktop app only:
+brew install --cask anchor
+
+# Standalone CLI only. Installs the executable as `anchor`:
+brew install anchor-cli
+
+anchor --version
+```
+
+The app cask installs `Anchor.app` and does not create a CLI symlink. The CLI
+formula installs only the standalone `anchor` executable. The desktop app keeps
+using signed Tauri updater metadata from GitHub Releases; Homebrew users can
+also upgrade via `brew upgrade --cask anchor` and `brew upgrade anchor-cli`.
+
 ## Phase 3 verification gates (passed)
 
 1. **Catalog watcher + auto-refresh** — notify recursively watches `inbox/items/`, `tasks/{active,calendar}`, every BU's `02-admin-approvals/` + `03-evidence-cert/` + `.anchor/bu-config.yaml`; bursts are debounced 500 ms and the React pane re-queries in another 300 ms.
@@ -89,7 +111,7 @@ W12 leaves Studio package freeze local-only. Phase 6 W21 must add the matching `
 │   inbox.rs / inbox_watcher.rs / korean_date.rs               │
 │   inbox_classifier.rs / gmail_gws.rs / ai_router.rs / terminal.rs │
 │   anchor_dir.rs  — layered settings + .anchor rules/templates/catalogs │
-│   Phase 3+: + skill_host/ registry + app-binary CLI dispatch │
+│   Phase 3+: + skill_host/ registry + standalone CLI dispatch │
 │   Phase 4+: + whisper bridge / mcp lifecycle                 │
 └──────┬─────────────────────────────────────────────────────┘
        │ stdio bridge + future WS/MCP bridges
@@ -181,7 +203,7 @@ Each phase is defined in **outcomes the user actually exercises**. No phase exis
 - The first 5-role loop contract is bounded: `lead -> planner -> worker -> reviewer`, optional `advisor` for ambiguity/high-risk, and one rework attempt before user-visible failure.
 
 **Skills SSOT control-plane track**:
-- Rust `src-tauri/src/skill_host/` is the canonical skills implementation. The app-binary CLI (`anchor doctor`, `anchor skills ...`) reuses the same Rust command functions that Tauri calls; Node MCP remains focused on MCP tools.
+- Rust `src-tauri/src/skill_host/` is the canonical skills implementation. The standalone CLI (`anchor doctor`, `anchor skills ...`) reuses the same Rust command functions that Tauri calls; Node MCP remains focused on MCP tools.
 - `SkillRecord.tier` is one of `core`, `public`, `private`, `imported`, or `managed`. Bundled repo skills are placement-compatible `core`; `public` and `private` become valid only under `~/.anchor/skills/_sources/skills-public` and `~/.anchor/skills/_sources/skills-private`.
 - Doctor validation emits explicit `duplicate_source` and `tier_misplaced` issues, marks affected records invalid, and blocks install/dispatch for invalid records.
 - Dirty/reconcile flows are tier-aware: git-backed sources can accept by add/commit/push or discard by restoring the skill path; bundled skills refuse accept and discard by rematerializing the embedded bundle; managed/imported skills accept by updating the saved hash.
@@ -331,14 +353,15 @@ cd src-tauri && cargo test
 ANCHOR_MCP_WORKSPACE="$PWD" node sidecars/anchor-mcp/index.mjs
 
 # Skills registry doctor / reconcile:
-cargo run --manifest-path src-tauri/Cargo.toml -- doctor --quiet
-cargo run --manifest-path src-tauri/Cargo.toml -- doctor --json
-cargo run --manifest-path src-tauri/Cargo.toml -- skills dirty --json
-cargo run --manifest-path src-tauri/Cargo.toml -- skills reconcile <name-or-id> --accept --dry-run
-cargo run --manifest-path src-tauri/Cargo.toml -- skills reconcile <name-or-id> --discard
-cargo run --manifest-path src-tauri/Cargo.toml -- skills import /path/to/skill --copy
-cargo run --manifest-path src-tauri/Cargo.toml -- skills import /path/to/skill --link
-cargo run --manifest-path src-tauri/Cargo.toml -- skills import-unmanage <name> --delete-files
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- --version
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- doctor --quiet
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- doctor --json
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills dirty --json
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills reconcile <name-or-id> --accept --dry-run
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills reconcile <name-or-id> --discard
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills import /path/to/skill --copy
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills import /path/to/skill --link
+cargo run --manifest-path src-tauri/Cargo.toml --bin anchor-cli -- skills import-unmanage <name> --delete-files
 
 # Bench workspace scan on a real workspace:
 cd src-tauri && cargo test --release bench_scan_real_workspace \
@@ -360,7 +383,10 @@ The workflow builds native Tauri bundles on macOS, Ubuntu, and Windows, then
 uploads the generated `.app` / `.dmg`, `.deb` / `.rpm` / `.AppImage`, `.exe`,
 and `.msi` assets to that same release. It also uploads signed updater
 metadata consumed by the startup auto-updater and native `Check for Updates...`
-menu action.
+menu action. A separate macOS CLI job builds `anchor-cli`, packages it as a
+tarball containing an `anchor` executable, and uploads
+`anchor-cli_<version>_darwin_{aarch64,x86_64}.tar.gz` plus SHA256 files to the
+same release.
 
 macOS bundles must be code signed before publishing. Until Apple Developer ID
 secrets are configured, Anchor uses explicit ad-hoc bundle signing
@@ -383,7 +409,15 @@ to import or notarize with blank credentials.
 
 Release asset versions come from the app metadata in `package.json`,
 `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; keep those in sync
-before tagging or publishing a release.
+before tagging or publishing a release. After release assets exist, update the
+Homebrew tap with:
+
+```bash
+node scripts/update-homebrew-tap.mjs v0.2.12 ../homebrew-cask --commit
+cd ../homebrew-cask
+brew audit --cask anchor
+brew audit --formula anchor-cli
+```
 
 ## Workspace Layout
 
