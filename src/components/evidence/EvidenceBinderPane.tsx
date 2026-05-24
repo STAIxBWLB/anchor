@@ -1,5 +1,5 @@
 import { CheckCircle2, ClipboardCheck, FileText, Link2, RefreshCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   evidenceCandidateSummary,
   readEvidenceBinder,
@@ -27,6 +27,9 @@ export function EvidenceBinderPane({
   const [candidates, setCandidates] = useState<EvidenceBinderCandidate[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const loadSeqRef = useRef(0);
+  const saveSeqRef = useRef(0);
+  const savingRef = useRef(false);
 
   const linkedIds = useMemo(
     () => new Set(state?.bindings.map((binding) => binding.candidateId) ?? []),
@@ -34,11 +37,22 @@ export function EvidenceBinderPane({
   );
 
   const load = useCallback(async () => {
+    const loadSeq = loadSeqRef.current + 1;
+    loadSeqRef.current = loadSeq;
     if (!workspaceRoot || !docId) {
+      saveSeqRef.current += 1;
+      savingRef.current = false;
       setState(null);
       setCandidates([]);
+      setSaving(false);
+      setLoading(false);
       return;
     }
+    saveSeqRef.current += 1;
+    savingRef.current = false;
+    setState(null);
+    setCandidates([]);
+    setSaving(false);
     setLoading(true);
     try {
       const response = await readEvidenceBinder({
@@ -46,12 +60,18 @@ export function EvidenceBinderPane({
         docId,
         documentPath,
       });
-      setState(response.state);
-      setCandidates(response.candidates);
+      if (loadSeqRef.current === loadSeq) {
+        setState(response.state);
+        setCandidates(response.candidates);
+      }
     } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
+      if (loadSeqRef.current === loadSeq) {
+        onError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setLoading(false);
+      if (loadSeqRef.current === loadSeq) {
+        setLoading(false);
+      }
     }
   }, [docId, documentPath, onError, workspaceRoot]);
 
@@ -61,37 +81,53 @@ export function EvidenceBinderPane({
 
   const toggleCandidate = useCallback(
     async (candidate: EvidenceBinderCandidate) => {
-      if (!workspaceRoot || !state) return;
+      if (!workspaceRoot || !docId || loading || savingRef.current) return;
       const now = new Date().toISOString();
-      const exists = linkedIds.has(candidate.id);
-      const next: EvidenceBinderState = {
-        ...state,
-        bindings: exists
-          ? state.bindings.filter((binding) => binding.candidateId !== candidate.id)
-          : [
-              ...state.bindings,
-              {
-                candidateId: candidate.id,
-                note: candidate.summary ?? null,
-                verified:
-                  candidate.validationChecks.length > 0 &&
-                  candidate.validationChecks.every((check) => check.status === "pass"),
-                linkedAt: now,
-              },
-            ],
-        updatedAt: now,
-      };
-      setState(next);
+      let nextState: EvidenceBinderState | null = null;
+      setState((current) => {
+        if (!current) return current;
+        const exists = current.bindings.some((binding) => binding.candidateId === candidate.id);
+        nextState = {
+          ...current,
+          bindings: exists
+            ? current.bindings.filter((binding) => binding.candidateId !== candidate.id)
+            : [
+                ...current.bindings,
+                {
+                  candidateId: candidate.id,
+                  note: candidate.summary ?? null,
+                  verified:
+                    candidate.validationChecks.length > 0 &&
+                    candidate.validationChecks.every((check) => check.status === "pass"),
+                  linkedAt: now,
+                },
+              ],
+          updatedAt: now,
+        };
+        return nextState;
+      });
+      if (!nextState) return;
+      const saveSeq = saveSeqRef.current + 1;
+      saveSeqRef.current = saveSeq;
+      savingRef.current = true;
       setSaving(true);
       try {
-        setState(await saveEvidenceBinder(workspaceRoot, next));
+        const savedState = await saveEvidenceBinder(workspaceRoot, nextState);
+        if (saveSeqRef.current === saveSeq) {
+          setState(savedState);
+        }
       } catch (err) {
-        onError(err instanceof Error ? err.message : String(err));
+        if (saveSeqRef.current === saveSeq) {
+          onError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
-        setSaving(false);
+        if (saveSeqRef.current === saveSeq) {
+          savingRef.current = false;
+          setSaving(false);
+        }
       }
     },
-    [linkedIds, onError, state, workspaceRoot],
+    [docId, loading, onError, workspaceRoot],
   );
 
   if (!workspaceRoot || !docId) {
@@ -146,6 +182,8 @@ export function EvidenceBinderPane({
                 className="evidence-card__main"
                 onClick={() => void toggleCandidate(candidate)}
                 title={candidate.relPath}
+                aria-pressed={linked}
+                disabled={saving || loading}
               >
                 <span className="evidence-card__icon">
                   {linked ? <CheckCircle2 size={16} /> : <FileText size={16} />}
@@ -162,8 +200,8 @@ export function EvidenceBinderPane({
               </div>
               {candidate.hwpFieldLabels.length > 0 ? (
                 <div className="evidence-card__fields">
-                  {candidate.hwpFieldLabels.map((label) => (
-                    <span key={label}>{label}</span>
+                  {candidate.hwpFieldLabels.map((label, index) => (
+                    <span key={`${label}-${index}`}>{label}</span>
                   ))}
                 </div>
               ) : null}

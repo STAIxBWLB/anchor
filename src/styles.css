@@ -6113,7 +6113,7 @@ button.git-badge:hover {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--muted, #888);
+  color: var(--muted);
   cursor: pointer;
   user-select: none;
 }
@@ -6123,9 +6123,9 @@ button.git-badge:hover {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   border-radius: 10px;
-  background: var(--surface-2, #1a1a1a);
+  background: var(--panel-2);
 }
 .new-doc-library__filters {
   display: flex;
@@ -6136,24 +6136,24 @@ button.git-badge:hover {
   font-size: 11px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   background: transparent;
   color: inherit;
   cursor: pointer;
 }
 .new-doc-library__filters button.active {
-  background: var(--accent, #2563eb);
-  color: #fff;
-  border-color: var(--accent, #2563eb);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
 }
 .new-doc-library__status,
 .new-doc-library__error,
 .new-doc-library__empty {
   font-size: 12px;
-  color: var(--muted, #888);
+  color: var(--muted);
 }
 .new-doc-library__error {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 .new-doc-library__grid {
   display: grid;
@@ -6172,7 +6172,7 @@ button.git-badge:hover {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--muted, #888);
+  color: var(--muted);
 }
 .new-doc-library__list {
   list-style: none;
@@ -6186,9 +6186,9 @@ button.git-badge:hover {
 .new-doc-library__item {
   width: 100%;
   text-align: left;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--surface, #161616);
+  background: var(--panel-raised);
   color: inherit;
   padding: 8px 10px;
   cursor: pointer;
@@ -6198,11 +6198,11 @@ button.git-badge:hover {
   gap: 2px;
 }
 .new-doc-library__item:hover {
-  background: var(--surface-hover, #1c1c1c);
+  background: var(--panel-2);
 }
 .new-doc-library__item.active {
-  border-color: var(--accent, #2563eb);
-  outline: 1px solid var(--accent, #2563eb);
+  border-color: var(--accent);
+  outline: 1px solid var(--accent);
 }
 .new-doc-library__item-title {
   font-size: 12px;
@@ -6213,11 +6213,11 @@ button.git-badge:hover {
   flex-wrap: wrap;
   gap: 4px;
   font-size: 10px;
-  color: var(--muted, #888);
+  color: var(--muted);
 }
 .new-doc-library__item-summary {
   font-size: 11px;
-  color: var(--muted, #888);
+  color: var(--muted);
   margin-top: 2px;
 }
 .new-doc-library__guideline {
@@ -6225,9 +6225,9 @@ button.git-badge:hover {
   align-items: flex-start;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--surface, #161616);
+  background: var(--panel-raised);
   cursor: pointer;
 }
 .new-doc-library__guideline input {
@@ -6244,7 +6244,7 @@ button.git-badge:hover {
   overflow: auto;
 }
 .writing-guideline--empty {
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 12px;
   padding: 16px 14px;
 }
@@ -6252,7 +6252,7 @@ button.git-badge:hover {
   display: block;
   margin-top: 6px;
   font-size: 11px;
-  color: var(--muted-2, #555);
+  color: var(--faint);
 }
 .writing-guideline__tabs {
   display: flex;
@@ -6263,15 +6263,15 @@ button.git-badge:hover {
   font-size: 11px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   background: transparent;
   color: inherit;
   cursor: pointer;
 }
 .writing-guideline__tabs button.active {
-  background: var(--accent, #2563eb);
-  color: #fff;
-  border-color: var(--accent, #2563eb);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
 }
 .writing-guideline__header h3 {
   margin: 0;
@@ -6280,18 +6280,18 @@ button.git-badge:hover {
 }
 .writing-guideline__meta {
   font-size: 10px;
-  color: var(--muted, #888);
+  color: var(--muted);
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 2px;
 }
 .writing-guideline__markdown {
-  font-family: var(--mono, ui-monospace);
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.55;
-  background: var(--input-bg, #0e0e0e);
-  border: 1px solid var(--border, #2a2a2a);
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
   border-radius: 6px;
   padding: 10px 12px;
   margin: 0;
@@ -6301,11 +6301,11 @@ button.git-badge:hover {
 .writing-guideline__status,
 .writing-guideline__error {
   font-size: 11px;
-  color: var(--muted, #888);
+  color: var(--muted);
   margin: 0;
 }
 .writing-guideline__error {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 
 .evidence-binder {
@@ -6315,10 +6315,11 @@ button.git-badge:hover {
   min-height: 0;
   padding: 12px 14px;
   overflow: auto;
+  color: var(--ink);
 }
 .evidence-binder--empty {
   align-items: flex-start;
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 12px;
 }
 .evidence-binder__header {
@@ -6335,7 +6336,7 @@ button.git-badge:hover {
 .evidence-binder__kicker {
   display: block;
   margin-bottom: 2px;
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -6344,7 +6345,7 @@ button.git-badge:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 11px;
 }
 .evidence-binder__list {
@@ -6353,13 +6354,14 @@ button.git-badge:hover {
   gap: 8px;
 }
 .evidence-card {
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: var(--surface, #161616);
+  background: var(--panel-raised);
   padding: 8px;
 }
 .evidence-card.linked {
-  border-color: color-mix(in srgb, var(--accent, #2563eb) 55%, var(--border, #2a2a2a));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--panel-raised));
 }
 .evidence-card__main {
   display: flex;
@@ -6373,11 +6375,15 @@ button.git-badge:hover {
   text-align: left;
   cursor: pointer;
 }
+.evidence-card__main:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
 .evidence-card__icon {
   display: inline-flex;
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--accent, #2563eb);
+  color: var(--accent);
 }
 .evidence-card__copy {
   min-width: 0;
@@ -6395,7 +6401,7 @@ button.git-badge:hover {
 .evidence-card__copy small,
 .evidence-card__meta,
 .evidence-card__linked {
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 10px;
 }
 .evidence-card__copy small {
@@ -6411,24 +6417,25 @@ button.git-badge:hover {
 }
 .evidence-card__meta span,
 .evidence-card__fields span {
-  border: 1px solid var(--border, #2a2a2a);
+  border: 1px solid var(--line-soft);
   border-radius: 999px;
+  background: var(--panel-2);
   padding: 2px 6px;
 }
 .evidence-card p {
   margin: 8px 0 0;
-  color: var(--muted, #888);
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.45;
 }
 .evidence-card__warning {
   margin-top: 8px;
-  color: var(--danger, #ef4444);
+  color: var(--danger);
   font-size: 11px;
 }
 .evidence-card__linked {
   align-items: center;
-  color: var(--accent, #2563eb);
+  color: var(--accent);
 }
 
 @keyframes overlay-in {

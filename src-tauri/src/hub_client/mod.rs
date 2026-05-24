@@ -270,10 +270,9 @@ fn load_hub_config(workspace_root: &std::path::Path) -> std::io::Result<HubConfi
 fn sanitize_path_segment(value: &str) -> Result<String, String> {
     let trimmed = value.trim();
     if trimmed.is_empty()
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains("..")
-        || trimmed.starts_with('.')
+        || !trimmed
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
     {
         return Err("hub_path_segment_invalid".to_string());
     }
@@ -296,8 +295,14 @@ mod tests {
     #[test]
     fn path_segment_rejects_unsafe_gate_ids() {
         assert!(sanitize_path_segment("gate_123").is_ok());
+        assert!(sanitize_path_segment("gate-123").is_ok());
         assert!(sanitize_path_segment("../gate").is_err());
         assert!(sanitize_path_segment("a/b").is_err());
+        assert!(sanitize_path_segment("a?b").is_err());
+        assert!(sanitize_path_segment("a#b").is_err());
+        assert!(sanitize_path_segment("a%b").is_err());
+        assert!(sanitize_path_segment("a:b").is_err());
+        assert!(sanitize_path_segment(".gate").is_err());
         assert!(sanitize_path_segment("").is_err());
     }
 }

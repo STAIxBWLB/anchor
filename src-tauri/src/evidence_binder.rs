@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 
 const BINDER_SCHEMA_VERSION: u32 = 1;
@@ -255,7 +255,9 @@ fn discover_sidecar_candidates(
             if !evidence_path.is_file() {
                 continue;
             }
-            let sidecar = fs::read_to_string(path).ok();
+            let sidecar_yaml = fs::read_to_string(path)
+                .ok()
+                .and_then(|text| parse_sidecar_yaml(&text));
             candidates.push(build_candidate(
                 work,
                 &evidence_path,
@@ -263,12 +265,12 @@ fn discover_sidecar_candidates(
                 scope.and_then(|scope| scope.business_unit.clone()),
                 Some(path_string(path)),
                 None,
-                sidecar
-                    .as_deref()
-                    .and_then(|text| sidecar_string(text, "summary")),
-                sidecar
-                    .as_deref()
-                    .and_then(|text| sidecar_string(text, "evidence_kind")),
+                sidecar_yaml
+                    .as_ref()
+                    .and_then(|yaml| sidecar_string(yaml, "summary")),
+                sidecar_yaml
+                    .as_ref()
+                    .and_then(|yaml| sidecar_string(yaml, "evidence_kind")),
                 None,
             )?);
         }
@@ -308,7 +310,7 @@ fn discover_processed_candidates(work: &Path) -> Result<Vec<EvidenceBinderCandid
                     continue;
                 }
                 let title = manifest_title_for_path(&manifest, &path);
-                let mut candidate = build_candidate(
+                let candidate = build_candidate(
                     work,
                     &path,
                     "inboxProcessed",
@@ -326,7 +328,6 @@ fn discover_processed_candidates(work: &Path) -> Result<Vec<EvidenceBinderCandid
                     None,
                     Some(title),
                 )?;
-                candidate.inbox_item_id = manifest.id.clone();
                 candidates.push(candidate);
             }
         }
@@ -435,14 +436,52 @@ fn scoped_bases(work: &Path, scope: Option<&DocumentScope>) -> Vec<PathBuf> {
 }
 
 fn processed_manifest_paths(item_dir: &Path, manifest: &ProcessedManifest) -> Vec<PathBuf> {
+    let canonical_item_dir = item_dir.canonicalize().ok();
     manifest
         .files
         .iter()
         .filter_map(|file| file.path.as_deref())
-        .map(str::trim)
-        .filter(|path| !path.is_empty() && !path.contains(".."))
-        .map(|path| item_dir.join(path))
+        .filter_map(|path| {
+            safe_processed_manifest_path(item_dir, canonical_item_dir.as_deref(), path)
+        })
         .collect()
+}
+
+fn safe_processed_manifest_path(
+    item_dir: &Path,
+    canonical_item_dir: Option<&Path>,
+    raw_path: &str,
+) -> Option<PathBuf> {
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() || trimmed.contains('\\') {
+        return None;
+    }
+
+    let rel_path = Path::new(trimmed);
+    let mut is_first_component = true;
+    for component in rel_path.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir => return None,
+            Component::Normal(part)
+                if is_first_component && part.to_string_lossy().ends_with(':') =>
+            {
+                return None;
+            }
+            _ => {}
+        }
+        is_first_component = false;
+    }
+
+    let candidate = item_dir.join(rel_path);
+    let Some(canonical_item_dir) = canonical_item_dir else {
+        return Some(candidate);
+    };
+    let canonical_candidate = candidate.canonicalize().ok()?;
+    if canonical_candidate.starts_with(canonical_item_dir) {
+        Some(canonical_candidate)
+    } else {
+        None
+    }
 }
 
 fn raw_files_under(raw_dir: &Path) -> Vec<PathBuf> {
@@ -481,8 +520,11 @@ fn evidence_path_for_sidecar(sidecar: &Path) -> Option<PathBuf> {
     Some(sidecar.with_file_name(source_name))
 }
 
-fn sidecar_string(text: &str, key: &str) -> Option<String> {
-    let yaml: serde_yaml::Value = serde_yaml::from_str(text).ok()?;
+fn parse_sidecar_yaml(text: &str) -> Option<serde_yaml::Value> {
+    serde_yaml::from_str(text).ok()
+}
+
+fn sidecar_string(yaml: &serde_yaml::Value, key: &str) -> Option<String> {
     yaml.get(key)
         .and_then(|value| value.as_str())
         .map(|value| value.trim().to_string())
@@ -621,5 +663,30 @@ mod tests {
     fn rejects_unsafe_doc_ids() {
         assert!(sanitize_doc_id("../x").is_err());
         assert!(sanitize_doc_id("doc x").is_ok());
+    }
+
+    #[test]
+    fn processed_manifest_paths_reject_escape_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let item = tmp.path().join("inbox/items/done/item-a");
+        fs::create_dir_all(item.join("raw")).unwrap();
+        fs::write(item.join("raw/ok.pdf"), b"%PDF-1.4\n%%EOF").unwrap();
+
+        let manifest: ProcessedManifest = serde_yaml::from_str(
+            r#"
+id: item-a
+files:
+  - path: raw/ok.pdf
+  - path: /etc/passwd
+  - path: ../escape.pdf
+  - path: C:\Users\x\secret.pdf
+  - path: C:/Users/x/secret.pdf
+"#,
+        )
+        .unwrap();
+
+        let paths = processed_manifest_paths(&item, &manifest);
+        assert_eq!(paths.len(), 1);
+        assert!(paths[0].ends_with("raw/ok.pdf"));
     }
 }
