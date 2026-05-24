@@ -3144,8 +3144,6 @@ mod tests {
     use std::ffi::OsString;
     use tempfile::TempDir;
 
-    static TEST_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
     struct TestHome {
         _guard: MutexGuard<'static, ()>,
         _dir: TempDir,
@@ -3163,10 +3161,7 @@ mod tests {
     }
 
     fn test_home() -> TestHome {
-        let guard = TEST_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = host_fs::test_anchor_home_lock();
         let dir = TempDir::new().unwrap();
         let previous = std::env::var_os("ANCHOR_TEST_HOME");
         std::env::set_var("ANCHOR_TEST_HOME", dir.path());

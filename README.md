@@ -416,6 +416,43 @@ build branch. It intentionally does not pass unset Apple secrets into
 `tauri-apps/tauri-action`, because empty environment variables make Tauri try
 to import or notarize with blank credentials.
 
+Minimum Apple Developer setup for direct distribution:
+
+1. In Apple Developer `Certificates, Identifiers & Profiles`, create only a
+   `Developer ID Application` certificate. Anchor does not need an Identifier
+   or Provisioning Profile for the current direct-distribution path because it
+   does not use iCloud, Push Notifications, App Groups, or another advanced
+   entitlement that requires a Developer ID provisioning profile.
+2. Install the downloaded `.cer` into Keychain Access, then export it with its
+   private key as a password-protected `.p12`.
+3. Encode the `.p12` and set the release secrets:
+
+   ```bash
+   tmp_cert_b64="$(mktemp)"
+   openssl base64 -A -in DeveloperIDApplication.p12 -out "$tmp_cert_b64"
+   gh secret set APPLE_CERTIFICATE --repo STAIxBWLB/anchor --body-file "$tmp_cert_b64"
+   rm "$tmp_cert_b64"
+
+   gh secret set APPLE_CERTIFICATE_PASSWORD --repo STAIxBWLB/anchor
+   gh secret set KEYCHAIN_PASSWORD --repo STAIxBWLB/anchor
+   gh secret set APPLE_ID --repo STAIxBWLB/anchor
+   gh secret set APPLE_PASSWORD --repo STAIxBWLB/anchor
+   gh secret set APPLE_TEAM_ID --repo STAIxBWLB/anchor
+   ```
+
+4. Confirm release readiness without printing secret values:
+
+   ```bash
+   make macos-distribution-check
+   make macos-distribution-local-check
+   ```
+
+`APPLE_PASSWORD` must be an Apple app-specific password. Keep the Tauri updater
+secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) in
+place; they sign updater metadata and are separate from Apple Developer ID
+signing. The workflow now fails on partial Apple signing configuration instead
+of silently producing an unintended ad-hoc macOS release.
+
 Release asset versions come from the app metadata in `package.json`,
 `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; keep those in sync
 before tagging or publishing a release. After release assets exist, update the
@@ -425,6 +462,15 @@ Homebrew tap with:
 make homebrew-update-commit RELEASE_TAG=v0.2.12 HOMEBREW_TAP_DIR=../homebrew-cask
 make homebrew-audit HOMEBREW_TAP_DIR=../homebrew-cask
 make homebrew-fetch HOMEBREW_TAP_DIR=../homebrew-cask
+```
+
+After downloading the release DMG, verify Gatekeeper-facing state on macOS:
+
+```bash
+xcrun stapler validate Anchor_*.dmg
+spctl -a -vv -t open --context context:primary-signature Anchor_*.dmg
+codesign --verify --deep --strict --verbose=4 /Applications/Anchor.app
+spctl -a -vv -t exec /Applications/Anchor.app
 ```
 
 ## Workspace Layout

@@ -71,6 +71,47 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate macOS signing secrets
+        if: matrix.platform == 'macos-latest'
+        env:
+          HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          HAS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD != '' }}
+          HAS_APPLE_ID: ${{ secrets.APPLE_ID != '' }}
+          HAS_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD != '' }}
+          HAS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+        run: |
+          set -euo pipefail
+          present=0
+          missing=()
+          check_secret() {
+            local name="$1"
+            local value="$2"
+            if [ "$value" = "true" ]; then
+              present=1
+            else
+              missing+=("$name")
+            fi
+          }
+
+          check_secret APPLE_CERTIFICATE "$HAS_APPLE_CERTIFICATE"
+          check_secret APPLE_CERTIFICATE_PASSWORD "$HAS_APPLE_CERTIFICATE_PASSWORD"
+          check_secret KEYCHAIN_PASSWORD "$HAS_KEYCHAIN_PASSWORD"
+          check_secret APPLE_ID "$HAS_APPLE_ID"
+          check_secret APPLE_PASSWORD "$HAS_APPLE_PASSWORD"
+          check_secret APPLE_TEAM_ID "$HAS_APPLE_TEAM_ID"
+
+          if [ "$present" -eq 1 ] && [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Partial Apple signing configuration. Missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          if [ "$present" -eq 0 ]; then
+            echo "Apple Developer ID secrets are not configured; macOS bundles will use ad-hoc signing."
+          else
+            echo "Apple Developer ID secrets are complete; macOS bundles will be signed and notarized."
+          fi
+
       - name: Prepare macOS signing
         if: matrix.platform == 'macos-latest' && env.HAS_APPLE_CERTIFICATE == 'true'
         env:

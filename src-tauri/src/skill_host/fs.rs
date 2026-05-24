@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs as unix_fs;
 
+#[cfg(test)]
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
 pub fn home_dir() -> Result<PathBuf, String> {
     dirs::home_dir().ok_or_else(|| "Cannot resolve home directory".to_string())
 }
@@ -125,6 +128,17 @@ pub fn safe_entry_name(input: &str) -> Result<String, String> {
 #[cfg(test)]
 fn test_anchor_home_override() -> Option<PathBuf> {
     std::env::var_os("ANCHOR_TEST_HOME").map(PathBuf::from)
+}
+
+#[cfg(test)]
+static ANCHOR_TEST_HOME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[cfg(test)]
+pub(crate) fn test_anchor_home_lock() -> MutexGuard<'static, ()> {
+    ANCHOR_TEST_HOME_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(not(test))]

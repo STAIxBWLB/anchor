@@ -649,8 +649,9 @@ fn display_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skill_host::fs as host_fs;
     use std::fs;
-    use std::sync::{Mutex, MutexGuard, OnceLock};
+    use std::sync::MutexGuard;
     use tempfile::TempDir;
 
     struct TestHome {
@@ -670,11 +671,7 @@ mod tests {
     }
 
     fn test_home() -> TestHome {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        let guard = LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = host_fs::test_anchor_home_lock();
         let home = TempDir::new().unwrap();
         let previous = std::env::var_os("ANCHOR_TEST_HOME");
         std::env::set_var("ANCHOR_TEST_HOME", home.path());

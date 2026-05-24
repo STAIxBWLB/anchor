@@ -27,6 +27,7 @@ CLI_SMOKE_HOME ?= .context/cli-smoke-home
 HOMEBREW_TAP_DIR ?= ../homebrew-cask
 VERSION ?= $(shell $(NODE) -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
 RELEASE_TAG ?= v$(VERSION)
+MACOS_RELEASE_REPO ?= STAIxBWLB/anchor
 TAURI_SIGNING_PRIVATE_KEY_FILE ?= $(HOME)/.tauri/anchor-updater.key
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD_FILE ?= $(HOME)/.tauri/anchor-updater.key.password
 
@@ -192,6 +193,14 @@ release-preflight: ## Release preflight: diff, verify, CLI smoke, e2e, and debug
 	$(MAKE) cli-smoke
 	$(MAKE) test-e2e
 	$(PNPM) tauri build --debug --no-bundle
+
+.PHONY: macos-distribution-check
+macos-distribution-check: ## Check repo config and GitHub secrets for notarized macOS direct distribution
+	ANCHOR_RELEASE_REPO="$(MACOS_RELEASE_REPO)" $(NODE) scripts/check-macos-direct-distribution.mjs --github-secrets
+
+.PHONY: macos-distribution-local-check
+macos-distribution-local-check: ## Check repo config and local Developer ID Application identity
+	$(NODE) scripts/check-macos-direct-distribution.mjs --require-local-identity
 
 .PHONY: homebrew-update
 homebrew-update: ## Render Homebrew cask/formula for RELEASE_TAG into HOMEBREW_TAP_DIR
