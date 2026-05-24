@@ -322,6 +322,11 @@ cd src-tauri && cargo test
 # Local Anchor MCP sidecar smoke:
 ANCHOR_MCP_WORKSPACE="$PWD" node sidecars/anchor-mcp/index.mjs
 
+# Skills registry doctor / reconcile:
+cargo run --manifest-path src-tauri/Cargo.toml -- doctor --quiet
+cargo run --manifest-path src-tauri/Cargo.toml -- skills dirty --json
+cargo run --manifest-path src-tauri/Cargo.toml -- skills reconcile <name-or-id> --accept --dry-run
+
 # Bench workspace scan on a real workspace:
 cd src-tauri && cargo test --release bench_scan_real_workspace \
     -- --ignored --nocapture --test-threads=1
