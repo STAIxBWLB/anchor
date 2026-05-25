@@ -21,6 +21,10 @@ env:
   CARGO_TERM_COLOR: always
   APPLE_SIGNING_IDENTITY: "-"
   HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+  # Opt all JavaScript actions into Node.js 24. Node.js 20 is deprecated
+  # on GitHub-hosted runners (forced to Node 24 on 2026-06-02, removed
+  # 2026-09-16). See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build:
