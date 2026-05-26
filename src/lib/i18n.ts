@@ -41,6 +41,8 @@ const ko: Record<string, string> = {
   "layout.showDocumentTypes": "문서 타입 패널 보이기",
   "layout.hideDocuments": "문서 패널 숨기기",
   "layout.showDocuments": "문서 패널 보이기",
+  "layout.hideRightPane": "오른쪽 패널 숨기기",
+  "layout.showRightPane": "오른쪽 패널 보이기",
   "layout.resizeDocuments": "문서 패널 크기 조절",
   "layout.resizeOutline": "오른쪽 패널 크기 조절",
 
@@ -220,6 +222,7 @@ const ko: Record<string, string> = {
 
   "rightPane.title": "오른쪽 패널",
   "rightPane.tabs": "오른쪽 패널 탭",
+  "rightPane.tab.workspace": "워크스페이스",
   "rightPane.tab.outline": "개요",
   "rightPane.tab.files": "파일",
   "rightPane.tab.memo": "메모",
@@ -1303,6 +1306,8 @@ const en: Record<string, string> = {
   "layout.showDocumentTypes": "Show document types panel",
   "layout.hideDocuments": "Hide documents panel",
   "layout.showDocuments": "Show documents panel",
+  "layout.hideRightPane": "Hide right panel",
+  "layout.showRightPane": "Show right panel",
   "layout.resizeDocuments": "Resize documents panel",
   "layout.resizeOutline": "Resize right panel",
 
@@ -1482,6 +1487,7 @@ const en: Record<string, string> = {
 
   "rightPane.title": "Right pane",
   "rightPane.tabs": "Right pane tabs",
+  "rightPane.tab.workspace": "Workspace",
   "rightPane.tab.outline": "Outline",
   "rightPane.tab.files": "Files",
   "rightPane.tab.memo": "Memo",

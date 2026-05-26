@@ -392,7 +392,7 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.activeAppMode).toBe("pkm");
     expect(settings.ui.activeWorkspaceVisibility).toBe("private");
     expect(settings.ui.editorViewMode).toBe("source");
-    expect(settings.ui.rightPaneTab).toBe("outline");
+    expect(settings.ui.rightPaneTab).toBe("workspace");
     expect(settings.ui.workspaceFileFilter).toBe("all");
     expect(settings.meetings.root).toBe("meetings");
     expect(settings.tasks.root).toBe("tasks");

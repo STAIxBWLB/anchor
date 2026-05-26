@@ -19,6 +19,7 @@ import {
   Folder,
   Hash,
   Info,
+  Layers,
   List,
   MoveRight,
   Plus,
@@ -54,7 +55,8 @@ import {
 import { extractOutline } from "../lib/markdown";
 import { useTranslation } from "../lib/i18n";
 import { useContextMenuKeyboard } from "../lib/useContextMenuKeyboard";
-import type { RightPaneTab } from "../lib/settings";
+import type { AnchorAppMode, DocumentViewDefinition, RightPaneTab } from "../lib/settings";
+import type { BuiltInDocumentView, DocumentFilter } from "../lib/documentIndex";
 import type {
   DocumentPayload,
   FileQueueItem,
@@ -64,6 +66,7 @@ import type {
   VaultEntry,
 } from "../lib/types";
 import { NeighborhoodPane } from "./NeighborhoodPane";
+import { Sidebar } from "./Sidebar";
 
 interface OutlinePaneProps {
   document: DocumentPayload | null;
@@ -100,6 +103,21 @@ interface OutlinePaneProps {
   skillsNode?: React.ReactNode;
   guidelineNode?: React.ReactNode;
   evidenceNode?: React.ReactNode;
+  appMode: AnchorAppMode;
+  contentCount: number;
+  typeCounts: Array<[string, number]>;
+  documentViews: DocumentViewDefinition[];
+  viewCounts: Record<BuiltInDocumentView, number>;
+  customViewCounts: Record<string, number>;
+  recentEntries: VaultEntry[];
+  selectedPath: string | null;
+  documentFilter: DocumentFilter;
+  onDocumentFilter: (filter: DocumentFilter) => void;
+  onDocumentViewsChange: (views: DocumentViewDefinition[]) => void;
+  onNewDocument: (docType?: string) => void;
+  canCreateDocument: boolean;
+  onSelectRecent: (entry: VaultEntry) => void;
+  onOpenCommandPalette: () => void;
 }
 
 const STANDARD_TYPES = [
@@ -188,6 +206,21 @@ export function OutlinePane({
   skillsNode,
   guidelineNode,
   evidenceNode,
+  appMode,
+  contentCount,
+  typeCounts,
+  documentViews,
+  viewCounts,
+  customViewCounts,
+  recentEntries,
+  selectedPath,
+  documentFilter,
+  onDocumentFilter,
+  onDocumentViewsChange,
+  onNewDocument,
+  canCreateDocument,
+  onSelectRecent,
+  onOpenCommandPalette,
 }: OutlinePaneProps) {
   const { t } = useTranslation();
   const tab = activeTab;
@@ -227,6 +260,16 @@ export function OutlinePane({
     [onQueueFileSources],
   );
 
+  const isPkm = appMode === "pkm";
+  useEffect(() => {
+    if (!isPkm && tab !== "workspace") {
+      onTabChange("workspace");
+    }
+  }, [isPkm, tab, onTabChange]);
+  const visibleTabs: readonly RightPaneTab[] = isPkm
+    ? ["workspace", "outline", "files", "memo", "skills", "guideline", "evidence", "info"]
+    : ["workspace"];
+
   return (
     <aside className="outline-pane" ref={paneRef}>
       <div className="outline-header">
@@ -243,7 +286,7 @@ export function OutlinePane({
       </div>
       <div className="right-pane-workspace">
         <div className="right-pane-tabs" role="tablist" aria-label={t("rightPane.tabs")}>
-          {(["outline", "files", "memo", "skills", "guideline", "evidence", "info"] as const).map((id) => (
+          {visibleTabs.map((id) => (
             <button
               key={id}
               type="button"
@@ -275,7 +318,9 @@ export function OutlinePane({
               title={t(`rightPane.tab.${id}`)}
               aria-label={t(`rightPane.tab.${id}`)}
             >
-              {id === "outline" ? (
+              {id === "workspace" ? (
+                <Layers size={20} />
+              ) : id === "outline" ? (
                 <List size={20} />
               ) : id === "files" ? (
                 <Files size={20} />
@@ -295,6 +340,26 @@ export function OutlinePane({
         </div>
 
         <div className="right-pane-content">
+          {tab === "workspace" ? (
+            <Sidebar
+              embedded
+              contentCount={contentCount}
+              typeCounts={typeCounts}
+              documentViews={documentViews}
+              viewCounts={viewCounts}
+              customViewCounts={customViewCounts}
+              recentEntries={recentEntries}
+              selectedPath={selectedPath}
+              documentFilter={documentFilter}
+              onDocumentFilter={onDocumentFilter}
+              onDocumentViewsChange={onDocumentViewsChange}
+              onNewDocument={onNewDocument}
+              canCreateDocument={canCreateDocument}
+              onSelectRecent={onSelectRecent}
+              onOpenCommandPalette={onOpenCommandPalette}
+            />
+          ) : null}
+
           {tab === "outline" ? (
             <>
               {document ? (
