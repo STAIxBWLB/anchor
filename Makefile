@@ -221,12 +221,12 @@ homebrew-update-push: ## Render, commit, and push Homebrew cask/formula update
 
 .PHONY: homebrew-audit
 homebrew-audit: ## Audit Anchor Homebrew cask and CLI formula in HOMEBREW_TAP_DIR
-	cd "$(HOMEBREW_TAP_DIR)" && brew audit --cask anchor
+	cd "$(HOMEBREW_TAP_DIR)" && brew audit --cask anchor-workspace
 	cd "$(HOMEBREW_TAP_DIR)" && brew audit --formula anchor-cli
 
 .PHONY: homebrew-fetch
 homebrew-fetch: ## Fetch Anchor Homebrew cask and CLI formula in HOMEBREW_TAP_DIR
-	cd "$(HOMEBREW_TAP_DIR)" && brew fetch --cask anchor
+	cd "$(HOMEBREW_TAP_DIR)" && brew fetch --cask anchor-workspace
 	cd "$(HOMEBREW_TAP_DIR)" && brew fetch anchor-cli
 
 # ---------------------------------------------------------------------------

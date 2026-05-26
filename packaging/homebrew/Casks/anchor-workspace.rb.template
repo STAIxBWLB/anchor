@@ -1,4 +1,4 @@
-cask "anchor" do
+cask "anchor-workspace" do
   arch arm: "aarch64", intel: "x64"
 
   version "{{VERSION}}"

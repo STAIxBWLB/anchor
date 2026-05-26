@@ -28,7 +28,7 @@ distributed through the `STAIxBWLB/homebrew-cask` tap:
 brew tap STAIxBWLB/homebrew-cask
 
 # Desktop app only:
-brew install --cask anchor
+brew install --cask anchor-workspace
 
 # Standalone CLI only. Installs the executable as `anchor`:
 brew install anchor-cli
@@ -39,7 +39,7 @@ anchor --version
 The app cask installs `Anchor.app` and does not create a CLI symlink. The CLI
 formula installs only the standalone `anchor` executable. The desktop app keeps
 using signed Tauri updater metadata from GitHub Releases; Homebrew users can
-also upgrade via `brew upgrade --cask anchor` and `brew upgrade anchor-cli`.
+also upgrade via `brew upgrade --cask anchor-workspace` and `brew upgrade anchor-cli`.
 
 For repo-local management shortcuts:
 

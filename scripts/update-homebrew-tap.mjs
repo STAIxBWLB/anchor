@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -56,19 +56,38 @@ function renderTemplate(templatePath, outputPath) {
   console.log(`wrote ${outputPath}`);
 }
 
+const appCaskPath = resolve(tapDir, "Casks/anchor-workspace.rb");
+const legacyAppCaskPath = resolve(tapDir, "Casks/anchor.rb");
+
 renderTemplate(
-  resolve(repoRoot, "packaging/homebrew/Casks/anchor.rb.template"),
-  resolve(tapDir, "Casks/anchor.rb"),
+  resolve(repoRoot, "packaging/homebrew/Casks/anchor-workspace.rb.template"),
+  appCaskPath,
 );
+if (existsSync(legacyAppCaskPath)) {
+  unlinkSync(legacyAppCaskPath);
+  console.log(`removed ${legacyAppCaskPath}`);
+}
 renderTemplate(
   resolve(repoRoot, "packaging/homebrew/Formula/anchor-cli.rb.template"),
   resolve(tapDir, "Formula/anchor-cli.rb"),
 );
 
 if (shouldCommit || shouldPush) {
-  execFileSync("git", ["-C", tapDir, "add", "Casks/anchor.rb", "Formula/anchor-cli.rb"], {
-    stdio: "inherit",
-  });
+  execFileSync(
+    "git",
+    [
+      "-C",
+      tapDir,
+      "add",
+      "--all",
+      "Casks/anchor.rb",
+      "Casks/anchor-workspace.rb",
+      "Formula/anchor-cli.rb",
+    ],
+    {
+      stdio: "inherit",
+    },
+  );
 }
 
 if (shouldCommit) {
@@ -85,9 +104,11 @@ console.log("");
 console.log(`Homebrew tap target: ${tapRepo}`);
 console.log("Next:");
 console.log(`  cd ${tapDir}`);
-console.log("  brew audit --cask anchor");
+console.log("  brew audit --cask anchor-workspace");
 console.log("  brew audit --formula anchor-cli");
 if (!shouldCommit) {
-  console.log("  git diff -- Casks/anchor.rb Formula/anchor-cli.rb");
-  console.log(`  git add Casks/anchor.rb Formula/anchor-cli.rb && git commit -m "anchor: update to ${tag}"`);
+  console.log("  git diff -- Casks/anchor.rb Casks/anchor-workspace.rb Formula/anchor-cli.rb");
+  console.log(
+    `  git add --all Casks/anchor.rb Casks/anchor-workspace.rb Formula/anchor-cli.rb && git commit -m "anchor: update to ${tag}"`,
+  );
 }
