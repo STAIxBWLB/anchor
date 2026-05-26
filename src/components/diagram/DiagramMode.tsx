@@ -51,6 +51,8 @@ import {
 import { useTranslation } from "../../lib/i18n";
 import {
   DiagramStoreProvider,
+  getDiagramSession,
+  setDiagramSession,
   useDiagram,
   useDiagramStore,
 } from "./DiagramStoreContext";
@@ -147,8 +149,21 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   const selection = useDiagram((s) => s.ephemeral.selection);
   const viewport = useDiagram((s) => s.ephemeral.viewport);
 
-  const [activeName, setActiveName] = useState<string | null>(null);
-  const [lastSavedBody, setLastSavedBody] = useState<string | null>(null);
+  // Read once on mount from the session singleton so switching activity-rail
+  // tabs and coming back resumes the in-progress work without losing the
+  // active filename or dirty/saved status.
+  const [activeName, setActiveNameState] = useState<string | null>(() => getDiagramSession().activeName);
+  const [lastSavedBody, setLastSavedBodyState] = useState<string | null>(
+    () => getDiagramSession().lastSavedBody,
+  );
+  const setActiveName = useCallback((value: string | null) => {
+    setActiveNameState(value);
+    setDiagramSession({ activeName: value });
+  }, []);
+  const setLastSavedBody = useCallback((value: string | null) => {
+    setLastSavedBodyState(value);
+    setDiagramSession({ lastSavedBody: value });
+  }, []);
   const [saving, setSaving] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [files, setFiles] = useState<DiagramFile[]>([]);
