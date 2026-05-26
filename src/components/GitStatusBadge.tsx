@@ -77,6 +77,7 @@ export function GitStatusBadge({ vaultPath, enabled, refreshTrigger, onCommitCli
   const content = (
     <>
       <GitBranch size={10} />
+      <span className="git-badge-branch">{display.branch}</span>
       {display.dirty && !display.pendingUntracked ? (
         <>
           <span className="git-badge-metric" title="staged">

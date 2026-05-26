@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -38,7 +37,6 @@ import type {
 } from "../../../lib/diagram/types";
 import {
   useDiagram,
-  useDiagramCoalescer,
   useDiagramStore,
 } from "../DiagramStoreContext";
 import { EdgeMarkers } from "./EdgeMarkers";
@@ -134,10 +132,8 @@ function findPortTarget(event: PointerEvent<SVGSVGElement>): {
 
 export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
   const store = useDiagramStore();
-  const persistentCoalescer = useDiagramCoalescer();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const gestureRef = useRef<Gesture>(null);
-  const [, forceUpdate] = useState(0);
 
   const nodes = useDiagram((s) => s.doc.nodes);
   const edges = useDiagram((s) => s.doc.edges);
@@ -452,7 +448,6 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
         setMarquee(null);
       }
       if (gesture.kind === "node") {
-        persistentCoalescer.reset(Date.now());
         setGuides([]);
       }
       if (gesture.kind === "connect") {
@@ -472,7 +467,7 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
       }
       gestureRef.current = null;
     },
-    [persistentCoalescer, store],
+    [store],
   );
 
   const onWheel = useCallback(
@@ -493,10 +488,6 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
     },
     [updateViewport, viewport],
   );
-
-  useLayoutEffect(() => {
-    forceUpdate((n) => n + 1);
-  }, [marquee, guides, connectGhost]);
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {

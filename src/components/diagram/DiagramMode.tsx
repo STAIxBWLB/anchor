@@ -45,6 +45,7 @@ import {
   saveSnapshotForDoc,
 } from "../../lib/diagram/versionHistory";
 import {
+  createDiagramId,
   createEmptyDoc,
   type DiagramDoc,
   type NodeKind,
@@ -56,6 +57,7 @@ import {
   getDiagramSession,
   setDiagramSession,
   useDiagram,
+  useDiagramCoalescer,
   useDiagramStore,
 } from "./DiagramStoreContext";
 import { CanvasSurface } from "./canvas/CanvasSurface";
@@ -169,6 +171,7 @@ export function DiagramMode({ workPath, onError }: DiagramModeProps) {
 function DiagramShell({ workPath, onError }: DiagramModeProps) {
   const { t } = useTranslation();
   const store = useDiagramStore();
+  const coalescer = useDiagramCoalescer();
   const sessionKey = workPath ?? "__no-workspace__";
   const doc = useDiagram((s) => s.doc);
   const nodes = doc.nodes;
@@ -343,11 +346,15 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
       const canvasY = (cy - viewport.py) / viewport.zoom;
       const offset = (insertOffsetRef.current % 5) * 16;
       insertOffsetRef.current += 1;
+      const nodeOpts =
+        kind === "text" && opts.title === undefined
+          ? { ...opts, title: t("diagram.toolbar.addText") }
+          : opts;
       store.setState(
-        withSnapshot(addNode(kind, canvasX + offset, canvasY + offset, opts), defaultCoalescer()),
+        withSnapshot(addNode(kind, canvasX + offset, canvasY + offset, nodeOpts), coalescer),
       );
     },
-    [store, viewport.px, viewport.py, viewport.zoom],
+    [coalescer, store, t, viewport.px, viewport.py, viewport.zoom],
   );
 
   const handleZoom = useCallback(
@@ -422,7 +429,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   );
 
   const handleNew = useCallback(() => {
-    const fresh = createEmptyDoc(crypto.randomUUID());
+    const fresh = createEmptyDoc(createDiagramId());
     store.setState(replaceDoc(fresh));
     setActiveName(null);
     setLastSavedBody(null);
@@ -545,7 +552,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
       }
       if (matchesShortcut(event, { key: "d", mod: true })) {
         event.preventDefault();
-        store.setState(withSnapshot(duplicateSelection(), defaultCoalescer()));
+        store.setState(withSnapshot(duplicateSelection(), coalescer));
         return;
       }
       if (!inField && event.key === "F2") {
@@ -570,22 +577,22 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         const step = event.shiftKey ? 10 : 1;
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          store.setState(withSnapshot(nudgeSelection(-step, 0), defaultCoalescer()));
+          store.setState(withSnapshot(nudgeSelection(-step, 0), coalescer));
           return;
         }
         if (event.key === "ArrowRight") {
           event.preventDefault();
-          store.setState(withSnapshot(nudgeSelection(step, 0), defaultCoalescer()));
+          store.setState(withSnapshot(nudgeSelection(step, 0), coalescer));
           return;
         }
         if (event.key === "ArrowUp") {
           event.preventDefault();
-          store.setState(withSnapshot(nudgeSelection(0, -step), defaultCoalescer()));
+          store.setState(withSnapshot(nudgeSelection(0, -step), coalescer));
           return;
         }
         if (event.key === "ArrowDown") {
           event.preventDefault();
-          store.setState(withSnapshot(nudgeSelection(0, step), defaultCoalescer()));
+          store.setState(withSnapshot(nudgeSelection(0, step), coalescer));
           return;
         }
       }
@@ -596,17 +603,17 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           const nodeIds = [...state.ephemeral.selection.nodes];
           const edgeIds = [...state.ephemeral.selection.edges];
           if (nodeIds.length > 0) {
-            store.setState(withSnapshot(removeNodes(nodeIds), defaultCoalescer()));
+            store.setState(withSnapshot(removeNodes(nodeIds), coalescer));
           }
           if (edgeIds.length > 0) {
-            store.setState(withSnapshot(removeEdges(edgeIds), defaultCoalescer()));
+            store.setState(withSnapshot(removeEdges(edgeIds), coalescer));
           }
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [findOpen, handleSave, hasSelection, store]);
+  }, [coalescer, findOpen, handleSave, hasSelection, store]);
 
   const statusLabel = saving
     ? t("diagram.status.saving")
@@ -847,7 +854,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         open={templateOpen}
         dirty={dirty}
         onApply={(tpl: TemplateDefinition) => {
-          const fresh = createEmptyDoc(crypto.randomUUID());
+          const fresh = createEmptyDoc(createDiagramId());
           const bundle = tpl.build(400, 300, t);
           const next: DiagramDoc = {
             ...fresh,
@@ -892,13 +899,13 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         }
         onSave={(memo) => {
           if (memoOpen) {
-            store.setState(withSnapshot(setNodeMeta(memoOpen, { memo: memo || null }), defaultCoalescer()));
+            store.setState(withSnapshot(setNodeMeta(memoOpen, { memo: memo || null }), coalescer));
           }
           setMemoOpen(null);
         }}
         onDelete={() => {
           if (memoOpen) {
-            store.setState(withSnapshot(setNodeMeta(memoOpen, { memo: null }), defaultCoalescer()));
+            store.setState(withSnapshot(setNodeMeta(memoOpen, { memo: null }), coalescer));
           }
           setMemoOpen(null);
         }}
@@ -935,7 +942,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
                     ),
                   },
                 }),
-                defaultCoalescer(),
+                coalescer,
               ),
             );
           }

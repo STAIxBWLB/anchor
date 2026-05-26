@@ -7,7 +7,7 @@
  * but the public API ({@link snapshot}/{@link undo}/{@link redo}) will stay
  * stable so call sites don't need to change.
  *
- * {@link coalesce} debounces rapid edits (drags, key entry) into a single
+ * {@link createCoalescer} debounces rapid edits (drags, key entry) into a single
  * history entry by suppressing snapshot calls within `windowMs` of the previous
  * snapshot. The next "real" snapshot (after the window elapses) commits the
  * latest doc.

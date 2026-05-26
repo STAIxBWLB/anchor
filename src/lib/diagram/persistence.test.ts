@@ -61,6 +61,11 @@ describe("diagram persistence", () => {
     expect(out.edges).toEqual([]);
   });
 
+  it("coerces unknown node kinds to a supported kind", () => {
+    const out = migrate({ nodes: [{ id: "n1", kind: "future-node", x: 0, y: 0 }], edges: [] });
+    expect(out.nodes[0]?.kind).toBe("simple");
+  });
+
   it("deserializeDoc throws on bad JSON", () => {
     expect(() => deserializeDoc("not json")).toThrow(/Cannot parse diagram JSON/);
   });

@@ -59,7 +59,7 @@ export function RibbonView({
           icon={<Magnet size={14} />}
         />
         <RibbonButton
-          labelKey="diagram.ribbon.group.display"
+          labelKey="diagram.toolbar.smartGuides"
           onClick={() => store.setState(toggleSmartGuides())}
           active={smartGuideOn}
         >🎯</RibbonButton>

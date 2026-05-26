@@ -20,9 +20,9 @@ describe("nodeKinds", () => {
     expect(n.title).toBe("Hi");
   });
 
-  it("seeds a default placeholder title for text nodes", () => {
+  it("keeps text node default title locale-neutral", () => {
     const n = mkNode("text", 0, 0);
-    expect(n.title).toBeTruthy();
+    expect(n.title).toBe("");
   });
 
   it("uses explicit id when provided", () => {

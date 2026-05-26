@@ -14,11 +14,14 @@ import {
 } from "../diagram";
 import {
   DIAGRAM_SCHEMA_VERSION,
+  createDiagramId,
   type DiagramDoc,
   type DiagramEdge,
   type DiagramLayer,
   type DiagramNode,
+  type NodeKind,
 } from "./types";
+import { ALL_KINDS } from "./nodeKinds";
 
 export function serializeDoc(doc: DiagramDoc): string {
   return JSON.stringify(doc, null, 2);
@@ -56,13 +59,21 @@ function ensureNumber(value: unknown, fallback: number): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+const NODE_KIND_SET = new Set<NodeKind>(ALL_KINDS);
+
+function ensureNodeKind(value: unknown): NodeKind {
+  if (typeof value === "string" && NODE_KIND_SET.has(value as NodeKind)) {
+    return value as NodeKind;
+  }
+  return "simple";
+}
+
 function ensureNode(raw: unknown, index: number): DiagramNode | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Partial<DiagramNode> & Record<string, unknown>;
-  const kindRaw = typeof r.kind === "string" ? r.kind : "simple";
   return {
     id: ensureId(r.id, "node", index),
-    kind: kindRaw as DiagramNode["kind"],
+    kind: ensureNodeKind(r.kind),
     x: ensureNumber(r.x, 0),
     y: ensureNumber(r.y, 0),
     w: ensureNumber(r.w, 140),
@@ -114,7 +125,7 @@ function ensureEdge(raw: unknown, index: number): DiagramEdge | null {
 export function migrate(raw: unknown, now: () => number = Date.now): DiagramDoc {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const ts = now();
-  const id = typeof obj.id === "string" && obj.id.length > 0 ? obj.id : crypto.randomUUID();
+  const id = typeof obj.id === "string" && obj.id.length > 0 ? obj.id : createDiagramId();
   const docTitle = typeof obj.docTitle === "string" ? obj.docTitle
     : typeof obj.title === "string" ? obj.title
     : "";

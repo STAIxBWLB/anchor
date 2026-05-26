@@ -47,16 +47,13 @@ function genId(): string {
   return `node-${Date.now().toString(36)}-${_autoId}`;
 }
 
-function defaultFieldsFor(kind: NodeKind, opts: MkNodeOpts): Partial<DiagramNode> {
-  if (kind === "text") {
-    return { title: opts.title ?? "텍스트" };
-  }
+function defaultFieldsFor(opts: MkNodeOpts): Partial<DiagramNode> {
   return { title: opts.title ?? "" };
 }
 
 export function mkNode(kind: NodeKind, x: number, y: number, opts: MkNodeOpts = {}): DiagramNode {
   const size = NSIZES[kind] ?? NSIZES.simple;
-  const defaults = defaultFieldsFor(kind, opts);
+  const defaults = defaultFieldsFor(opts);
   return {
     id: opts.id ?? genId(),
     kind,

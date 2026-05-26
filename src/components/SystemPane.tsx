@@ -70,6 +70,7 @@ import {
   SETTINGS_WINDOW_OPEN_TAB_EVENT,
   type SettingsWindowOpenTabPayload,
 } from "../lib/settingsWindowEvents";
+import { DIAGRAM_ENABLE_STORAGE_KEY } from "../lib/diagramFlag";
 import type {
   ImportItem,
   ImportPlan,
@@ -955,11 +956,10 @@ function PreferencesTab({
 
 function DiagramPreviewToggle() {
   const { t } = useTranslation();
-  const STORAGE_KEY = "anchor:diagram:enabled";
   const isOptOut = (value: string | null) => value === "0" || value === "false";
   const [enabled, setEnabled] = useState<boolean>(() => {
     try {
-      return !isOptOut(window.localStorage.getItem(STORAGE_KEY));
+      return !isOptOut(window.localStorage.getItem(DIAGRAM_ENABLE_STORAGE_KEY));
     } catch {
       return true;
     }
@@ -967,8 +967,8 @@ function DiagramPreviewToggle() {
   const toggle = (next: boolean) => {
     setEnabled(next);
     try {
-      if (next) window.localStorage.removeItem(STORAGE_KEY);
-      else window.localStorage.setItem(STORAGE_KEY, "0");
+      if (next) window.localStorage.removeItem(DIAGRAM_ENABLE_STORAGE_KEY);
+      else window.localStorage.setItem(DIAGRAM_ENABLE_STORAGE_KEY, "0");
     } catch {
       /* ignore */
     }

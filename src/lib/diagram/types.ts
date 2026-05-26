@@ -157,6 +157,16 @@ export interface DiagramStateRoot {
   ephemeral: EphemeralState;
 }
 
+let generatedDocIdSeq = 0;
+
+export function createDiagramId(prefix: string = "doc"): DiagramId {
+  generatedDocIdSeq += 1;
+  if (typeof globalThis.crypto !== "undefined" && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${prefix}-${Date.now().toString(36)}-${generatedDocIdSeq}`;
+}
+
 export function createEmptyDoc(id: DiagramId, now: number = Date.now()): DiagramDoc {
   return {
     v: DIAGRAM_SCHEMA_VERSION,

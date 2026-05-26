@@ -6,7 +6,12 @@
  * selectors; only subscribers whose selector output changes are notified.
  */
 
-import { createEmptyDoc, createInitialEphemeral, type DiagramStateRoot } from "./types";
+import {
+  createDiagramId,
+  createEmptyDoc,
+  createInitialEphemeral,
+  type DiagramStateRoot,
+} from "./types";
 
 export type Listener<T> = (snapshot: T) => void;
 export type Selector<T> = (state: DiagramStateRoot) => T;
@@ -29,7 +34,7 @@ export function createDiagramStore(
   initial?: Partial<DiagramStateRoot>,
 ): DiagramStore {
   let state: DiagramStateRoot = {
-    doc: initial?.doc ?? createEmptyDoc(crypto.randomUUID()),
+    doc: initial?.doc ?? createEmptyDoc(createDiagramId()),
     ephemeral: initial?.ephemeral ?? createInitialEphemeral(),
   };
   const listeners = new Set<Listener<DiagramStateRoot>>();

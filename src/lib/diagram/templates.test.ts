@@ -34,7 +34,7 @@ describe("templates", () => {
       for (const node of bundle.nodes) {
         if (!node.title) continue;
         // Translated strings would equal the key in the fake translator
-        expect(node.title).toMatch(/^(diagram\.template\.|)/);
+        expect(node.title).toMatch(/^diagram\.template\./);
       }
     }
   });
