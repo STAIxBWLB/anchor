@@ -28,8 +28,14 @@ import {
   type DiagramFile,
   writeDiagram,
 } from "../../lib/diagram/persistence";
+import type { TemplateDefinition } from "../../lib/diagram/templates";
+import {
+  createAutoSnapshotScheduler,
+  saveSnapshotForDoc,
+} from "../../lib/diagram/versionHistory";
 import {
   createEmptyDoc,
+  type DiagramDoc,
   type NodeKind,
   type RibbonTab,
 } from "../../lib/diagram/types";
@@ -43,7 +49,10 @@ import { CanvasSurface } from "./canvas/CanvasSurface";
 import { LeftPanel } from "./panels/LeftPanel";
 import { RightPanel } from "./panels/RightPanel";
 import { Ribbon } from "./ribbon/Ribbon";
+import { ExportDialog } from "./modals/ExportDialog";
 import { SaveAsDialog } from "./modals/SaveAsDialog";
+import { TemplatePickerDialog } from "./modals/TemplatePickerDialog";
+import { VersionHistoryDialog } from "./modals/VersionHistoryDialog";
 import "./diagram.css";
 
 export interface DiagramModeProps {
@@ -112,6 +121,9 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   const [listOpen, setListOpen] = useState(false);
   const [files, setFiles] = useState<DiagramFile[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [panels, setPanels] = useState<PersistedPanelState>(() => readPanelState());
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const insertOffsetRef = useRef(0);
@@ -138,6 +150,26 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   );
   const dirty = lastSavedBody !== null ? docBody !== lastSavedBody : nodes.length > 0;
   const hasSelection = selection.nodes.size + selection.edges.size > 0;
+
+  // Auto-snapshot scheduler — runs whenever the doc is dirty and a workspace
+  // is attached. Each fire bypasses the human-facing save and stores a
+  // versioned copy under .anchor/diagrams/history/<docId>/.
+  useEffect(() => {
+    if (!workPath) return;
+    const sched = createAutoSnapshotScheduler({
+      enabled: true,
+      getDoc: () => store.getState().doc,
+      onFire: async (_content, doc) => {
+        try {
+          await saveSnapshotForDoc(workPath, doc);
+        } catch {
+          /* ignore — snapshots are best-effort */
+        }
+      },
+    });
+    if (dirty) sched.markDirty();
+    return () => sched.dispose();
+  }, [dirty, store, workPath]);
 
   const reportError = useCallback((message: string | null) => onError?.(message), [onError]);
 
@@ -420,6 +452,9 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onNew: handleNew,
           onOpen: () => setListOpen((o) => !o),
           onSave: handleSave,
+          onExport: () => setExportOpen(true),
+          onTemplates: () => setTemplateOpen(true),
+          onHistory: () => setHistoryOpen(true),
           saving,
           canSave: Boolean(workPath),
         }}
@@ -487,6 +522,46 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         workspace={workPath}
         onConfirm={handleConfirmSaveAs}
         onCancel={() => setSaveDialogOpen(false)}
+      />
+      <TemplatePickerDialog
+        open={templateOpen}
+        dirty={dirty}
+        onApply={(tpl: TemplateDefinition) => {
+          const fresh = createEmptyDoc(crypto.randomUUID());
+          const bundle = tpl.build(400, 300, t);
+          const next: DiagramDoc = {
+            ...fresh,
+            nodes: bundle.nodes,
+            edges: bundle.edges,
+            docTitle: t(tpl.labelKey),
+          };
+          store.setState(replaceDoc(next));
+          setActiveName(null);
+          setLastSavedBody(null);
+          setTemplateOpen(false);
+        }}
+        onCancel={() => setTemplateOpen(false)}
+      />
+      <ExportDialog
+        open={exportOpen}
+        doc={store.getState().doc}
+        workspace={workPath}
+        getSvg={() =>
+          viewportRef.current?.querySelector<SVGSVGElement>(".anchor-diagram-canvas") ?? null
+        }
+        onClose={() => setExportOpen(false)}
+      />
+      <VersionHistoryDialog
+        open={historyOpen}
+        doc={store.getState().doc}
+        workspace={workPath}
+        onRestore={(next) => {
+          store.setState(replaceDoc(next));
+          setHistoryOpen(false);
+          reportError(null);
+        }}
+        onError={(message) => reportError(t("diagram.error.load", { message }))}
+        onClose={() => setHistoryOpen(false)}
       />
     </div>
   );

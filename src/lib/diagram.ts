@@ -13,6 +13,12 @@ export interface DiagramFile {
   docTitle: string;
 }
 
+export interface DiagramSnapshotMeta {
+  docId: string;
+  snapshotTs: string;
+  size: number;
+}
+
 function isTauri(): boolean {
   return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);
 }
@@ -50,7 +56,7 @@ export async function diagramDeleteDocument(
 export async function diagramExportBlob(
   workspace: string,
   name: string,
-  kind: "png" | "svg" | "json",
+  kind: "png" | "jpg" | "svg" | "json" | "pdf",
   bytes: Uint8Array,
 ): Promise<string> {
   if (!isTauri()) throw new Error("diagram_export_blob_requires_tauri");
@@ -59,5 +65,44 @@ export async function diagramExportBlob(
     name,
     kind,
     bytes: Array.from(bytes),
+  });
+}
+
+export async function diagramSaveSnapshot(
+  workspace: string,
+  docId: string,
+  snapshotTs: string,
+  content: string,
+): Promise<DiagramSnapshotMeta> {
+  if (!isTauri()) throw new Error("diagram_save_snapshot_requires_tauri");
+  return invoke<DiagramSnapshotMeta>("diagram_save_snapshot", {
+    workspace,
+    docId,
+    snapshotTs,
+    content,
+  });
+}
+
+export async function diagramListSnapshots(
+  workspace: string,
+  docId: string,
+): Promise<DiagramSnapshotMeta[]> {
+  if (!isTauri()) return [];
+  return invoke<DiagramSnapshotMeta[]>("diagram_list_snapshots", {
+    workspace,
+    docId,
+  });
+}
+
+export async function diagramRestoreSnapshot(
+  workspace: string,
+  docId: string,
+  snapshotTs: string,
+): Promise<string> {
+  if (!isTauri()) throw new Error("diagram_restore_snapshot_requires_tauri");
+  return invoke<string>("diagram_restore_snapshot", {
+    workspace,
+    docId,
+    snapshotTs,
   });
 }

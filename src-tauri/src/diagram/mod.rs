@@ -192,14 +192,188 @@ pub fn diagram_delete_document(workspace: String, name: String) -> Result<bool, 
     Ok(true)
 }
 
+fn validate_export_kind(kind: &str) -> Result<&'static str, String> {
+    match kind {
+        "png" => Ok("png"),
+        "jpg" | "jpeg" => Ok("jpg"),
+        "svg" => Ok("svg"),
+        "json" => Ok("json"),
+        "pdf" => Ok("pdf"),
+        _ => Err(format!("Unsupported export kind: {kind}")),
+    }
+}
+
 #[tauri::command]
 pub fn diagram_export_blob(
-    _workspace: String,
-    _name: String,
-    _kind: String,
-    _bytes: Vec<u8>,
+    workspace: String,
+    name: String,
+    kind: String,
+    bytes: Vec<u8>,
 ) -> Result<String, String> {
-    Err("diagram_export_blob is implemented in Phase 4".to_string())
+    let trimmed = validate_name(&name)?;
+    let ext = validate_export_kind(&kind)?;
+    let root = diagrams_root(&workspace)?;
+    let candidate = root.join(format!("{trimmed}.{ext}"));
+    ensure_within(&root, &candidate)?;
+    let action = if candidate.is_file() {
+        WorkspaceWriteAction::Modify
+    } else {
+        WorkspaceWriteAction::Create
+    };
+    assert_anchor_can_write(&workspace, action)?;
+    if let Some(parent) = candidate.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Cannot create diagrams folder: {err}"))?;
+    }
+    fs::write(&candidate, &bytes).map_err(|err| format!("Cannot write export: {err}"))?;
+    Ok(candidate.to_string_lossy().to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Version-history snapshots
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_DIR: &str = ".anchor/diagrams/history";
+const SNAPSHOT_CAP: usize = 20;
+
+fn validate_doc_id(doc_id: &str) -> Result<&str, String> {
+    validate_name(doc_id)
+}
+
+fn validate_snapshot_ts(ts: &str) -> Result<&str, String> {
+    if ts.trim().is_empty() {
+        return Err("snapshot ts is required".to_string());
+    }
+    if ts.contains("..") || ts.contains('/') || ts.contains('\\') || ts.contains('\0') {
+        return Err(format!("Invalid snapshot ts: {ts}"));
+    }
+    Ok(ts)
+}
+
+fn snapshot_dir(workspace: &str, doc_id: &str) -> Result<PathBuf, String> {
+    let id = validate_doc_id(doc_id)?;
+    let root = resolve_inside_vault(workspace, SNAPSHOT_DIR)?;
+    let dir = root.join(id);
+    ensure_within(&root, &dir)?;
+    Ok(dir)
+}
+
+fn snapshot_file(workspace: &str, doc_id: &str, ts: &str) -> Result<PathBuf, String> {
+    let ts = validate_snapshot_ts(ts)?;
+    let dir = snapshot_dir(workspace, doc_id)?;
+    let candidate = dir.join(format!("snapshot-{ts}.json"));
+    ensure_within(&dir, &candidate)?;
+    Ok(candidate)
+}
+
+#[tauri::command]
+pub fn diagram_save_snapshot(
+    workspace: String,
+    doc_id: String,
+    snapshot_ts: String,
+    content: String,
+) -> Result<SnapshotMeta, String> {
+    let dir = snapshot_dir(&workspace, &doc_id)?;
+    let path = snapshot_file(&workspace, &doc_id, &snapshot_ts)?;
+    assert_anchor_can_write(
+        &workspace,
+        if path.is_file() {
+            WorkspaceWriteAction::Modify
+        } else {
+            WorkspaceWriteAction::Create
+        },
+    )?;
+    fs::create_dir_all(&dir).map_err(|err| format!("Cannot create snapshot dir: {err}"))?;
+    let body = if content.ends_with('\n') {
+        content
+    } else {
+        format!("{content}\n")
+    };
+    fs::write(&path, &body).map_err(|err| format!("Cannot write snapshot: {err}"))?;
+    let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+
+    prune_snapshots(&dir, SNAPSHOT_CAP)?;
+
+    Ok(SnapshotMeta {
+        doc_id,
+        snapshot_ts,
+        size,
+    })
+}
+
+fn prune_snapshots(dir: &Path, cap: usize) -> Result<(), String> {
+    let mut entries: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
+    let read = match fs::read_dir(dir) {
+        Ok(r) => r,
+        Err(_) => return Ok(()),
+    };
+    for entry in read {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        if !(name.starts_with("snapshot-") && name.ends_with(".json")) {
+            continue;
+        }
+        let mtime = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        entries.push((path, mtime));
+    }
+    if entries.len() <= cap {
+        return Ok(());
+    }
+    entries.sort_by(|a, b| a.1.cmp(&b.1));
+    for (path, _) in entries.iter().take(entries.len() - cap) {
+        let _ = fs::remove_file(path);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn diagram_list_snapshots(
+    workspace: String,
+    doc_id: String,
+) -> Result<Vec<SnapshotMeta>, String> {
+    let dir = snapshot_dir(&workspace, &doc_id)?;
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut out: Vec<SnapshotMeta> = Vec::new();
+    let read = fs::read_dir(&dir).map_err(|err| format!("Cannot read snapshots: {err}"))?;
+    for entry in read {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        let Some(stripped) = name.strip_prefix("snapshot-").and_then(|s| s.strip_suffix(".json"))
+        else {
+            continue;
+        };
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        out.push(SnapshotMeta {
+            doc_id: doc_id.clone(),
+            snapshot_ts: stripped.to_string(),
+            size: meta.len(),
+        });
+    }
+    out.sort_by(|a, b| b.snapshot_ts.cmp(&a.snapshot_ts));
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn diagram_restore_snapshot(
+    workspace: String,
+    doc_id: String,
+    snapshot_ts: String,
+) -> Result<String, String> {
+    let path = snapshot_file(&workspace, &doc_id, &snapshot_ts)?;
+    if !path.is_file() {
+        return Err(format!("snapshot not found: {snapshot_ts}"));
+    }
+    fs::read_to_string(&path).map_err(|err| format!("Cannot read snapshot: {err}"))
 }
 
 #[cfg(test)]
@@ -292,8 +466,65 @@ mod tests {
     }
 
     #[test]
-    fn export_blob_is_phase_4_stub() {
-        let err = diagram_export_blob("w".into(), "n".into(), "png".into(), vec![]).unwrap_err();
-        assert!(err.contains("Phase 4"));
+    fn export_blob_writes_png_file() {
+        let (_tmp, work) = setup_workspace();
+        let path = diagram_export_blob(work, "demo".into(), "png".into(), vec![0x89, 0x50, 0x4e, 0x47])
+            .unwrap();
+        assert!(path.ends_with("/diagrams/demo.png") || path.contains("\\diagrams\\demo.png"));
+        let bytes = fs::read(&path).unwrap();
+        assert_eq!(&bytes, &[0x89, 0x50, 0x4e, 0x47]);
+    }
+
+    #[test]
+    fn export_blob_rejects_unknown_kind() {
+        let (_tmp, work) = setup_workspace();
+        assert!(diagram_export_blob(work, "demo".into(), "exe".into(), vec![]).is_err());
+    }
+
+    #[test]
+    fn snapshot_save_list_restore_round_trip() {
+        let (_tmp, work) = setup_workspace();
+        let meta = diagram_save_snapshot(
+            work.clone(),
+            "doc-1".into(),
+            "20260101T000000Z".into(),
+            "{\"v\":7}".into(),
+        )
+        .unwrap();
+        assert_eq!(meta.snapshot_ts, "20260101T000000Z");
+        let list = diagram_list_snapshots(work.clone(), "doc-1".into()).unwrap();
+        assert_eq!(list.len(), 1);
+        let body =
+            diagram_restore_snapshot(work, "doc-1".into(), "20260101T000000Z".into()).unwrap();
+        assert!(body.contains("\"v\":7"));
+    }
+
+    #[test]
+    fn snapshot_caps_history_at_20() {
+        let (_tmp, work) = setup_workspace();
+        for i in 0..25 {
+            let _ = diagram_save_snapshot(
+                work.clone(),
+                "doc-2".into(),
+                format!("20260101T{:06}Z", i),
+                "{}".into(),
+            )
+            .unwrap();
+        }
+        let list = diagram_list_snapshots(work, "doc-2".into()).unwrap();
+        assert_eq!(list.len(), SNAPSHOT_CAP);
+        assert_eq!(list[0].snapshot_ts, "20260101T000024Z");
+    }
+
+    #[test]
+    fn snapshot_rejects_bad_ts() {
+        let (_tmp, work) = setup_workspace();
+        assert!(diagram_save_snapshot(
+            work,
+            "doc".into(),
+            "../escape".into(),
+            "{}".into()
+        )
+        .is_err());
     }
 }
