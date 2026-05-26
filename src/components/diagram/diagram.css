@@ -1,9 +1,8 @@
 /*
- * Anchor diagram mode — Phase 0 scaffold styles.
+ * Anchor diagram mode — Phase 1 layout + canvas styles.
  *
  * All rules are scoped under `.anchor-diagram` so the diagram subsystem can
- * grow without leaking into Anchor's global stylesheet. Phase 1+ will add
- * canvas / ribbon / panel rules here.
+ * grow without leaking into Anchor's global stylesheet.
  */
 
 .anchor-diagram {
@@ -13,35 +12,64 @@
   width: 100%;
   background: var(--anchor-bg, #fafafa);
   color: var(--anchor-fg, #1f2937);
-  overflow: auto;
+  overflow: hidden;
 }
 
 .anchor-diagram-header {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 24px 28px 16px;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--anchor-border, #e5e7eb);
   background: var(--anchor-surface, #ffffff);
+  flex-shrink: 0;
 }
 
 .anchor-diagram-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
-.anchor-diagram-title h1 {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.2;
-  margin: 0;
+.anchor-diagram-title-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: inherit;
+  outline: none;
+  transition: border-color 120ms;
 }
 
-.anchor-diagram-title p {
-  font-size: 12px;
-  color: var(--anchor-muted, #6b7280);
-  margin: 2px 0 0;
+.anchor-diagram-title-input:hover,
+.anchor-diagram-title-input:focus {
+  border-color: var(--anchor-border, #e5e7eb);
+}
+
+.anchor-diagram-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.anchor-diagram-status-saved {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.anchor-diagram-status-dirty {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
 }
 
 .anchor-diagram-meta {
@@ -67,6 +95,116 @@
   font-size: 10px;
 }
 
+.anchor-diagram-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--anchor-border, #e5e7eb);
+  background: var(--anchor-surface, #ffffff);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.anchor-diagram-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+  transition: background 100ms, border-color 100ms;
+}
+
+.anchor-diagram-toolbar button:hover:not(:disabled) {
+  background: var(--anchor-soft, #f3f4f6);
+  border-color: var(--anchor-border, #e5e7eb);
+}
+
+.anchor-diagram-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anchor-diagram-toolbar-primary {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #1d4ed8 !important;
+  font-weight: 600;
+}
+
+.anchor-diagram-toolbar-primary:hover:not(:disabled) {
+  background: #1d4ed8 !important;
+}
+
+.anchor-diagram-toolbar-primary:disabled {
+  background: #93c5fd !important;
+  border-color: #93c5fd !important;
+}
+
+.anchor-diagram-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--anchor-border, #e5e7eb);
+  margin: 0 4px;
+}
+
+.anchor-diagram-spacer {
+  flex: 1;
+}
+
+.anchor-diagram-zoom-label {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: center;
+  color: var(--anchor-muted, #6b7280);
+}
+
+.anchor-diagram-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(99, 102, 241, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.anchor-diagram-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  cursor: default;
+}
+
+.anchor-diagram-node {
+  cursor: grab;
+}
+
+.anchor-diagram-node:active {
+  cursor: grabbing;
+}
+
+.anchor-diagram-node-label {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
 .anchor-diagram-empty {
   display: flex;
   flex-direction: column;
@@ -85,4 +223,107 @@
   background: var(--anchor-soft, #f3f4f6);
   padding: 6px 10px;
   border-radius: 6px;
+}
+
+.anchor-diagram-list {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 320px;
+  max-height: calc(100% - 24px);
+  background: var(--anchor-surface, #ffffff);
+  border: 1px solid var(--anchor-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.anchor-diagram-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--anchor-border, #e5e7eb);
+}
+
+.anchor-diagram-list-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.anchor-diagram-list-head button {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--anchor-border, #e5e7eb);
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.anchor-diagram-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.anchor-diagram-list li {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.anchor-diagram-list li > button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.anchor-diagram-list li > button:hover {
+  background: var(--anchor-soft, #f3f4f6);
+  border-color: var(--anchor-border, #e5e7eb);
+}
+
+.anchor-diagram-list-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.anchor-diagram-list-meta {
+  font-size: 10px;
+  color: var(--anchor-muted, #6b7280);
+  margin-top: 2px;
+}
+
+.anchor-diagram-list-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--anchor-muted, #6b7280);
+}
+
+.anchor-diagram-list-delete:hover {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.anchor-diagram-list-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--anchor-muted, #6b7280);
 }
