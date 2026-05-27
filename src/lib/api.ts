@@ -1383,3 +1383,106 @@ function mockClassification(raw: string): InboxClassification {
     extractedDate: null,
   };
 }
+
+export interface BinaryViewerClassification {
+  category:
+    | "image"
+    | "svg"
+    | "pdf"
+    | "docx"
+    | "xlsx"
+    | "hwpx"
+    | "audio"
+    | "video"
+    | "text"
+    | "archive"
+    | "unsupported";
+  mime: string | null;
+  extension: string | null;
+  sizeBytes: number;
+  detectedFormat: string;
+}
+
+export interface BinaryViewerTextPreview {
+  content: string;
+  truncated: boolean;
+  encoding: string;
+  byteCount: number;
+}
+
+export interface BinaryViewerArchiveEntry {
+  name: string;
+  size: number;
+  compressedSize: number;
+  isDir: boolean;
+}
+
+export interface BinaryViewerHwpxPreview {
+  html: string;
+  sections: number;
+  warnings: string[];
+}
+
+export async function binaryViewerClassify(
+  vaultPath: string,
+  targetPath: string,
+): Promise<BinaryViewerClassification> {
+  if (!isTauri()) {
+    throw new Error("binaryViewerClassify requires the Tauri app.");
+  }
+  return invoke<BinaryViewerClassification>("binary_viewer_classify", {
+    vaultPath,
+    targetPath,
+  });
+}
+
+export async function binaryViewerReadText(
+  vaultPath: string,
+  targetPath: string,
+  maxBytes?: number,
+): Promise<BinaryViewerTextPreview> {
+  if (!isTauri()) {
+    throw new Error("binaryViewerReadText requires the Tauri app.");
+  }
+  return invoke<BinaryViewerTextPreview>("binary_viewer_read_text", {
+    vaultPath,
+    targetPath,
+    maxBytes: maxBytes ?? null,
+  });
+}
+
+export async function binaryViewerReadArchive(
+  vaultPath: string,
+  targetPath: string,
+): Promise<BinaryViewerArchiveEntry[]> {
+  if (!isTauri()) {
+    throw new Error("binaryViewerReadArchive requires the Tauri app.");
+  }
+  return invoke<BinaryViewerArchiveEntry[]>("binary_viewer_read_archive", {
+    vaultPath,
+    targetPath,
+  });
+}
+
+export async function binaryViewerExtractHwpx(
+  vaultPath: string,
+  targetPath: string,
+): Promise<BinaryViewerHwpxPreview> {
+  if (!isTauri()) {
+    throw new Error("binaryViewerExtractHwpx requires the Tauri app.");
+  }
+  return invoke<BinaryViewerHwpxPreview>("binary_viewer_extract_hwpx", {
+    vaultPath,
+    targetPath,
+  });
+}
+
+export async function binaryViewerOpenExternal(
+  vaultPath: string,
+  targetPath: string,
+): Promise<void> {
+  if (!isTauri()) {
+    throw new Error("binaryViewerOpenExternal requires the Tauri app.");
+  }
+  await invoke("binary_viewer_open_external", { vaultPath, targetPath });
+}
