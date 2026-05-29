@@ -5067,6 +5067,8 @@ button.git-badge:hover {
 /* ─── Comms dashboard (per-source processing) ──────────────────────── */
 
 .comms-source-selector {
+  align-items: center;
+  justify-content: flex-start;
   padding: 10px 22px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--panel-2);
