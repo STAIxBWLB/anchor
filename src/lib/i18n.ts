@@ -569,6 +569,9 @@ const ko: Record<string, string> = {
   "comms.results.title": "처리 결과",
   "comms.results.empty.title": "처리 결과 없음",
   "comms.results.empty.description": "이 소스에서 처리된 항목이 여기에 표시됩니다.",
+  "comms.progress.elapsed": "{time} 경과",
+  "comms.progress.idle": "대기 중",
+  "comms.progress.waiting": "출력 대기 중…",
 
   "meetings.title": "회의록",
   "meetings.subtitle": "회의록 {count}건",
@@ -2280,6 +2283,9 @@ const en: Record<string, string> = {
   "comms.results.title": "Processing results",
   "comms.results.empty.title": "No processing results",
   "comms.results.empty.description": "Processed items for this source appear here.",
+  "comms.progress.elapsed": "{time} elapsed",
+  "comms.progress.idle": "Idle",
+  "comms.progress.waiting": "Waiting for output…",
 
   "meetings.title": "Meetings",
   "meetings.subtitle": "{count} meeting notes",

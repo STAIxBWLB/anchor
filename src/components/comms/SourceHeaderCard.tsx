@@ -1,6 +1,7 @@
 import { Loader2, Play } from "lucide-react";
 import { useTranslation } from "../../lib/i18n";
 import { SOURCE_LABEL_KEY, type InboxSourceChannel } from "../../lib/inboxSources";
+import { useElapsed, type MissionProgress } from "../../lib/missionProgress";
 import type { InboxSourceRun } from "../../lib/types";
 import { formatShortDate } from "../inbox/processedFormat";
 
@@ -8,6 +9,7 @@ interface SourceHeaderCardProps {
   channel: string;
   run: InboxSourceRun | null;
   running: boolean;
+  progress?: MissionProgress | null;
   processedCount: number;
   actionBusy: boolean;
   compact?: boolean;
@@ -19,6 +21,7 @@ export function SourceHeaderCard({
   channel,
   run,
   running,
+  progress = null,
   processedCount,
   actionBusy,
   compact = false,
@@ -29,6 +32,7 @@ export function SourceHeaderCard({
   const labelKey = SOURCE_LABEL_KEY[channel as InboxSourceChannel];
   const label = labelKey ? t(labelKey) : channel;
   const digest = run?.digest ?? null;
+  const elapsed = useElapsed(progress?.startedAt ?? null, running && progress != null);
 
   const info = (
     <>
@@ -36,6 +40,16 @@ export function SourceHeaderCard({
         <strong>{label}</strong>
         {running ? <span className="source-card-live">{t("comms.source.processing")}</span> : null}
       </div>
+      {running && progress ? (
+        <div className="source-card-progress">
+          <Loader2 size={13} className="spin" />
+          {elapsed ? <span>{t("comms.progress.elapsed", { time: elapsed })}</span> : null}
+          {progress.status === "idle" ? <span>{t("comms.progress.idle")}</span> : null}
+          <span className="source-card-progress-activity">
+            {progress.latestActivity ?? t("comms.progress.waiting")}
+          </span>
+        </div>
+      ) : null}
       <div className="source-card-meta">
         {run?.lastRunAt ? (
           <span>

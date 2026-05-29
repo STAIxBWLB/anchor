@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { LegacyLaunchdService } from "../lib/api";
 import { useTranslation } from "../lib/i18n";
 import { enumerateSourceChannels, sourceRunByChannel } from "../lib/inboxSources";
+import { latestActivityLine, type MissionProgress } from "../lib/missionProgress";
 import type {
   InboxProcessedItem,
   InboxProcessedItemDetail,
@@ -114,6 +115,20 @@ export function CommsPane({
     }
     return set;
   }, [processingMissions]);
+  const progressByChannel = useMemo(() => {
+    const map = new Map<string, MissionProgress>();
+    for (const mission of processingMissions) {
+      const channel = inboxProcessChannel(mission);
+      if (!channel) continue;
+      map.set(channel, {
+        missionId: mission.id,
+        status: mission.status,
+        startedAt: mission.startedAt,
+        latestActivity: latestActivityLine(processingLogLines[mission.id]),
+      });
+    }
+    return map;
+  }, [processingMissions, processingLogLines]);
   const missionsForActive = useMemo(
     () =>
       sourceFilter
@@ -170,6 +185,7 @@ export function CommsPane({
             runByChannel={runByChannel}
             processedByChannel={processedByChannel}
             runningChannels={runningChannels}
+            progressByChannel={progressByChannel}
             actionBusy={actionBusy}
             onProcessNow={onProcessNow}
             onSelect={onSourceFilter}
@@ -180,6 +196,7 @@ export function CommsPane({
               channel={sourceFilter}
               run={runByChannel.get(sourceFilter) ?? null}
               running={runningChannels.has(sourceFilter)}
+              progress={progressByChannel.get(sourceFilter) ?? null}
               processedCount={processedByChannel.get(sourceFilter) ?? 0}
               actionBusy={actionBusy}
               onProcessNow={onProcessNow}
@@ -199,6 +216,7 @@ export function CommsPane({
               logLines={processingLogLines}
               onStop={onStopProcessingMission}
               emptyLabel={t("comms.source.noActiveProcess")}
+              waitingLabel={t("comms.progress.waiting")}
             />
             <div className="comms-results">
               <h3 className="comms-results-title">{t("comms.results.title")}</h3>
