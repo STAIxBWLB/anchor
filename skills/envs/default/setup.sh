@@ -19,8 +19,8 @@ EOF
 }
 
 # Health check: venv importable + node docx + bundled jre (jdk.compiler).
-# jre is resolved independently (it lives in the source/_builtin env, not at
-# --target), mirroring scripts/runtime_paths.py::_jre_root.
+# The canonical setup target carries all three runtime surfaces:
+# .venv, node_modules, and jre.
 verify_runtimes() {
     local target="$1" ok=0 py jre c
     echo "🔍 Anchor 런타임 헬스체크: $target"
@@ -56,7 +56,7 @@ PYEOF
     if [[ -n "$jre" ]] && "$jre/bin/java" --list-modules 2>/dev/null | grep -q '^jdk.compiler@'; then
         echo "  ✅ jre: $jre ($("$jre/bin/java" -version 2>&1 | head -1)) jdk.compiler 포함"
     else
-        echo "  ❌ jre: jdk.compiler 미발견 (bash $PROJECT_DIR/scripts/setup-jre.sh)"
+        echo "  ❌ jre: jdk.compiler 미발견 (bash $PROJECT_DIR/setup.sh --target $target)"
         ok=1
     fi
 

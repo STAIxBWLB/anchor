@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# setup-jre.sh — install Temurin JDK 21 into skills/envs/default/jre/
+# setup-jre.sh — install Temurin JDK 21 for Anchor skills
 #
 # Used by the hwpx skill (and any other skill that needs a known-good Java runtime).
 # Strategy:
-#   1. If skills/envs/default/jre/bin/java has the jdk.compiler module → exit 0.
+#   1. If the target jre/bin/java has the jdk.compiler module → exit 0.
 #   2. Else download Temurin 21 JDK from api.adoptium.net for the current OS/arch.
 #
-# Output: skills/envs/default/jre/bin/java
+# Output: ~/.anchor/env/jre/bin/java when called by setup.sh --target ~/.anchor/env.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

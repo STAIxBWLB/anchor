@@ -4,7 +4,7 @@ Layout (relative to this file):
   scripts/runtime_paths.py        ← __file__
   scripts/                        ← parent
   /                               ← SKILL_ROOT (skills/hwpx/)
-  ancestor skills/envs/default/   ← ENV_ROOT (jre + .venv)
+  ~/.anchor/env/                  ← ENV_ROOT (.venv + node + jre host)
   runtime/                        ← bundled Java assets (in skill, committed)
 """
 from __future__ import annotations
@@ -28,11 +28,6 @@ def _env_root() -> Path:
         p = Path(v).expanduser()
         if (p / ".venv").exists() or (p / "jre").exists():
             return p
-    v = os.environ.get("VIRTUAL_ENV")
-    if v:
-        p = Path(v).expanduser().parent  # VIRTUAL_ENV points at <root>/.venv
-        if (p / ".venv").exists():
-            return p
     # 2. canonical fixed location
     home_env = Path.home() / ".anchor" / "env"
     if (home_env / ".venv").exists():
@@ -53,9 +48,8 @@ def _env_root() -> Path:
 def _jre_root() -> Path:
     """Resolve the bundled Java runtime.
 
-    The jre lives in the source/_builtin env's default dir, NOT in
-    ~/.anchor/env (which only holds .venv + node_modules), so resolve it
-    independently from the .venv host.
+    The canonical setup target provisions the JRE under ~/.anchor/env/jre.
+    Source-tree locations stay as dev fallbacks.
     """
     candidates = [
         ENV_ROOT / "jre",
@@ -82,7 +76,7 @@ VENV_PY = ENV_ROOT / ".venv" / "bin" / "python3"
 
 SETUP_HINT = (
     "bundled Java runtime 미설치. 다음을 실행:\n"
-    f"  bash {JRE_ROOT.parent}/scripts/setup-jre.sh"
+    "  bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env"
 )
 
 

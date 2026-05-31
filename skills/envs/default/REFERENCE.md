@@ -57,13 +57,13 @@ copies in the wrappers in sync with it**:
 
 1. `$SKILL_PYTHON` (caller override)
 2. `$ANCHOR_SKILLS_ENV/.venv/bin/python3` (host-injected)
-3. `$VIRTUAL_ENV/bin/python3` (active venv)
-4. `$HOME/.anchor/env/.venv/bin/python3` (canonical fixed location)
-5. repo-local walk-up: `env/.venv`, `envs/default/.venv`, `skills/envs/default/.venv` (dev-in-tree)
-6. system `python3` (warning)
+3. `$HOME/.anchor/env/.venv/bin/python3` (canonical fixed location)
+4. repo-local walk-up: `env/.venv`, `envs/default/.venv`, `skills/envs/default/.venv` (dev-in-tree)
+5. system `python3` (warning)
 
-The JRE is resolved separately (it is **not** under `~/.anchor/env`):
-`$ENV_ROOT/jre` → `~/.anchor/skills/_builtin/envs/default/jre` → dev-in-tree
-`skills/envs/default/jre`. The Anchor host injects `ANCHOR_SKILLS_ENV`,
+Ambient `$VIRTUAL_ENV` is intentionally ignored as an input so unrelated shell
+venvs cannot shadow the Anchor runtime. The JRE is resolved from
+`$ENV_ROOT/jre` first, which is `~/.anchor/env/jre` for canonical installs, then
+dev/source fallbacks. The Anchor host injects `ANCHOR_SKILLS_ENV`,
 `VIRTUAL_ENV`, `PATH` (`+.venv/bin`), and `NODE_PATH` (`+node_modules`) for
 in-app runs; the shell wrappers export the same set so bare CLI sessions match.

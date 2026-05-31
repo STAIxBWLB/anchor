@@ -11,10 +11,8 @@ resolve_env_root() {
     if [[ -n "${ANCHOR_SKILLS_ENV:-}" && -d "$ANCHOR_SKILLS_ENV/.venv" ]]; then
         printf '%s\n' "$ANCHOR_SKILLS_ENV"; return 0
     fi
-    if [[ -n "${VIRTUAL_ENV:-}" && -d "$VIRTUAL_ENV" ]]; then
-        printf '%s\n' "$(cd "$VIRTUAL_ENV/.." && pwd -P)"; return 0
-    fi
-    # 2. 정규 고정 위치
+    # 2. 정규 고정 위치. Ambient VIRTUAL_ENV is intentionally ignored so an
+    # unrelated shell venv cannot shadow the Anchor runtime.
     if [[ -d "$HOME/.anchor/env/.venv" ]]; then
         printf '%s\n' "$HOME/.anchor/env"; return 0
     fi

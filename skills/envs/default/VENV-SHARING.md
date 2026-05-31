@@ -15,10 +15,12 @@ Scripts and hooks resolve the env in this order (most-specific first):
 
 1. `$SKILL_PYTHON` (caller override)
 2. `$ANCHOR_SKILLS_ENV/.venv` (host-injected)
-3. `$VIRTUAL_ENV` (active venv)
-4. `~/.anchor/env/.venv` (canonical fixed location)
-5. repo-local walk-up: `<ancestor>/{env,envs/default,skills/envs/default}/.venv` (dev-in-tree)
-6. system `python3` (warning)
+3. `~/.anchor/env/.venv` (canonical fixed location)
+4. repo-local walk-up: `<ancestor>/{env,envs/default,skills/envs/default}/.venv` (dev-in-tree)
+5. system `python3` (warning)
+
+Ambient `$VIRTUAL_ENV` is not used for discovery. Wrappers set `VIRTUAL_ENV`
+after the Anchor env is resolved.
 
 See REFERENCE.md "Env resolution (canonical)" for the source-of-truth list.
 

@@ -69,7 +69,7 @@ make sync
 ## SessionStart Hook
 
 `init-env.sh`가 Claude Code 세션 시작 시 자동 실행:
-1. `$ANCHOR_SKILLS_ENV` → `$VIRTUAL_ENV` → `~/.anchor/env` → 상위 탐색 순으로 env 해소
+1. `$ANCHOR_SKILLS_ENV` → `~/.anchor/env` → 상위 탐색 순으로 env 해소
 2. `CLAUDE_ENV_FILE`에 `ANCHOR_SKILLS_ENV`·`VIRTUAL_ENV`·`PATH`·`NODE_PATH` 주입
    (Rust 호스트 `env_vars_for_runs` 와 동일 세트)
 3. 이후 `python3`(venv 패키지), `node`(node_modules `require`) 가 공유 환경 사용

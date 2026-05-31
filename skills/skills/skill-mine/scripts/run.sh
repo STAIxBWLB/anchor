@@ -3,7 +3,7 @@
 #
 # 우선순위:
 #   1. $SKILL_PYTHON (caller override)
-#   2. $ANCHOR_SKILLS_ENV/$VIRTUAL_ENV (host 주입) → ~/.anchor/env/.venv (정규)
+#   2. $ANCHOR_SKILLS_ENV (host 주입) → ~/.anchor/env/.venv (정규)
 #   3. repo-local env/.venv (dev-in-tree)
 #   4. python3 on PATH (경고 출력)
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Resolve the Anchor skills python interpreter, most-specific first.
-# Honors $SKILL_PYTHON, then host-injected $ANCHOR_SKILLS_ENV/$VIRTUAL_ENV,
+# Honors $SKILL_PYTHON, then host-injected $ANCHOR_SKILLS_ENV,
 # then the canonical ~/.anchor/env, then a repo-local walk-up (dev-in-tree).
 # Canonical snippet — keep in sync with skills/envs/default/REFERENCE.md.
 find_env_python() {
@@ -23,7 +23,6 @@ find_env_python() {
   fi
   for c in \
     "${ANCHOR_SKILLS_ENV:+$ANCHOR_SKILLS_ENV/.venv/bin/python3}" \
-    "${VIRTUAL_ENV:+$VIRTUAL_ENV/bin/python3}" \
     "$HOME/.anchor/env/.venv/bin/python3"; do
     [[ -n "$c" && -x "$c" ]] && printf '%s\n' "$c" && return 0
   done
@@ -55,7 +54,7 @@ fi
 case "$PYTHON" in
   */.venv/bin/python3)
     _ENV_ROOT="$(cd "$(dirname "$PYTHON")/../.." && pwd -P)"
-    export VIRTUAL_ENV="${VIRTUAL_ENV:-$_ENV_ROOT/.venv}"
+    export VIRTUAL_ENV="$_ENV_ROOT/.venv"
     case ":$PATH:" in *":$_ENV_ROOT/.venv/bin:"*) ;; *) PATH="$_ENV_ROOT/.venv/bin:$PATH";; esac
     export PATH
     if [[ -d "$_ENV_ROOT/node_modules" ]]; then
