@@ -726,6 +726,14 @@ def cmd_edit_section(args) -> int:
     ref_idx = args.ref_index if args.ref_index is not None else start
     if not (0 <= ref_idx < len(children)) or hx.localname(children[ref_idx]) != "p":
         _die(1, f"ref-index {ref_idx} 가 <hp:p> 아님")
+    if any(hx.localname(el) == "secPr" for el in children[ref_idx].iter()):
+        _die(1, f"ref-index {ref_idx} 는 section 속성(secPr)을 포함해 복제 불가")
+    if any(
+        hx.localname(el) == "secPr"
+        for child in children[start:end]
+        for el in child.iter()
+    ):
+        _die(1, f"교체 범위 [{start}:{end}) 에 section 속성(secPr) 문단 포함")
     ref = children[ref_idx]
 
     if args.lines:
