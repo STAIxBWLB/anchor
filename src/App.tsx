@@ -197,7 +197,7 @@ import {
   type SkillRecord,
   type TerminalDispatchSpec,
 } from "./lib/skills";
-import { activeSkillMissions, isSkillMission } from "./lib/skillRuns";
+import { activeTrackedAgentMissions, isTrackedAgentMission } from "./lib/skillRuns";
 import {
   checkAppUpdate,
   installAppUpdate,
@@ -248,6 +248,7 @@ import {
   applyWorkspaceMeetingsOverrides,
   applyWorkspaceTasksOverrides,
   normalizeAnchorSettings,
+  resolveClassifierRuntime,
   type AnchorSettings,
   type AnchorAppMode,
   type DocumentBrowserMode,
@@ -518,7 +519,7 @@ function upsertMission(current: MissionRecord[], next: MissionRecord): MissionRe
 }
 
 function activeTrackedMissions(missions: MissionRecord[]): MissionRecord[] {
-  return activeSkillMissions(missions).sort(
+  return activeTrackedAgentMissions(missions).sort(
     (a, b) => b.lastOutputAt.localeCompare(a.lastOutputAt) || b.startedAt.localeCompare(a.startedAt),
   );
 }
@@ -963,7 +964,7 @@ function MainApp() {
     () => ({ includeDotFolders: anchorSettings.scan.includeDotFolders }),
     [anchorSettings.scan.includeDotFolders],
   );
-  const skillRuntimeCommands = useMemo<Partial<Record<SkillDispatchRuntime, string | null>>>(
+  const terminalRuntimeCommands = useMemo<Partial<Record<SkillDispatchRuntime, string | null>>>(
     () => ({
       claude: anchorSettings.terminal.launchers.claude.command ?? null,
       codex: anchorSettings.terminal.launchers.codex.command ?? null,
@@ -972,6 +973,13 @@ function MainApp() {
       anchorSettings.terminal.launchers.claude.command,
       anchorSettings.terminal.launchers.codex.command,
     ],
+  );
+  const aiRuntimeCommands = useMemo<Partial<Record<SkillDispatchRuntime, string | null>>>(
+    () => ({
+      claude: anchorSettings.ai.commandOverrides.claude,
+      codex: anchorSettings.ai.commandOverrides.codex,
+    }),
+    [anchorSettings.ai.commandOverrides.claude, anchorSettings.ai.commandOverrides.codex],
   );
 
   const privateWorkspaces = useMemo(
@@ -2757,8 +2765,8 @@ function MainApp() {
       setInboxActionBusy(true);
       setError(null);
       try {
-        const runtime: SkillDispatchRuntime = "claude";
-        const commandOverride = skillRuntimeCommands[runtime] ?? null;
+        const runtime: SkillDispatchRuntime = anchorSettings.ai.defaultRuntime;
+        const commandOverride = aiRuntimeCommands[runtime] ?? null;
         const runtimeStatus = await skillsRuntimeStatus({ runtime, commandOverride });
         if (!runtimeStatus.available) {
           throw new Error(
@@ -2786,6 +2794,7 @@ function MainApp() {
             cwd: inboxWorkspacePath,
             context,
             commandOverride,
+            permissionMode: anchorSettings.ai.permissionMode,
             metadata: {
               origin: "inboxProcess",
               channel,
@@ -2813,7 +2822,9 @@ function MainApp() {
       inboxRuntimeConfig,
       inboxWorkspacePath,
       refreshProcessingMissions,
-      skillRuntimeCommands,
+      aiRuntimeCommands,
+      anchorSettings.ai.defaultRuntime,
+      anchorSettings.ai.permissionMode,
       skills,
     ],
   );
@@ -2821,7 +2832,7 @@ function MainApp() {
   const stopProcessingMission = useCallback(async (id: string) => {
     try {
       const record = await stopAiMission(id);
-      if (isSkillMission(record)) {
+      if (isTrackedAgentMission(record)) {
         setProcessingMissions((current) => upsertMission(current, record));
       }
     } catch (err) {
@@ -2873,7 +2884,14 @@ function MainApp() {
       if (!target) return;
       updateInboxCarry(id, { classifying: true, classifyError: null });
       try {
-        const classification = await classifyInboxItem(target);
+        const runtime = resolveClassifierRuntime(anchorSettings.ai);
+        const classification = await classifyInboxItem(
+          target,
+          runtime,
+          inboxWorkspacePath,
+          anchorSettings.ai.commandOverrides[runtime],
+          anchorSettings.ai.permissionMode,
+        );
         updateInboxCarry(id, { classifying: false, classification });
       } catch (err) {
         updateInboxCarry(id, {
@@ -2882,7 +2900,7 @@ function MainApp() {
         });
       }
     },
-    [inboxDrops, updateInboxCarry],
+    [anchorSettings.ai, inboxDrops, inboxWorkspacePath, updateInboxCarry],
   );
 
   useEffect(() => {
@@ -2994,7 +3012,7 @@ function MainApp() {
         const offMission = await listen<MissionRecord>("ai://mission_update", (event) => {
           const record = event.payload;
           const inboxMission = isInboxProcessMission(record);
-          if (!isSkillMission(record)) return;
+          if (!isTrackedAgentMission(record)) return;
           processingMissionIdsRef.current = new Set([
             ...processingMissionIdsRef.current,
             record.id,
@@ -6363,7 +6381,8 @@ function MainApp() {
             effectiveSettings={effectiveMeetingsSettings}
             labelMode={anchorSettings.ui.documentLabelMode}
             skills={skills}
-            runtimeCommands={skillRuntimeCommands}
+            runtimeCommands={aiRuntimeCommands}
+            permissionMode={anchorSettings.ai.permissionMode}
             processingMissions={activeMeetingsMissions(processingMissions)}
             processingLogLines={processingLogLines}
             onRefreshMissions={refreshProcessingMissions}
@@ -6641,9 +6660,10 @@ function MainApp() {
               <div className="skills-pane-stack">
                 <SkillRunsPanel
                   workPath={activeDocumentWorkspacePath ?? inboxWorkspacePath}
-                  missions={activeSkillMissions(processingMissions)}
+                  missions={activeTrackedAgentMissions(processingMissions)}
                   logLines={processingLogLines}
-                  runtimeCommands={skillRuntimeCommands}
+                  runtimeCommands={aiRuntimeCommands}
+                  permissionMode={anchorSettings.ai.permissionMode}
                   onRefresh={refreshProcessingMissions}
                   onStopMission={(id) => void stopProcessingMission(id)}
                   onMissionStarted={handleMeetingsMissionStarted}
@@ -6857,7 +6877,10 @@ function MainApp() {
             handleMeetingsMissionStarted(invocationId);
             setPersistedRightPaneTab("skills");
           }}
-          runtimeCommands={skillRuntimeCommands}
+          terminalRuntimeCommands={terminalRuntimeCommands}
+          aiRuntimeCommands={aiRuntimeCommands}
+          defaultRuntime={anchorSettings.ai.defaultRuntime}
+          permissionMode={anchorSettings.ai.permissionMode}
           onError={setError}
         />
         <CommandPalette

@@ -1,4 +1,4 @@
-import { Code2, FileText, Loader2, Play, Search, SquareTerminal, X } from "lucide-react";
+import { Code2, FileText, Loader2, Play, Search, SquareTerminal, Workflow, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type {
   DispatchComposition,
@@ -10,12 +10,16 @@ import type {
 } from "../../lib/skills";
 import { useTranslation } from "../../lib/i18n";
 import {
+  agentRunStructuredLoop,
   skillsDispatchBackground,
   skillsDispatchCompose,
   skillsDispatchTerminal,
   skillsRuntimeStatus,
 } from "../../lib/skills";
 import { Button } from "../ui/Button";
+
+type ComposeMode = "terminal" | "background" | "structured";
+const EMPTY_RUNTIME_COMMANDS: Partial<Record<SkillDispatchRuntime, string | null>> = {};
 
 export interface ComposeDialogSeed {
   skill?: SkillRecord | null;
@@ -26,7 +30,7 @@ export interface ComposeDialogSeed {
 }
 
 export interface ComposeDialogDispatchEvent {
-  mode: "terminal" | "background";
+  mode: ComposeMode;
   runtime: SkillDispatchRuntime;
   invocationId: string | null;
 }
@@ -38,7 +42,10 @@ interface ComposeDialogProps {
   onClose: () => void;
   onTerminalDispatch: (spec: TerminalDispatchSpec) => void;
   onBackgroundDispatch?: (invocationId: string) => void;
-  runtimeCommands?: Partial<Record<SkillDispatchRuntime, string | null>>;
+  terminalRuntimeCommands?: Partial<Record<SkillDispatchRuntime, string | null>>;
+  aiRuntimeCommands?: Partial<Record<SkillDispatchRuntime, string | null>>;
+  defaultRuntime?: SkillDispatchRuntime;
+  permissionMode?: string;
   onError: (message: string | null) => void;
 }
 
@@ -49,31 +56,35 @@ export function ComposeDialog({
   onClose,
   onTerminalDispatch,
   onBackgroundDispatch,
-  runtimeCommands = {},
+  terminalRuntimeCommands = EMPTY_RUNTIME_COMMANDS,
+  aiRuntimeCommands = EMPTY_RUNTIME_COMMANDS,
+  defaultRuntime,
+  permissionMode,
   onError,
 }: ComposeDialogProps) {
   const { t } = useTranslation();
   const [skillId, setSkillId] = useState("");
   const [prompt, setPrompt] = useState("");
   const [skillQuery, setSkillQuery] = useState("");
-  const [runtime, setRuntime] = useState<SkillDispatchRuntime>("claude");
-  const [mode, setMode] = useState<"terminal" | "background">("background");
+  const [runtime, setRuntime] = useState<SkillDispatchRuntime>(defaultRuntime ?? "claude");
+  const [mode, setMode] = useState<ComposeMode>("background");
   const [preview, setPreview] = useState<DispatchComposition | null>(null);
   const [busy, setBusy] = useState(false);
   const [runtimeStatuses, setRuntimeStatuses] = useState<
     Partial<Record<SkillDispatchRuntime, SkillRuntimeStatus>>
   >({});
   const [runtimeStatusLoading, setRuntimeStatusLoading] = useState(false);
+  const runtimeStatusCommands = mode === "terminal" ? terminalRuntimeCommands : aiRuntimeCommands;
 
   useEffect(() => {
     if (!open) return;
     setSkillId(seed?.skill?.id ?? skills[0]?.id ?? "");
     setPrompt(seed?.prompt ?? "");
     setSkillQuery("");
-    setRuntime(readLastSkillRuntime() ?? "claude");
+    setRuntime(readLastSkillRuntime() ?? defaultRuntime ?? "claude");
     setMode("background");
     setPreview(null);
-  }, [open, seed, skills]);
+  }, [open, seed, skills, defaultRuntime]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,7 +94,7 @@ export function ComposeDialog({
       (["claude", "codex"] as SkillDispatchRuntime[]).map(async (candidate) => {
         const status = await skillsRuntimeStatus({
           runtime: candidate,
-          commandOverride: runtimeCommands[candidate] ?? null,
+          commandOverride: runtimeStatusCommands[candidate] ?? null,
         });
         return [candidate, status] as const;
       }),
@@ -110,7 +121,7 @@ export function ComposeDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, onError, runtimeCommands]);
+  }, [open, onError, runtimeStatusCommands]);
 
   const selectedSkill = useMemo(
     () => skills.find((skill) => skill.id === skillId) ?? null,
@@ -171,14 +182,38 @@ export function ComposeDialog({
     onError(null);
     try {
       let dispatchEvent: ComposeDialogDispatchEvent;
-      if (mode === "terminal") {
+      if (mode === "structured") {
+        if (!seed?.cwd) {
+          onError(t("skills.compose.structuredNeedsCwd"));
+          setBusy(false);
+          return;
+        }
+        // Compose the full directive (SKILL.md body + selected context + user
+        // prompt) the same way terminal/background dispatch does, so the loop
+        // sees the skill's actual instructions, not just its name.
+        const composition = await skillsDispatchCompose({
+          skillId: selectedSkill.id,
+          prompt,
+          cwd: seed.cwd,
+          context,
+        });
+        const runId = await agentRunStructuredLoop({
+          provider: runtime,
+          directive: composition.prompt,
+          cwd: seed.cwd,
+          commandOverride: aiRuntimeCommands[runtime] ?? null,
+          permissionMode: permissionMode ?? null,
+        });
+        onBackgroundDispatch?.(runId);
+        dispatchEvent = { mode: "structured", runtime, invocationId: runId };
+      } else if (mode === "terminal") {
         const spec = await skillsDispatchTerminal({
           skillId: selectedSkill.id,
           runtime,
           prompt,
           cwd: seed?.cwd ?? null,
           context,
-          commandOverride: runtimeCommands[runtime] ?? null,
+          commandOverride: terminalRuntimeCommands[runtime] ?? null,
         });
         onTerminalDispatch(spec);
         dispatchEvent = { mode: "terminal", runtime, invocationId: null };
@@ -189,7 +224,8 @@ export function ComposeDialog({
           prompt,
           cwd: seed?.cwd ?? null,
           context,
-          commandOverride: runtimeCommands[runtime] ?? null,
+          commandOverride: aiRuntimeCommands[runtime] ?? null,
+          permissionMode: permissionMode ?? null,
           metadata: {
             origin: "skillCompose",
             skillName: selectedSkill.name,
@@ -360,10 +396,22 @@ export function ComposeDialog({
                     <Play size={13} />
                     <span>{t("skills.compose.background")}</span>
                   </button>
+                  <button
+                    type="button"
+                    className={mode === "structured" ? "active" : ""}
+                    onClick={() => setMode("structured")}
+                  >
+                    <Workflow size={13} />
+                    <span>{t("skills.compose.structured")}</span>
+                  </button>
                 </div>
                 {mode === "terminal" ? (
                   <p className="compose-mode-note">
                     {t("skills.compose.terminalFreeRun")}
+                  </p>
+                ) : mode === "structured" ? (
+                  <p className="compose-mode-note">
+                    {t("skills.compose.structuredNote")}
                   </p>
                 ) : (
                   <p className="compose-mode-note">
