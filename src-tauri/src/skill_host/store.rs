@@ -1457,10 +1457,20 @@ pub fn skills_import_unmanage(
             }
             removed_installs += 1;
             if install.managed_by == "anchor" {
-                let _ = host_fs::remove_if_matching_symlink(
-                    Path::new(&install.target_path),
-                    &anchor_entry,
-                );
+                if install.mode == "copy" {
+                    // Copy installs are real directories, not symlinks; remove the
+                    // directory (gated on our marker so we never delete a dir Anchor
+                    // did not create), matching skills_uninstall_skill.
+                    let tool_target = Path::new(&install.target_path);
+                    if copy_install_is_anchor_managed(tool_target, &install.installed_as) {
+                        let _ = fs::remove_dir_all(tool_target);
+                    }
+                } else {
+                    let _ = host_fs::remove_if_matching_symlink(
+                        Path::new(&install.target_path),
+                        &anchor_entry,
+                    );
+                }
             }
             false
         })
@@ -3971,6 +3981,38 @@ mod tests {
         assert!(removed.removed_entrypoint);
         assert!(removed.deleted_files);
         assert!(!Path::new(&copied.imported_path).exists());
+    }
+
+    #[test]
+    fn import_unmanage_removes_copy_install_directory() {
+        let _home = test_home();
+        let src_root = TempDir::new().unwrap();
+        let source = write_skill(src_root.path(), "imp-copy");
+        let imported =
+            skills_import_external(None, path_string(&source), None, Some("copy".to_string()))
+                .unwrap();
+
+        // Install the imported skill to Claude in copy mode (a real directory).
+        skills_install_skill(
+            imported.skill.id,
+            "claude".to_string(),
+            None,
+            Some("copy".to_string()),
+        )
+        .unwrap();
+        let tool_target = install_target_path("claude", "imp-copy").unwrap();
+        assert!(tool_target.is_dir());
+        assert!(read_install_marker(&tool_target).unwrap().anchor_managed);
+
+        let removed = skills_import_unmanage(None, "imp-copy".to_string(), Some(true)).unwrap();
+        assert_eq!(removed.removed_installs, 1);
+        // The copy install directory must be deleted, not just the registry record.
+        assert!(!tool_target.exists());
+        let registry = load_registry().unwrap();
+        assert!(!registry
+            .installs
+            .iter()
+            .any(|install| install.installed_as == "imp-copy"));
     }
 
     #[test]
