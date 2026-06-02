@@ -5076,6 +5076,14 @@ button.git-badge:hover {
   gap: 12px;
 }
 
+.comms-source-grid .source-card {
+  align-self: stretch;
+}
+
+.comms-source-grid .source-card-actions {
+  margin-top: auto;
+}
+
 .comms-source-detail {
   display: flex;
   flex-direction: column;
