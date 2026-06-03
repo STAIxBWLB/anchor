@@ -365,7 +365,9 @@ test("opens meetings mode with list, detail, and calendar views", async ({ page 
   await expect(page.locator(".unified-calendar")).toBeVisible();
   await expect(page.locator(".unified-calendar")).toContainText("Skills 관리");
 
-  await meetingsPane.getByRole("button", { name: "녹취록 처리" }).click();
+  // The transcript intake entry moved from an actions-bar button to a sidebar
+  // nav item ("녹취록", hint "녹취록·메모를 회의록으로"). Match the label.
+  await meetingsPane.getByRole("button", { name: /녹취록/ }).click();
   await expect(page.locator(".meetings-workbench")).toBeVisible();
   const transcriptTextarea = page.locator(".meetings-source-card textarea");
   await expect(transcriptTextarea).toBeVisible();
@@ -444,7 +446,7 @@ test("opens meetings mode with list, detail, and calendar views", async ({ page 
   await page.reload();
   const reloadedMeetingsPane = page.locator(".meetings-pane");
   await page.locator(".activity-rail").getByRole("button", { name: "회의록" }).click();
-  await reloadedMeetingsPane.getByRole("button", { name: "녹취록 처리" }).click();
+  await reloadedMeetingsPane.getByRole("button", { name: /녹취록/ }).click();
   await page.locator(".meetings-source-card textarea").fill("새 회의록 작업으로 저장된 패널 높이를 확인한다.");
   await reloadedMeetingsPane.getByRole("button", { name: "회의록 생성" }).click();
   await page.getByRole("button", { name: "Codex로 실행" }).click();
@@ -457,7 +459,9 @@ test("opens meetings mode with list, detail, and calendar views", async ({ page 
     )
     .toBe(storedDockHeight);
 
-  await meetingsPane.getByRole("button", { name: "외부 노트 정제" }).click();
+  // External/auto-summary intake also moved to a sidebar nav item
+  // ("자동정리 회의록"); "외부 노트 정제" is now the workbench title.
+  await meetingsPane.getByRole("button", { name: /자동정리 회의록/ }).click();
   await expect(page.locator(".meetings-source-card textarea")).toBeVisible();
   await page.locator(".meetings-source-card textarea").fill("외부 노트 초안을 회의록 형식으로 정리한다.");
   await reloadedMeetingsPane.getByRole("button", { name: "정제 실행" }).click();
