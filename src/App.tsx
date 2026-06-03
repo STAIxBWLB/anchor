@@ -6961,6 +6961,9 @@ function MainApp() {
           open={commitDialog !== null}
           vaultPath={commitDialog?.path ?? null}
           status={commitDialog?.status ?? null}
+          aiRuntime={anchorSettings.ai.defaultRuntime}
+          aiCommandOverride={aiRuntimeCommands[anchorSettings.ai.defaultRuntime] ?? null}
+          onConfirmApproval={approvalGate.confirmApproval}
           onClose={() => setCommitDialog(null)}
           onCommitted={() => setGitRefreshTick((n) => n + 1)}
         />

@@ -4410,6 +4410,33 @@ button.git-badge:hover {
   font-size: 12px;
 }
 
+.commit-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.commit-label-row > span:first-child {
+  min-width: 0;
+}
+
+.commit-sync-report {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--ink-2);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
 .commit-files {
   list-style: none;
   padding: 6px 8px;
