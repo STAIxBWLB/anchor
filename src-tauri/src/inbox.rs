@@ -529,13 +529,12 @@ pub fn apply_inbox_decisions(
     let root = inbox_settings::resolve_runtime_root(&work, &config)?;
     let mut outcomes = Vec::new();
     for decision in decisions {
-        let is_reject = decision.decision == "reject";
-        let event = if is_reject {
+        let event = if decision.decision == "reject" {
             "inbox://rejected"
         } else {
             "inbox://accepted"
         };
-        let fallback_decision = if is_reject { "rejected" } else { "accepted" };
+        let fallback_decision = apply_inbox_error_decision_label(&decision.decision);
         match apply_inbox_decision_at(&work, &config, &root, &decision) {
             Ok(outcome) => {
                 emit_decision(&app, event, &outcome);
@@ -545,6 +544,14 @@ pub fn apply_inbox_decisions(
         }
     }
     Ok(outcomes)
+}
+
+fn apply_inbox_error_decision_label(decision: &str) -> &'static str {
+    match decision {
+        "accept" => "accepted",
+        "reject" => "rejected",
+        _ => "pending",
+    }
 }
 
 fn apply_inbox_decision_at(
@@ -3203,6 +3210,42 @@ inbox:
         fs::write(item.join("raw/chat.txt"), b"hello").unwrap();
         fs::write(item.join("summary.md"), b"# summary").unwrap();
         item
+    }
+
+    #[test]
+    fn apply_inbox_decision_labels_unsupported_apply_error_as_pending() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let item = apply_fixture(&root, "260604-kakao-unsupported");
+
+        let config = inbox_settings::load_runtime_config_or_legacy(&root).unwrap();
+        let inbox_root = inbox_settings::resolve_runtime_root(&root, &config).unwrap();
+        let decision = InboxApplyDecision {
+            item_dir: "inbox/items/pending/260604-kakao-unsupported".to_string(),
+            decision: "defer".to_string(),
+            destination: Some("projects/rise/inbox".to_string()),
+            classification: Some("action".to_string()),
+            project: Some("rise".to_string()),
+        };
+
+        let err = apply_inbox_decision_at(&root, &config, &inbox_root, &decision).unwrap_err();
+        let fallback_label = apply_inbox_error_decision_label(&decision.decision);
+        let outcome = error_outcome(
+            decision.item_dir.clone(),
+            fallback_label,
+            err,
+        );
+
+        assert!(!outcome.ok);
+        assert_eq!(outcome.decision, "pending");
+        assert!(outcome.target_path.is_none());
+        assert!(outcome
+            .error
+            .as_deref()
+            .is_some_and(|err| err.contains("inbox_unsupported_decision")));
+        assert!(item.exists());
+        assert!(!root.join("inbox/items/done/260604-kakao-unsupported").exists());
+        assert!(!root.join("rejected/kakao/260604-kakao-unsupported").exists());
     }
 
     #[test]

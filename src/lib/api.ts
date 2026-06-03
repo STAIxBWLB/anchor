@@ -586,9 +586,7 @@ export async function applyInboxDecisions(
         id: decision.itemDir,
         decision: accepted ? "accepted" : "rejected",
         sourcePath: decision.itemDir,
-        targetPath: accepted
-          ? `${decision.destination ?? "inbox/items/done"}/${name}`
-          : `rejected/${name}`,
+        targetPath: accepted ? `inbox/items/done/${name}` : `rejected/${name}`,
         fileName: name,
         ok: true,
         error: null,
