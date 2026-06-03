@@ -113,6 +113,10 @@ export function inboxReviewCanApply({
   return selectedInboxDecisionCount(decisions) > 0;
 }
 
+export function statusAfterInboxMetadataEdit(status: InboxItemDecisionStatus): InboxItemDecisionStatus {
+  return status === "rejected" ? "rejected" : "edited";
+}
+
 /** Map UI decisions to the Rust `apply_inbox_decisions` payload. Pending items
  *  (only non-required ones can still be pending) are dropped — left in place. */
 export function buildInboxApplyDecisions(decisions: InboxItemDecision[]): InboxApplyDecision[] {

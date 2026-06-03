@@ -559,10 +559,17 @@ fn apply_inbox_decision_at(
     } else {
         resolve_inside_vault(&work.to_string_lossy(), &decision.item_dir)?
     };
-    if !item_dir.exists() {
-        return Err("inbox_item_missing".to_string());
+    let item_metadata = fs::symlink_metadata(&item_dir).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            "inbox_item_missing".to_string()
+        } else {
+            format!("Cannot inspect inbox item: {err}")
+        }
+    })?;
+    if item_metadata.file_type().is_symlink() {
+        return Err("inbox_item_symlink_unsupported".to_string());
     }
-    if !item_dir.is_dir() {
+    if !item_metadata.is_dir() {
         return Err("inbox_item_not_directory".to_string());
     }
     if !is_pending_item_dir(work, config, &item_dir)? {
@@ -618,7 +625,18 @@ fn file_raw_originals(
     dest_dir: &Path,
 ) -> Result<(), String> {
     let raw_dir = item_dir.join(&config.naming.raw_dir);
-    if !raw_dir.is_dir() {
+    let raw_metadata = match fs::symlink_metadata(&raw_dir) {
+        Ok(metadata) => metadata,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(format!("Cannot inspect raw directory: {err}")),
+    };
+    if raw_metadata.file_type().is_symlink() {
+        return Err(format!(
+            "Source symlinks are not supported: {}",
+            raw_dir.display()
+        ));
+    }
+    if !raw_metadata.is_dir() {
         return Ok(());
     }
     fs::create_dir_all(dest_dir)
@@ -626,16 +644,26 @@ fn file_raw_originals(
     for entry in fs::read_dir(&raw_dir).map_err(|err| format!("Cannot read raw directory: {err}"))? {
         let entry = entry.map_err(|err| format!("Cannot read raw entry: {err}"))?;
         let path = entry.path();
+        let metadata =
+            fs::symlink_metadata(&path).map_err(|err| format!("Cannot inspect raw entry: {err}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err(format!(
+                "Source symlinks are not supported: {}",
+                path.display()
+            ));
+        }
         let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
             continue;
         };
         if name == ".DS_Store" {
             continue;
         }
-        let kind = if path.is_dir() {
+        let kind = if metadata.is_dir() {
             FileQueueSourceKind::Directory
-        } else {
+        } else if metadata.is_file() {
             FileQueueSourceKind::File
+        } else {
+            continue;
         };
         let target = unique_path(dest_dir.join(name));
         copy_source(&path, &target, kind)?;
@@ -3237,6 +3265,75 @@ inbox:
         assert_eq!(outcome.decision, "rejected");
         assert!(!item.exists());
         assert!(root.join("rejected/kakao/260604-kakao-b").is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_inbox_decision_rejects_symlink_pending_item_dir() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        fs::write(root.join("workspace.config.yaml"), APPLY_CONFIG).unwrap();
+        let real = root.join("real-pending-target");
+        fs::create_dir_all(&real).unwrap();
+        fs::write(
+            real.join("manifest.yaml"),
+            "id: 260604-kakao-link\nstatus: pending\nchannel: kakao\n",
+        )
+        .unwrap();
+        let link = root.join("inbox/items/pending/260604-kakao-link");
+        fs::create_dir_all(link.parent().unwrap()).unwrap();
+        symlink(&real, &link).unwrap();
+
+        let config = inbox_settings::load_runtime_config_or_legacy(&root).unwrap();
+        let inbox_root = inbox_settings::resolve_runtime_root(&root, &config).unwrap();
+        let decision = InboxApplyDecision {
+            item_dir: "inbox/items/pending/260604-kakao-link".to_string(),
+            decision: "reject".to_string(),
+            destination: None,
+            classification: None,
+            project: None,
+        };
+
+        let err = apply_inbox_decision_at(&root, &config, &inbox_root, &decision).unwrap_err();
+        assert_eq!(err, "inbox_item_symlink_unsupported");
+        assert!(fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert!(real.is_dir());
+        assert!(!root.join("rejected/kakao/260604-kakao-link").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_inbox_decision_rejects_raw_symlink_entries() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().canonicalize().unwrap();
+        let item = apply_fixture(&root, "260604-kakao-raw-link");
+        fs::remove_file(item.join("raw/chat.txt")).unwrap();
+        let outside = root.join("outside-secret.txt");
+        fs::write(&outside, b"secret").unwrap();
+        symlink(&outside, item.join("raw/leak.txt")).unwrap();
+
+        let config = inbox_settings::load_runtime_config_or_legacy(&root).unwrap();
+        let inbox_root = inbox_settings::resolve_runtime_root(&root, &config).unwrap();
+        let decision = InboxApplyDecision {
+            item_dir: "inbox/items/pending/260604-kakao-raw-link".to_string(),
+            decision: "accept".to_string(),
+            destination: Some("projects/rise/inbox".to_string()),
+            classification: Some("action".to_string()),
+            project: Some("rise".to_string()),
+        };
+
+        let err = apply_inbox_decision_at(&root, &config, &inbox_root, &decision).unwrap_err();
+        assert!(err.contains("Source symlinks are not supported"));
+        assert!(item.exists());
+        assert!(!root.join("inbox/items/done/260604-kakao-raw-link").exists());
+        assert!(!root.join("projects/rise/inbox/leak.txt").exists());
     }
 
     #[test]

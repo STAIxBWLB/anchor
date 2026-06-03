@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, GitCompare, Loader2 } from "lucide-react";
 import { useTranslation } from "../../lib/i18n";
 import {
   INBOX_CLASSIFICATIONS,
+  statusAfterInboxMetadataEdit,
   type InboxItemDecision,
   type InboxItemDecisionStatus,
   type InboxReviewArtifact,
@@ -156,7 +157,7 @@ export function InboxReviewPanel({
                   onChange={(event) =>
                     onUpdateDecision(item.id, {
                       classification: event.target.value as InboxReviewClassification,
-                      status: "edited",
+                      status: statusAfterInboxMetadataEdit(item.status),
                     })
                   }
                 >
@@ -174,7 +175,10 @@ export function InboxReviewPanel({
                   value={item.project ?? ""}
                   placeholder={t("inbox.review.projectPlaceholder")}
                   onChange={(event) =>
-                    onUpdateDecision(item.id, { project: event.target.value || null, status: "edited" })
+                    onUpdateDecision(item.id, {
+                      project: event.target.value || null,
+                      status: statusAfterInboxMetadataEdit(item.status),
+                    })
                   }
                 />
               </label>
@@ -185,7 +189,10 @@ export function InboxReviewPanel({
                   value={item.destination ?? ""}
                   placeholder={t("inbox.review.destinationPlaceholder")}
                   onChange={(event) =>
-                    onUpdateDecision(item.id, { destination: event.target.value || null, status: "edited" })
+                    onUpdateDecision(item.id, {
+                      destination: event.target.value || null,
+                      status: statusAfterInboxMetadataEdit(item.status),
+                    })
                   }
                 />
               </label>

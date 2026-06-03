@@ -7,6 +7,7 @@ import {
   inboxReviewCanApply,
   inboxReviewDecisionsComplete,
   parseInboxReviewArtifact,
+  statusAfterInboxMetadataEdit,
   type InboxItemDecision,
 } from "./inboxReview";
 
@@ -99,17 +100,33 @@ describe("inbox decision gating", () => {
     expect(inboxReviewCanApply({ decisions: [], decisionsComplete: true })).toBe(false);
   });
 
+  it("preserves rejected status for metadata edits and marks other edits", () => {
+    expect(statusAfterInboxMetadataEdit("rejected")).toBe("rejected");
+    expect(statusAfterInboxMetadataEdit("accepted")).toBe("edited");
+    expect(statusAfterInboxMetadataEdit("pending")).toBe("edited");
+    expect(statusAfterInboxMetadataEdit("edited")).toBe("edited");
+  });
+
   it("maps decisions to the rust apply payload, skipping pending items", () => {
     const decisions: InboxItemDecision[] = [
       decision("a", "accepted", { destination: "projects/x" }),
-      decision("b", "rejected"),
+      decision("b", "rejected", {
+        destination: "projects/ignored",
+        classification: "schedule",
+        project: "rise",
+      }),
       decision("c", "pending"),
       decision("d", "edited", { destination: "projects/y", classification: "schedule" }),
     ];
     const payload = buildInboxApplyDecisions(decisions);
     expect(payload).toHaveLength(3);
     expect(payload[0]).toMatchObject({ itemDir: "inbox/items/pending/a", decision: "accept", destination: "projects/x" });
-    expect(payload[1]).toMatchObject({ decision: "reject" });
+    expect(payload[1]).toMatchObject({
+      decision: "reject",
+      destination: null,
+      classification: "schedule",
+      project: "rise",
+    });
     expect(payload[2]).toMatchObject({ decision: "accept", destination: "projects/y", classification: "schedule" });
   });
 });
