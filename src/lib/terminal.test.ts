@@ -3,6 +3,7 @@ import {
   activeItemMention,
   buildAgentContextArgs,
   buildAgentResumeArgs,
+  buildAnchorBackgroundContextEnv,
   buildAnchorContextEnv,
   createTerminalTab,
   createTerminalTask,
@@ -473,6 +474,16 @@ describe("active-item context bridge", () => {
   it("returns only safe markers when disabled", () => {
     const env = buildAnchorContextEnv(CTX, "term-1", false);
     expect(Object.keys(env).sort()).toEqual(["ANCHOR_SESSION_ID", "ANCHOR_TERMINAL"]);
+  });
+
+  it("builds non-terminal context env for background agent runs", () => {
+    const env = buildAnchorBackgroundContextEnv(CTX, true);
+    expect(env.ANCHOR_WORKSPACE).toBe("/work/vault");
+    expect(env.ANCHOR_APP_MODE).toBe("pkm");
+    expect(env.ANCHOR_ACTIVE_DOC_REL).toBe("notes/메모.md");
+    expect("ANCHOR_TERMINAL" in env).toBe(false);
+    expect("ANCHOR_SESSION_ID" in env).toBe(false);
+    expect(buildAnchorBackgroundContextEnv(CTX, false)).toEqual({});
   });
 
   it("adds --add-dir only for agents with a workspace", () => {

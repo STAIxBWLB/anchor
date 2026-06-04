@@ -1,4 +1,9 @@
-import type { AnchorAppMode, AnchorSettings, TerminalLauncherId } from "./settings";
+import type {
+  AnchorAppMode,
+  AnchorSettings,
+  TerminalAttachMentionStyle,
+  TerminalLauncherId,
+} from "./settings";
 
 export type TerminalKind = TerminalLauncherId;
 
@@ -646,7 +651,7 @@ export function terminalHookEventToStatus(token: string): AgentStatus | null {
 // Active-item context bridge (env + --add-dir + @file mention)
 // ---------------------------------------------------------------------------
 
-export type AttachMentionStyle = "mention" | "path" | "read";
+export type AttachMentionStyle = TerminalAttachMentionStyle;
 
 /** The Anchor active window/item, fed to CLI agents as context. */
 export interface ActiveTerminalContext {
@@ -657,6 +662,22 @@ export interface ActiveTerminalContext {
   docRelPath: string | null;
   docTitle: string | null;
   docType: string | null;
+}
+
+function applyActiveContextEnv(
+  env: Record<string, string>,
+  ctx: ActiveTerminalContext,
+  enabled: boolean,
+): Record<string, string> {
+  if (!enabled) return env;
+  if (ctx.workspaceRoot) env.ANCHOR_WORKSPACE = ctx.workspaceRoot;
+  env.ANCHOR_WORKSPACE_VISIBILITY = ctx.workspaceVisibility;
+  env.ANCHOR_APP_MODE = ctx.appMode;
+  if (ctx.docAbsPath) env.ANCHOR_ACTIVE_DOC = ctx.docAbsPath;
+  if (ctx.docRelPath) env.ANCHOR_ACTIVE_DOC_REL = ctx.docRelPath;
+  if (ctx.docTitle) env.ANCHOR_ACTIVE_DOC_TITLE = ctx.docTitle;
+  if (ctx.docType) env.ANCHOR_ACTIVE_DOC_TYPE = ctx.docType;
+  return env;
 }
 
 /**
@@ -673,15 +694,18 @@ export function buildAnchorContextEnv(
     ANCHOR_TERMINAL: "1",
     ANCHOR_SESSION_ID: sessionId,
   };
-  if (!enabled) return env;
-  if (ctx.workspaceRoot) env.ANCHOR_WORKSPACE = ctx.workspaceRoot;
-  env.ANCHOR_WORKSPACE_VISIBILITY = ctx.workspaceVisibility;
-  env.ANCHOR_APP_MODE = ctx.appMode;
-  if (ctx.docAbsPath) env.ANCHOR_ACTIVE_DOC = ctx.docAbsPath;
-  if (ctx.docRelPath) env.ANCHOR_ACTIVE_DOC_REL = ctx.docRelPath;
-  if (ctx.docTitle) env.ANCHOR_ACTIVE_DOC_TITLE = ctx.docTitle;
-  if (ctx.docType) env.ANCHOR_ACTIVE_DOC_TYPE = ctx.docType;
-  return env;
+  return applyActiveContextEnv(env, ctx, enabled);
+}
+
+/**
+ * Environment variables for non-PTY background agent runs. These carry the
+ * same active item context but deliberately omit terminal hook markers.
+ */
+export function buildAnchorBackgroundContextEnv(
+  ctx: ActiveTerminalContext,
+  enabled: boolean,
+): Record<string, string> {
+  return applyActiveContextEnv({}, ctx, enabled);
 }
 
 /** `--add-dir <workspace>` for claude/codex so the agent can read the tree. */

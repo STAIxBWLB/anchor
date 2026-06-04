@@ -892,7 +892,7 @@ export async function revealInFileManager(
   targetPath: string,
 ): Promise<void> {
   if (!isTauri()) {
-    throw new Error("Reveal in Finder requires the Tauri app.");
+    throw new Error("Reveal in file manager requires the Tauri app.");
   }
   await invoke("reveal_in_file_manager", { vaultPath, targetPath });
 }
@@ -902,7 +902,7 @@ export async function openInFileManager(
   targetPath: string,
 ): Promise<void> {
   if (!isTauri()) {
-    throw new Error("Open in Finder requires the Tauri app.");
+    throw new Error("Open in file manager requires the Tauri app.");
   }
   await invoke("open_in_file_manager", { vaultPath, targetPath });
 }

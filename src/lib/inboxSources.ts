@@ -31,9 +31,22 @@ export const CHANNEL_TO_COMMS_PROVIDER: Partial<Record<InboxSourceChannel, Comms
 };
 
 const SOURCE_CHANNEL_SET = new Set<string>(INBOX_SOURCE_CHANNELS);
+const ALL_SOURCE_VALUE_BASE = "__all_sources__";
 
 export function isInboxSourceChannel(channel: string): channel is InboxSourceChannel {
   return SOURCE_CHANNEL_SET.has(channel);
+}
+
+export function allSourceSelectValue(sources: readonly string[]): string {
+  const sourceSet = new Set(sources);
+  if (!sourceSet.has(ALL_SOURCE_VALUE_BASE)) return ALL_SOURCE_VALUE_BASE;
+  let suffix = 1;
+  let candidate = `${ALL_SOURCE_VALUE_BASE}:${suffix}`;
+  while (sourceSet.has(candidate)) {
+    suffix += 1;
+    candidate = `${ALL_SOURCE_VALUE_BASE}:${suffix}`;
+  }
+  return candidate;
 }
 
 /**

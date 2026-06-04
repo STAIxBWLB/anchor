@@ -45,7 +45,10 @@ import {
   type TerminalLaunchRequest,
   type TerminalPanelHandle,
 } from "./components/TerminalPanel";
-import { buildAnchorContextEnv, type ActiveTerminalContext } from "./lib/terminal";
+import {
+  buildAnchorBackgroundContextEnv,
+  type ActiveTerminalContext,
+} from "./lib/terminal";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { WorkspaceFilesPane } from "./components/WorkspaceFilesPane";
 import { useApprovalGate } from "./approval/ApprovalDialog";
@@ -3002,7 +3005,7 @@ function MainApp() {
       updateInboxCarry(id, { classifying: true, classifyError: null });
       try {
         const runtime = resolveClassifierRuntime(anchorSettings.ai);
-        const contextEnv = buildAnchorContextEnv(
+        const contextEnv = buildAnchorBackgroundContextEnv(
           {
             workspaceRoot: inboxWorkspacePath,
             workspaceVisibility: explorerVisibility,
@@ -3012,7 +3015,6 @@ function MainApp() {
             docTitle: null,
             docType: null,
           },
-          "ai-inbox",
           anchorSettings.terminal.injectActiveContext,
         );
         const classification = await classifyInboxItem(
@@ -3031,7 +3033,14 @@ function MainApp() {
         });
       }
     },
-    [anchorSettings.ai, inboxDrops, inboxWorkspacePath, updateInboxCarry],
+    [
+      anchorSettings.ai,
+      anchorSettings.terminal.injectActiveContext,
+      explorerVisibility,
+      inboxDrops,
+      inboxWorkspacePath,
+      updateInboxCarry,
+    ],
   );
 
   useEffect(() => {

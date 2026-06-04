@@ -41,6 +41,7 @@ import {
   type InboxTrashableRow,
 } from "../lib/inbox";
 import { useTranslation } from "../lib/i18n";
+import { allSourceSelectValue } from "../lib/inboxSources";
 import { useContextMenuKeyboard } from "../lib/useContextMenuKeyboard";
 import type {
   InboxEntry,
@@ -118,8 +119,6 @@ type InboxContextMenuState = {
   path: string;
   targets: InboxTrashTarget[];
 };
-
-const ALL_SOURCE_VALUE = "__all_sources__";
 
 export function InboxPane({
   items,
@@ -203,7 +202,8 @@ export function InboxPane({
     (entrySourceCounts.get(source) ?? 0) + (fileSourceCounts.get(source) ?? 0);
   const selectedSourceCount =
     sourceFilter === null ? totalSourceCount : countForSource(sourceFilter);
-  const sourceSelectValue = sourceFilter ?? ALL_SOURCE_VALUE;
+  const allSourceValue = useMemo(() => allSourceSelectValue(sources), [sources]);
+  const sourceSelectValue = sourceFilter ?? allSourceValue;
   const selectedFolderTitle =
     sourceFilter === null
       ? t("inbox.openFolder")
@@ -622,10 +622,10 @@ export function InboxPane({
                 value={sourceSelectValue}
                 onChange={(event) => {
                   const value = event.target.value;
-                  onSourceFilter(value === ALL_SOURCE_VALUE ? null : value);
+                  onSourceFilter(value === allSourceValue ? null : value);
                 }}
               >
-                <option value={ALL_SOURCE_VALUE}>{t("inbox.filter.all")}</option>
+                <option value={allSourceValue}>{t("inbox.filter.all")}</option>
                 {sources.map((source) => (
                   <option value={source} key={source}>
                     {source}

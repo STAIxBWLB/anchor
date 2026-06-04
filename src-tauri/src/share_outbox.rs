@@ -15,6 +15,7 @@ use crate::inbox_settings::{expand_tilde, lexical_normalize_path, workspace_conf
 use crate::skill_host;
 use crate::skill_host::store::SkillRecord;
 use crate::vault::resolve_inside_vault;
+use crate::win_process::NoWindow;
 
 /// Keys the skill's `prepare_share_file.py` `require_config` enforces.
 const REQUIRED_KEYS: [&str; 6] = [
@@ -378,6 +379,7 @@ pub fn prepare_share_outbox_files(
             cmd.arg("--dry-run");
         }
         cmd.current_dir(&script_dir);
+        cmd.no_window();
 
         match cmd.output() {
             Ok(output) => results.push(parse_one(

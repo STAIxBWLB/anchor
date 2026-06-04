@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { inboxRootPath, sourceDropPath, sourceFolderPath } from "./inboxSources";
+import {
+  allSourceSelectValue,
+  inboxRootPath,
+  sourceDropPath,
+  sourceFolderPath,
+} from "./inboxSources";
 import type { InboxRuntimeConfig } from "./types";
 
 describe("sourceDropPath", () => {
@@ -18,6 +23,18 @@ describe("sourceDropPath", () => {
 
   it("falls back to the inbox drop root plus source key", () => {
     expect(sourceDropPath(runtimeConfig(), "telegram")).toBe("drop/telegram");
+  });
+});
+
+describe("allSourceSelectValue", () => {
+  it("uses the base sentinel when no source collides", () => {
+    expect(allSourceSelectValue(["gws", "kakao"])).toBe("__all_sources__");
+  });
+
+  it("derives a non-colliding sentinel when a channel uses the base value", () => {
+    expect(allSourceSelectValue(["__all_sources__", "__all_sources__:1", "kakao"])).toBe(
+      "__all_sources__:2",
+    );
   });
 });
 
