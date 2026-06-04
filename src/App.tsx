@@ -40,7 +40,12 @@ import { MissionBadge } from "./components/MissionBadge";
 import { NewDocumentDialog } from "./components/NewDocumentDialog";
 import { OutlinePane } from "./components/OutlinePane";
 import { SystemPane } from "./components/SystemPane";
-import { TerminalPanel, type TerminalLaunchRequest } from "./components/TerminalPanel";
+import {
+  TerminalPanel,
+  type TerminalLaunchRequest,
+  type TerminalPanelHandle,
+} from "./components/TerminalPanel";
+import { buildAnchorContextEnv, type ActiveTerminalContext } from "./lib/terminal";
 import { WorkspaceSwitcher } from "./components/WorkspaceSwitcher";
 import { WorkspaceFilesPane } from "./components/WorkspaceFilesPane";
 import { useApprovalGate } from "./approval/ApprovalDialog";
@@ -108,6 +113,11 @@ import {
   stopInboxWatcher,
   stopTelegramPolling,
   telegramPollingStatus,
+  removeAgentContextHint,
+  terminalHooksInstall,
+  terminalHooksStatus,
+  terminalHooksUninstall,
+  writeAgentContextHint,
   trashDocument,
   trashInboxItems,
   updateFrontmatterField,
@@ -1155,6 +1165,29 @@ function MainApp() {
   const activeDocumentWorkspaceState =
     (activeDocumentWorkspacePath ? workspaceStates[activeDocumentWorkspacePath] : null) ??
     EMPTY_WORKSPACE_STATE;
+  const activeTerminalContext = useMemo<ActiveTerminalContext>(() => {
+    const frontmatterType = selectedEntry?.frontmatter?.type;
+    return {
+      workspaceRoot: activeDocumentWorkspacePath ?? null,
+      workspaceVisibility: explorerVisibility,
+      appMode,
+      docAbsPath: selectedEntry?.path ?? document?.path ?? null,
+      docRelPath: selectedEntry?.relPath ?? null,
+      docTitle: selectedEntry?.title ?? document?.title ?? null,
+      docType: typeof frontmatterType === "string" ? frontmatterType : null,
+    };
+  }, [
+    activeDocumentWorkspacePath,
+    appMode,
+    document?.path,
+    document?.title,
+    explorerVisibility,
+    selectedEntry?.frontmatter?.type,
+    selectedEntry?.path,
+    selectedEntry?.relPath,
+    selectedEntry?.title,
+  ]);
+  const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   const shouldScanExplorerWorkspaceFiles = shouldLazyScanWorkspaceFiles({
     paneMode: anchorSettings.ui.explorerPaneMode,
     startupIoReady: explorerWorkspaceState.startupIoReady,
@@ -1629,6 +1662,65 @@ function MainApp() {
       }, options);
     },
     [updateSettings],
+  );
+
+  const attachActiveItemToTerminal = useCallback(() => {
+    if (!anchorSettings.ui.layout.terminalOpen) {
+      updateLayoutSettings({ terminalOpen: true });
+    }
+    return terminalPanelRef.current?.attachActiveItem() ?? false;
+  }, [anchorSettings.ui.layout.terminalOpen, updateLayoutSettings]);
+
+  const attachPathToTerminal = useCallback(
+    (relPath: string | null, absPath: string | null) => {
+      if (!anchorSettings.ui.layout.terminalOpen) {
+        updateLayoutSettings({ terminalOpen: true });
+      }
+      return terminalPanelRef.current?.attachPath(relPath, absPath) ?? false;
+    },
+    [anchorSettings.ui.layout.terminalOpen, updateLayoutSettings],
+  );
+
+  const toggleAgentStatusHooks = useCallback(async () => {
+    const workPath = activeDocumentWorkspacePath;
+    const scope: "project" | "global" = workPath ? "project" : "global";
+    try {
+      const status = await terminalHooksStatus(workPath, scope);
+      const next = status.claudeInstalled
+        ? await terminalHooksUninstall(workPath, scope)
+        : await terminalHooksInstall(workPath, scope);
+      setError(
+        next.claudeInstalled
+          ? t("terminal.hooks.enabled", { path: next.claudePath })
+          : t("terminal.hooks.disabled", { path: next.claudePath }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [activeDocumentWorkspacePath, t]);
+
+  const writeAgentContextHintCommand = useCallback(
+    async (remove: boolean) => {
+      const workPath = activeDocumentWorkspacePath;
+      if (!workPath) {
+        setError(t("terminal.hint.noWorkspace"));
+        return;
+      }
+      try {
+        const targets = ["claude", "agents"];
+        const paths = remove
+          ? await removeAgentContextHint(workPath, targets)
+          : await writeAgentContextHint(workPath, targets);
+        setError(
+          remove
+            ? t("terminal.hint.removed", { count: paths.length })
+            : t("terminal.hint.written", { count: paths.length }),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [activeDocumentWorkspacePath, t],
   );
 
   const refreshSkills = useCallback(async () => {
@@ -2736,8 +2828,14 @@ function MainApp() {
   );
 
   const processInboxKeys = useCallback(
-    async (keys: string[], channelOverride?: string | null, reviewFlow = true) => {
+    async (
+      keys: string[],
+      channelOverride?: string | null,
+      reviewFlow = true,
+      processingContext?: string,
+    ) => {
       if (!inboxWorkspacePath) return;
+      const trimmedContext = processingContext?.trim() ?? "";
       const processSkill =
         skills.find((skill) => skill.name === "inbox-process") ??
         skills.find((skill) => skill.id.endsWith(":inbox-process") || skill.id === "inbox-process");
@@ -2784,6 +2882,7 @@ function MainApp() {
           config: inboxRuntimeConfig,
           channels,
           reviewFlow,
+          processingContext: trimmedContext || undefined,
         });
         const context: SkillContextItem[] = selectedEntries.map((entry) => ({
           path: entry.kind === "pendingItem" ? entry.manifestPath ?? entry.path : entry.path,
@@ -2807,6 +2906,7 @@ function MainApp() {
             workspacePath: inboxWorkspacePath,
             skillName: "inbox-process",
             runtime,
+            ...(trimmedContext ? { processingContext: trimmedContext } : {}),
           },
         });
         processingMissionIdsRef.current = new Set([
@@ -2889,12 +2989,26 @@ function MainApp() {
       updateInboxCarry(id, { classifying: true, classifyError: null });
       try {
         const runtime = resolveClassifierRuntime(anchorSettings.ai);
+        const contextEnv = buildAnchorContextEnv(
+          {
+            workspaceRoot: inboxWorkspacePath,
+            workspaceVisibility: explorerVisibility,
+            appMode: "inbox",
+            docAbsPath: null,
+            docRelPath: target.relPath ?? null,
+            docTitle: null,
+            docType: null,
+          },
+          "ai-inbox",
+          anchorSettings.terminal.injectActiveContext,
+        );
         const classification = await classifyInboxItem(
           target,
           runtime,
           inboxWorkspacePath,
           anchorSettings.ai.commandOverrides[runtime],
           anchorSettings.ai.permissionMode,
+          contextEnv,
         );
         updateInboxCarry(id, { classifying: false, classification });
       } catch (err) {
@@ -5492,6 +5606,18 @@ function MainApp() {
         case "split-right":
           splitEditorRight();
           break;
+        case "attach-active-item":
+          void attachActiveItemToTerminal();
+          break;
+        case "toggle-agent-hooks":
+          void toggleAgentStatusHooks();
+          break;
+        case "write-context-hint":
+          void writeAgentContextHintCommand(false);
+          break;
+        case "remove-context-hint":
+          void writeAgentContextHintCommand(true);
+          break;
         case "dock-terminal-right":
           dockTerminal("right");
           break;
@@ -5556,6 +5682,9 @@ function MainApp() {
       openTasks,
       checkForUpdates,
       splitEditorRight,
+      attachActiveItemToTerminal,
+      toggleAgentStatusHooks,
+      writeAgentContextHintCommand,
       dockTerminal,
       closeAllCleanTabs,
       editorViewMode,
@@ -6378,7 +6507,7 @@ function MainApp() {
             onBulkAccept={bulkAcceptInboxKeys}
             onBulkReject={bulkRejectInboxKeys}
             onBulkMoveFiles={bulkMoveInboxFiles}
-            onProcessEntries={(keys) => void processInboxKeys(keys)}
+            onProcessEntries={(keys, context) => void processInboxKeys(keys, undefined, true, context)}
             onStageFiles={(paths) => void stageInboxFiles(paths)}
             onProcessedStatusFilter={setProcessedStatusFilter}
             onProcessedQuery={setProcessedQuery}
@@ -6619,6 +6748,7 @@ function MainApp() {
                   );
                 }}
                 onApplySkillToTarget={applySkillToFileTarget}
+                onAttachToTerminal={attachPathToTerminal}
               />
             ) : null}
             {documentsPaneOpen ? (
@@ -6767,7 +6897,9 @@ function MainApp() {
         ) : null}
 
         <TerminalPanel
+          ref={terminalPanelRef}
           cwd={activeDocumentWorkspacePath}
+          activeContext={activeTerminalContext}
           settings={anchorSettings}
           launchRequest={terminalLaunchRequest}
           open={anchorSettings.ui.layout.terminalOpen}

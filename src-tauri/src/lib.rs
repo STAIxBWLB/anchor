@@ -38,6 +38,7 @@ mod tasks;
 mod telegram_io;
 mod template_fill;
 mod terminal;
+mod terminal_hooks;
 mod vault;
 mod vault_list;
 mod workspace;
@@ -138,6 +139,11 @@ use telegram_io::{
 };
 use template_fill::{template_fill_hwpx, template_get_fields, template_prepare_hwpx_template};
 use terminal::{terminal_kill, terminal_resize, terminal_spawn, terminal_write, TerminalState};
+use terminal_hooks::{
+    remove_agent_context_hint, start_terminal_hook_watcher, terminal_hooks_install,
+    terminal_hooks_status, terminal_hooks_uninstall, write_agent_context_hint,
+    TerminalHookWatcherState,
+};
 use vault::{default_vault_path, read_vault_cache, sample_workspace_path, scan_vault};
 use vault_list::{
     add_workspace_root, list_workspace_roots, refresh_workspace_capabilities,
@@ -164,9 +170,16 @@ pub fn run() {
         .manage(InboxWatcherState::default())
         .manage(TelegramIoState::default())
         .manage(TerminalState::default())
+        .manage(TerminalHookWatcherState::default())
         .manage(ApprovalState::default())
         .manage(MissionState::default())
         .manage(CatalogWatcherState::default())
+        .setup(|app| {
+            // Start the agent-hook status watcher (best-effort; absent hooks
+            // simply produce no events).
+            let _ = start_terminal_hook_watcher(&app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             default_vault_path,
             sample_workspace_path,
@@ -245,6 +258,11 @@ pub fn run() {
             terminal_write,
             terminal_resize,
             terminal_kill,
+            terminal_hooks_install,
+            terminal_hooks_uninstall,
+            terminal_hooks_status,
+            write_agent_context_hint,
+            remove_agent_context_hint,
             build_inbox_classification_prompt,
             parse_inbox_classification,
             fetch_gmail_unread,

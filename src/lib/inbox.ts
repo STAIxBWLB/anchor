@@ -185,6 +185,7 @@ export function buildInboxProcessPrompt({
   config,
   channels,
   reviewFlow = true,
+  processingContext,
 }: {
   entries: InboxEntry[];
   config: InboxRuntimeConfig;
@@ -192,6 +193,12 @@ export function buildInboxProcessPrompt({
   channels?: string[];
   /** When true, dispatch the meetings/tasks-style review run (propose, don't move). */
   reviewFlow?: boolean;
+  /** Free-text guidance the user typed at Process time. Woven into the
+   *  invocation header so the skill's `<channel> [context...]` parser captures it
+   *  (key=value tokens stay raw → metadata.processing_hints), and emitted as a
+   *  labeled block. Optional; empty/whitespace is treated as absent so the prompt
+   *  stays byte-for-byte identical to a context-free run. */
+  processingContext?: string;
 }): string {
   const byChannel = new Map<string, InboxEntry[]>();
   for (const entry of entries) {
@@ -203,8 +210,16 @@ export function buildInboxProcessPrompt({
     byChannel.size > 0
       ? [...byChannel.keys()].filter(Boolean).sort()
       : [...new Set(channels ?? [])].filter(Boolean).sort();
-  const header =
+  const trimmedContext = processingContext?.trim() ?? "";
+  const baseHeader =
     resolvedChannels.length > 0 ? `inbox-process ${resolvedChannels.join(" ")}` : "inbox-process";
+  // Append the user context to the invocation line so the skill's
+  // "<channel> [context...]" parser fires. Internal whitespace/newlines are
+  // collapsed to single spaces so the invocation stays one line (the full,
+  // newline-preserving text is repeated in the labeled block below). key=value
+  // tokens are left raw for the skill to parse into metadata.processing_hints.
+  const headerContext = trimmedContext.replace(/\s+/g, " ");
+  const header = headerContext ? `${baseHeader} ${headerContext}` : baseHeader;
 
   const contextLines =
     entries.length > 0
@@ -230,6 +245,20 @@ export function buildInboxProcessPrompt({
       ]
     : [];
 
+  // User-typed guidance, emitted as an explicit labeled block (in addition to the
+  // header suffix) so the model reliably treats it as processing context.
+  const contextBlock = trimmedContext
+    ? [
+        "Processing context (user-provided):",
+        trimmedContext,
+        "",
+        "Honor this context when extracting, classifying, and routing. Store the",
+        "raw text as metadata.processing_context and parse any key=value tokens",
+        "into metadata.processing_hints (per the skill's Workflow step 1).",
+        "",
+      ]
+    : [];
+
   return [
     header,
     "",
@@ -240,6 +269,7 @@ export function buildInboxProcessPrompt({
     "Use workspace.config.yaml as the SSOT, especially inbox.paths and inbox.naming.",
     "",
     ...reviewBlock,
+    ...contextBlock,
     "Selected context:",
     ...contextLines,
     "",

@@ -4805,6 +4805,28 @@ button.git-badge:hover {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.processed-row-wrap {
+  position: relative;
+  display: flex;
+}
+
+.processed-row-wrap > .processed-row {
+  flex: 1;
+  min-width: 0;
+  padding-right: 40px;
+}
+
+.processed-row-reveal {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--muted);
+}
+
+.processed-row-reveal:hover {
+  color: var(--ink);
+}
+
 .processed-row-title {
   min-width: 0;
   display: flex;
@@ -7532,8 +7554,8 @@ button.git-badge:hover {
 
 .terminal-panel {
   position: relative;
-  display: grid;
-  grid-template-rows: 34px 34px minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 36px;
   border-top: 1px solid #2e2e2e;
@@ -7543,12 +7565,12 @@ button.git-badge:hover {
 
 .terminal-panel.collapsed {
   height: 36px;
-  grid-template-rows: 36px;
 }
 
 .terminal-panel.maximized {
   height: auto;
   min-height: 0;
+  flex: 1;
 }
 
 .terminal-panel.dock-right {
@@ -7560,14 +7582,242 @@ button.git-badge:hover {
 .terminal-panel.dock-right.collapsed {
   width: 40px;
   height: auto;
-  grid-template-rows: 36px;
 }
 
-/* Tabs and body stay mounted across collapse/expand to preserve xterm DOM,
-   so [hidden] must beat the class selectors that set display:flex / block. */
-.terminal-tabs[hidden],
-.terminal-body[hidden] {
+/* The workspace (session sidebar + main) stays mounted across collapse/expand
+   to preserve xterm DOM, so [hidden] must beat display:flex. */
+.terminal-workspace {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
+.terminal-workspace[hidden] {
   display: none;
+}
+
+.terminal-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Terminal session sidebar (tasks) ─────────────────────────────── */
+
+.terminal-session-sidebar {
+  flex: none;
+  width: 184px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #242424;
+  background: #151515;
+}
+
+.terminal-session-sidebar.collapsed {
+  width: 42px;
+}
+
+.terminal-session-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px;
+  border-bottom: 1px solid #242424;
+}
+
+.terminal-session-sidebar.collapsed .terminal-session-sidebar-header {
+  flex-direction: column;
+  height: auto;
+  padding: 6px 0;
+  gap: 4px;
+}
+
+.terminal-session-sidebar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8a8a8a;
+}
+
+.terminal-sidebar-btn {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: #c8c8c8;
+}
+
+.terminal-sidebar-btn:hover:not(:disabled) {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+.terminal-sidebar-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.terminal-task-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminal-task-empty {
+  padding: 8px 6px;
+  color: #777777;
+  font-size: 11px;
+}
+
+.terminal-session-sidebar.collapsed .terminal-task-empty {
+  display: none;
+}
+
+.terminal-task-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: #9d9d9d;
+  cursor: pointer;
+}
+
+.terminal-task-row:hover {
+  background: #1d1d1d;
+}
+
+.terminal-task-row.active {
+  background: #232323;
+  color: #ffffff;
+}
+
+.terminal-task-row.attention {
+  box-shadow: inset 2px 0 0 #7aa2f7;
+}
+
+.terminal-session-sidebar.collapsed .terminal-task-row {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 0;
+}
+
+.terminal-session-sidebar.collapsed .terminal-task-body,
+.terminal-session-sidebar.collapsed .terminal-task-close,
+.terminal-session-sidebar.collapsed .terminal-task-rename {
+  display: none;
+}
+
+.terminal-task-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.terminal-task-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.terminal-task-cwd {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7a7a7a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.terminal-task-rename {
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #3d5a44;
+  border-radius: 4px;
+  background: #111111;
+  color: #ffffff;
+  font-size: 11.5px;
+}
+
+.terminal-task-close {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: #858585;
+}
+
+.terminal-task-close:hover {
+  background: #333333;
+  color: #ffffff;
+}
+
+/* ─── Status dots (sessions + task rows) ───────────────────────────── */
+
+.terminal-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #606060;
+  flex: none;
+}
+
+.terminal-status-dot.running {
+  background: #8bc891;
+}
+
+.terminal-status-dot.spawning,
+.terminal-status-dot.needs-input {
+  background: #e5c07b;
+  animation: terminal-status-pulse 1.1s ease-in-out infinite;
+}
+
+.terminal-status-dot.attention {
+  background: #7aa2f7;
+}
+
+.terminal-status-dot.done {
+  background: #5f7d64;
+}
+
+.terminal-status-dot.exited {
+  background: #555555;
+}
+
+@keyframes terminal-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .terminal-resize-handle {
@@ -7630,7 +7880,7 @@ button.git-badge:hover {
 .terminal-panel.dock-right.collapsed .terminal-title span,
 .terminal-panel.dock-right.collapsed .terminal-title svg:last-child,
 .terminal-panel.dock-right.collapsed .terminal-launchers,
-.terminal-panel.dock-right.collapsed .terminal-cwd,
+.terminal-panel.dock-right.collapsed .terminal-header-right,
 .terminal-panel.dock-right.collapsed .terminal-icon-button {
   display: none;
 }
@@ -7665,9 +7915,49 @@ button.git-badge:hover {
   cursor: not-allowed;
 }
 
-.terminal-cwd {
+.terminal-header-right {
   min-width: 0;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-context-chip {
+  flex: none;
+  max-width: 220px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid #303030;
+  border-radius: 5px;
+  background: #1c1c1c;
+  color: #b8b8b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.terminal-context-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-context-chip:hover:not(:disabled) {
+  background: #262626;
+  color: #ffffff;
+}
+
+.terminal-context-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.terminal-cwd {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7771,6 +8061,7 @@ button.git-badge:hover {
 
 .terminal-body {
   position: relative;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   background: #111111;
@@ -7916,6 +8207,34 @@ button.git-badge:hover {
   padding: 18px;
   color: #858585;
   font-size: 12px;
+}
+
+.terminal-relaunch-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: #111111;
+}
+
+.terminal-relaunch-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #3d5a44;
+  border-radius: 6px;
+  background: #1c241d;
+  color: #d4d4d4;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.terminal-relaunch-button:hover {
+  background: #243026;
+  color: #ffffff;
 }
 
 .terminal-error {
@@ -13192,6 +13511,14 @@ button.git-badge:hover {
 .inbox-run-card-head span,
 .inbox-run-log-summary span,
 .inbox-run-card-actions span { color: var(--muted); font-size: 11px; }
+.inbox-run-card-head .inbox-run-context {
+  flex-basis: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
 .inbox-run-log-summary button {
   border: 0;
   background: transparent;
@@ -13425,6 +13752,69 @@ button.git-badge:hover {
 .task-new-dialog p {
   margin: 4px 0 0;
   color: var(--muted);
+}
+
+.inbox-process-dialog {
+  display: grid;
+  gap: 14px;
+  width: min(560px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-lg);
+  padding: 18px;
+}
+
+.inbox-process-dialog header,
+.inbox-process-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inbox-process-dialog header {
+  align-items: flex-start;
+}
+
+.inbox-process-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.inbox-process-dialog p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.inbox-process-dialog textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 82%, var(--bg));
+  color: var(--ink);
+  padding: 10px;
+  outline: 0;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.inbox-process-dialog textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.inbox-process-dialog-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.inbox-process-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .task-natural-dialog textarea {

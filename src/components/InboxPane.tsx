@@ -2,6 +2,7 @@ import {
   Brain,
   Check,
   FilePlus2,
+  FolderOpen,
   HelpCircle,
   Inbox,
   Loader2,
@@ -43,6 +44,7 @@ import type {
   MissionRecord,
 } from "../lib/types";
 import { BulkActionBar } from "./BulkActionBar";
+import { InboxProcessComposer } from "./inbox/InboxProcessComposer";
 import { ProcessedItemsBrowser } from "./inbox/ProcessedItemsBrowser";
 import { InboxRunsPanel } from "./inbox/InboxRunsPanel";
 import { formatBytes } from "./inbox/processedFormat";
@@ -71,7 +73,7 @@ interface InboxPaneProps {
   onBulkAccept: (keys: string[]) => void | Promise<void>;
   onBulkReject: (keys: string[]) => void | Promise<void>;
   onBulkMoveFiles: (keys: string[]) => void | Promise<void>;
-  onProcessEntries: (keys: string[]) => void | Promise<void>;
+  onProcessEntries: (keys: string[], context?: string) => void | Promise<void>;
   onStageFiles: (paths: string[]) => void | Promise<void>;
   onProcessedStatusFilter: (status: InboxProcessedStatus | "all") => void;
   onProcessedQuery: (query: string) => void;
@@ -149,6 +151,7 @@ export function InboxPane({
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
   const [dragOverDrop, setDragOverDrop] = useState(false);
   const [contextMenu, setContextMenu] = useState<InboxContextMenuState | null>(null);
+  const [processComposer, setProcessComposer] = useState<{ keys: string[] } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const handleContextMenuKeyDown = useContextMenuKeyboard(
     contextMenuRef,
@@ -253,6 +256,26 @@ export function InboxPane({
     if (focusedKey?.startsWith("entry:")) return [focusedKey];
     const fallback = rows.find((row) => row.kind === "entry")?.key;
     return fallback ? [fallback] : [];
+  };
+
+  // Distinct channels of the staged entry keys, for the composer's
+  // `inbox-process <channels>` preview line.
+  const channelsForKeys = (keys: string[]): string[] => {
+    const ids = new Set(
+      keys.filter((key) => key.startsWith("entry:")).map((key) => key.slice("entry:".length)),
+    );
+    const channels = entries
+      .filter((entry) => ids.has(entry.id))
+      .map((entry) => entry.channel)
+      .filter(Boolean);
+    return [...new Set(channels)].sort();
+  };
+
+  // All Process triggers route through here so the user can add free-text
+  // context before the run is dispatched.
+  const openProcessComposer = (keys: string[]) => {
+    if (keys.length === 0) return;
+    setProcessComposer({ keys });
   };
 
   const actionKeys = () => {
@@ -440,7 +463,7 @@ export function InboxPane({
           void actOnKeys(actionKeys(), "rejected");
         } else if (event.key.toLowerCase() === "p") {
           event.preventDefault();
-          void onProcessEntries(processActionKeys());
+          openProcessComposer(processActionKeys());
         } else if (event.key === "?") {
           event.preventDefault();
           setCheatsheetOpen((value) => !value);
@@ -581,11 +604,23 @@ export function InboxPane({
                         <div className="inbox-decision">
                           <button
                             type="button"
+                            className="icon-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onRevealPath(pathForRow(row));
+                            }}
+                            title={t("inbox.menu.revealFinder")}
+                            aria-label={t("inbox.menu.revealFinder")}
+                          >
+                            <FolderOpen size={14} />
+                          </button>
+                          <button
+                            type="button"
                             className="button button-ghost button-sm"
                             disabled={actionBusy}
                             onClick={(event) => {
                               event.stopPropagation();
-                              void onProcessEntries([key]);
+                              openProcessComposer([key]);
                             }}
                           >
                             <Play size={14} />
@@ -764,6 +799,18 @@ export function InboxPane({
                   >
                     <X size={14} />
                   </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRevealPath(entry.item.path);
+                    }}
+                    title={t("inbox.menu.revealFinder")}
+                    aria-label={t("inbox.menu.revealFinder")}
+                  >
+                    <FolderOpen size={14} />
+                  </button>
                 </div>
               </article>
             );
@@ -820,8 +867,24 @@ export function InboxPane({
         onAccept={() => void onBulkAccept(selectedDecisionKeys)}
         onReject={() => void onBulkReject(selectedDecisionKeys)}
         onMoveFiles={() => void onBulkMoveFiles([...selectedKeys])}
-        onProcess={() => void onProcessEntries([...selectedKeys])}
+        onProcess={() => openProcessComposer([...selectedKeys])}
         onCancel={() => setSelectedKeys(new Set())}
+      />
+      <InboxProcessComposer
+        open={processComposer !== null}
+        targetCount={
+          processComposer
+            ? processComposer.keys.filter((key) => key.startsWith("entry:")).length
+            : 0
+        }
+        channels={processComposer ? channelsForKeys(processComposer.keys) : []}
+        busy={actionBusy}
+        onRun={(context) => {
+          const keys = processComposer?.keys ?? [];
+          setProcessComposer(null);
+          void onProcessEntries(keys, context);
+        }}
+        onCancel={() => setProcessComposer(null)}
       />
     </main>
   );

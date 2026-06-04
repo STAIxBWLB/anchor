@@ -8,6 +8,7 @@ export type FilesSortKey = "name" | "modifiedDesc" | "modifiedAsc";
 export type FilesListAttribute = "parent" | "kind" | "modified" | "size" | "git" | "binary";
 export type TerminalLauncherId = "claude" | "codex" | "shell";
 export type TerminalDock = "bottom" | "right";
+export type TerminalAttachMentionStyle = "mention" | "path" | "read";
 export type ThemeMode = "system" | "light" | "dark";
 export type AnchorAppMode =
   | "pkm"
@@ -161,6 +162,10 @@ export interface AnchorSettings {
     lastHeight: number;
     autoLaunch: TerminalLauncherId | null;
     launchers: Record<TerminalLauncherId, TerminalLauncherSettings>;
+    /** Inject ANCHOR_* env + --add-dir from the active item into agent sessions. */
+    injectActiveContext: boolean;
+    /** How "attach active item" inserts a file reference into a focused agent. */
+    attachMentionStyle: TerminalAttachMentionStyle;
   };
   ai: AiSettings;
   comms: CommsSettings;
@@ -320,6 +325,8 @@ export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
         label: "Shell",
       },
     },
+    injectActiveContext: true,
+    attachMentionStyle: "mention",
   },
   ai: {
     defaultRuntime: "claude",
@@ -454,6 +461,11 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
           DEFAULT_ANCHOR_SETTINGS.terminal.launchers.shell,
         ),
       },
+      injectActiveContext:
+        typeof terminal.injectActiveContext === "boolean"
+          ? terminal.injectActiveContext
+          : DEFAULT_ANCHOR_SETTINGS.terminal.injectActiveContext,
+      attachMentionStyle: parseAttachMentionStyle(terminal.attachMentionStyle),
     },
     ai: normalizeAi(value.ai),
     comms: normalizeCommsSettings(value.comms),
@@ -1115,6 +1127,12 @@ function parseAutoLaunch(value: unknown): TerminalLauncherId | null {
   return value === "claude" || value === "codex" || value === "shell"
     ? value
     : DEFAULT_ANCHOR_SETTINGS.terminal.autoLaunch;
+}
+
+function parseAttachMentionStyle(value: unknown): TerminalAttachMentionStyle {
+  return value === "mention" || value === "path" || value === "read"
+    ? value
+    : DEFAULT_ANCHOR_SETTINGS.terminal.attachMentionStyle;
 }
 
 function parseStringArray(value: unknown): string[] {
