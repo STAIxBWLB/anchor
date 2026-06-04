@@ -58,6 +58,29 @@ export function sourceDropPath(config: InboxRuntimeConfig, key: string): string 
   return dropRoot ? `${dropRoot}/${key}` : key;
 }
 
+export function inboxRootPath(config: InboxRuntimeConfig): string {
+  return trimTrailingPathSlashes(config.root) || ".";
+}
+
+export function sourceFolderPath(config: InboxRuntimeConfig, key: string): string {
+  return joinInboxPath(inboxRootPath(config), sourceDropPath(config, key));
+}
+
+function joinInboxPath(root: string, child: string): string {
+  const left = trimTrailingPathSlashes(root);
+  const right = child.replace(/^\/+/, "");
+  if (!right) return left || ".";
+  if (!left) return right;
+  if (left === "/") return `/${right}`;
+  return `${left}/${right}`;
+}
+
+function trimTrailingPathSlashes(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  if (trimmed.length > 0) return trimmed;
+  return path.startsWith("/") ? "/" : "";
+}
+
 /** Index source runs by channel for O(1) lookup in the dashboard. */
 export function sourceRunByChannel(runs: InboxSourceRun[]): Map<string, InboxSourceRun> {
   const map = new Map<string, InboxSourceRun>();

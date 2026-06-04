@@ -125,7 +125,7 @@ import {
   type BinaryViewerClassification,
   type LegacyLaunchdService,
 } from "./lib/api";
-import { sourceDropPath } from "./lib/inboxSources";
+import { inboxRootPath, sourceFolderPath } from "./lib/inboxSources";
 import {
   exportDispatch,
   exportPlan,
@@ -2162,6 +2162,10 @@ function MainApp() {
   const inboxItems = useMemo<InboxItemState[]>(
     () => buildInboxItemStates(inboxDrops, inboxCarry),
     [inboxDrops, inboxCarry],
+  );
+  const inboxSourceFolderKeys = useMemo(
+    () => Object.keys(inboxRuntimeConfig.channels ?? {}),
+    [inboxRuntimeConfig],
   );
 
   const gmailItems = useMemo<GmailMessageState[]>(
@@ -6495,6 +6499,7 @@ function MainApp() {
             processingLogLines={processingLogLines}
             sourceFilter={inboxSourceFilter}
             onSourceFilter={setInboxSourceFilter}
+            sourceFolderKeys={inboxSourceFolderKeys}
             fileDropTarget={inboxRuntimeConfig.file_drop}
             focusRequest={inboxFocusTick}
             actionBusy={inboxActionBusy}
@@ -6506,18 +6511,16 @@ function MainApp() {
             onOpenSettings={openInboxSettings}
             onOpenInboxFolder={() => {
               if (!inboxWorkspacePath) return;
-              void openInFileManager(inboxWorkspacePath, inboxRuntimeConfig.root).catch((err) =>
-                setError(err instanceof Error ? err.message : String(err)),
-              );
+              void openInFileManager(
+                inboxWorkspacePath,
+                inboxRootPath(inboxRuntimeConfig),
+              ).catch((err) => setError(err instanceof Error ? err.message : String(err)));
             }}
             onOpenSourceFolder={(key) => {
               if (!inboxWorkspacePath) return;
-              const inboxRoot = inboxRuntimeConfig.root.replace(/\/+$/, "");
-              const dropPath = sourceDropPath(inboxRuntimeConfig, key).replace(/^\/+/, "");
-              const targetPath = inboxRoot ? `${inboxRoot}/${dropPath}` : dropPath;
               void openInFileManager(
                 inboxWorkspacePath,
-                targetPath,
+                sourceFolderPath(inboxRuntimeConfig, key),
               ).catch((err) => setError(err instanceof Error ? err.message : String(err)));
             }}
             onClassify={(id) => void classifyItem(id)}

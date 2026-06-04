@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sourceDropPath } from "./inboxSources";
+import { inboxRootPath, sourceDropPath, sourceFolderPath } from "./inboxSources";
 import type { InboxRuntimeConfig } from "./types";
 
 describe("sourceDropPath", () => {
@@ -18,6 +18,45 @@ describe("sourceDropPath", () => {
 
   it("falls back to the inbox drop root plus source key", () => {
     expect(sourceDropPath(runtimeConfig(), "telegram")).toBe("drop/telegram");
+  });
+});
+
+describe("sourceFolderPath", () => {
+  it("joins tilde inbox roots with channel drop paths without stripping tilde", () => {
+    const config = runtimeConfig();
+    config.root = "~/workspace/work/inbox";
+    config.channels.kakao = {
+      provider: "kakao",
+      skill: "io-kakao",
+      kind: "bundle",
+      drop_paths: ["drop/kakao"],
+      dedupe: "sha256",
+    };
+
+    expect(inboxRootPath(config)).toBe("~/workspace/work/inbox");
+    expect(sourceFolderPath(config, "kakao")).toBe("~/workspace/work/inbox/drop/kakao");
+  });
+
+  it("trims duplicate boundary slashes while preserving absolute roots", () => {
+    const config = runtimeConfig();
+    config.root = "/Users/yj.lee/workspace/work/inbox/";
+    config.channels.gws = {
+      provider: "gws",
+      skill: "io-gws",
+      kind: "bundle",
+      drop_paths: ["/drop/gws/"],
+      dedupe: "provider-native",
+    };
+
+    expect(sourceFolderPath(config, "gws")).toBe("/Users/yj.lee/workspace/work/inbox/drop/gws/");
+  });
+
+  it("falls back to a relative inbox root and configured drop root", () => {
+    const config = runtimeConfig();
+    config.root = "inbox/";
+    config.paths.drop = "drop/";
+
+    expect(sourceFolderPath(config, "telegram")).toBe("inbox/drop/telegram");
   });
 });
 

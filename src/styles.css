@@ -10741,6 +10741,18 @@ button.git-badge:hover {
   font-weight: 650;
 }
 
+.inbox-filter-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inbox-filter-folder-button {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
 .inbox-filter-chip.active {
   color: var(--ink);
   border-color: var(--accent);

@@ -22,13 +22,17 @@ import {
 } from "../lib/fileDrag";
 import {
   categoryLabel,
+  countInboxEntryChannels,
   countInboxSources,
+  filterEntriesByChannel,
   filterItemsBySource,
   groupEntriesByChannel,
   groupFilesBySource,
   inboxContextActionKeys,
   inboxTrashTargetsForRows,
+  mergeInboxSourceKeys,
   shouldHandleInboxDeleteShortcut,
+  uniqueEntryChannels,
   uniqueSources,
   type InboxDecision,
   type InboxItemState,
@@ -65,6 +69,7 @@ interface InboxPaneProps {
   processingLogLines: Record<string, string[]>;
   sourceFilter: string | null;
   onSourceFilter: (source: string | null) => void;
+  sourceFolderKeys?: string[];
   fileDropTarget: InboxFileDropConfig;
   onRefresh: () => void;
   onOpenSettings: () => void;
@@ -123,6 +128,7 @@ export function InboxPane({
   processingLogLines,
   sourceFilter,
   onSourceFilter,
+  sourceFolderKeys = [],
   fileDropTarget,
   onRefresh,
   onOpenSettings,
@@ -164,16 +170,27 @@ export function InboxPane({
     !!contextMenu,
     () => setContextMenu(null),
   );
-  const sources = useMemo(() => uniqueSources(items), [items]);
-  const sourceCounts = useMemo(() => countInboxSources(items), [items]);
+  const fileSources = useMemo(() => uniqueSources(items), [items]);
+  const entrySources = useMemo(() => uniqueEntryChannels(entries), [entries]);
+  const sources = useMemo(
+    () => mergeInboxSourceKeys(sourceFolderKeys, entrySources, fileSources),
+    [sourceFolderKeys, entrySources, fileSources],
+  );
+  const fileSourceCounts = useMemo(() => countInboxSources(items), [items]);
+  const entrySourceCounts = useMemo(() => countInboxEntryChannels(entries), [entries]);
+  const visibleEntries = useMemo(
+    () => filterEntriesByChannel(entries, sourceFilter),
+    [entries, sourceFilter],
+  );
   const visibleItems = useMemo(
     () => filterItemsBySource(items, sourceFilter),
     [items, sourceFilter],
   );
-  const entryGroups = useMemo(() => groupEntriesByChannel(entries), [entries]);
+  const entryGroups = useMemo(() => groupEntriesByChannel(visibleEntries), [visibleEntries]);
   const fileGroups = useMemo(() => groupFilesBySource(visibleItems), [visibleItems]);
   const pending = visibleItems.filter((entry) => entry.decision === "pending").length;
-  const entryPending = entries.filter((entry) => entry.status !== "done").length;
+  const entryPending = visibleEntries.filter((entry) => entry.status !== "done").length;
+  const totalSourceCount = entries.length + items.length;
   const rows = useMemo<InboxRow[]>(
     () => [
       ...entryGroups.flatMap((group) =>
@@ -558,20 +575,32 @@ export function InboxPane({
             className={sourceFilter === null ? "inbox-filter-chip active" : "inbox-filter-chip"}
             onClick={() => onSourceFilter(null)}
           >
-            {t("inbox.filter.all")} <span className="count">{items.length}</span>
+            {t("inbox.filter.all")} <span className="count">{totalSourceCount}</span>
           </button>
           {sources.map((source) => {
-            const count = sourceCounts.get(source) ?? 0;
+            const count =
+              (entrySourceCounts.get(source) ?? 0) + (fileSourceCounts.get(source) ?? 0);
             const active = sourceFilter === source;
             return (
-              <button
-                type="button"
-                key={source}
-                className={active ? "inbox-filter-chip active" : "inbox-filter-chip"}
-                onClick={() => onSourceFilter(active ? null : source)}
-              >
-                {source} <span className="count">{count}</span>
-              </button>
+              <div className="inbox-filter-source" key={source}>
+                <button
+                  type="button"
+                  className={active ? "inbox-filter-chip active" : "inbox-filter-chip"}
+                  onClick={() => onSourceFilter(active ? null : source)}
+                >
+                  {source} <span className="count">{count}</span>
+                </button>
+                <button
+                  type="button"
+                  className="icon-button inbox-filter-folder-button"
+                  onClick={() => onOpenSourceFolder?.(source)}
+                  disabled={!onOpenSourceFolder}
+                  title={t("inbox.openSourceFolder", { source })}
+                  aria-label={t("inbox.openSourceFolder", { source })}
+                >
+                  <FolderOpen size={13} />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -582,7 +611,7 @@ export function InboxPane({
           title="CONFIGURED ENTRIES"
         >
             <div className="inbox-list">
-              {entries.length === 0 ? (
+              {visibleEntries.length === 0 ? (
                 <div className="inbox-empty">
                   <Inbox size={24} />
                   <strong>No configured inbox items</strong>

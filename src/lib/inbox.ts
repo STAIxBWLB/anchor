@@ -64,6 +64,43 @@ export function countInboxSources<T extends { item: { source: string } }>(
   return counts;
 }
 
+export function filterEntriesByChannel<T extends { channel: string }>(
+  entries: T[],
+  source: string | null,
+): T[] {
+  if (source === null) return entries;
+  return entries.filter((entry) => entry.channel === source);
+}
+
+export function uniqueEntryChannels<T extends { channel: string }>(entries: T[]): string[] {
+  const seen = new Set<string>();
+  for (const entry of entries) seen.add(entry.channel);
+  return [...seen].sort();
+}
+
+export function countInboxEntryChannels<T extends { channel: string }>(
+  entries: T[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    counts.set(entry.channel, (counts.get(entry.channel) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function mergeInboxSourceKeys(...groups: string[][]): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const group of groups) {
+    for (const key of group) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(key);
+    }
+  }
+  return merged;
+}
+
 export interface InboxEntryChannelGroup {
   key: string;
   entries: InboxEntry[];
