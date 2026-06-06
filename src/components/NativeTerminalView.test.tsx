@@ -81,10 +81,17 @@ let rectSize = { width: 800, height: 300 };
 let rafQueue: FrameRequestCallback[] = [];
 let canvasStub: CanvasStub;
 let roots: Root[] = [];
+let devicePixelRatioDescriptor: PropertyDescriptor | undefined;
+let actEnvironmentDescriptor: PropertyDescriptor | undefined;
 
 function installDomStubs() {
   rectSize = { width: 800, height: 300 };
   rafQueue = [];
+  devicePixelRatioDescriptor = Object.getOwnPropertyDescriptor(window, "devicePixelRatio");
+  actEnvironmentDescriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "IS_REACT_ACT_ENVIRONMENT",
+  );
   canvasStub = {
     clearRect: vi.fn(),
     fillRect: vi.fn(),
@@ -157,6 +164,25 @@ function installDomStubs() {
   vi.stubGlobal("ResizeObserver", TestResizeObserver);
 }
 
+function restoreProperty(
+  target: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+) {
+  if (descriptor) {
+    Object.defineProperty(target, key, descriptor);
+    return;
+  }
+  delete (target as Record<PropertyKey, unknown>)[key];
+}
+
+function restoreDomStubGlobals() {
+  restoreProperty(window, "devicePixelRatio", devicePixelRatioDescriptor);
+  restoreProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironmentDescriptor);
+  devicePixelRatioDescriptor = undefined;
+  actEnvironmentDescriptor = undefined;
+}
+
 function flushRaf() {
   const callbacks = rafQueue;
   rafQueue = [];
@@ -205,6 +231,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  restoreDomStubGlobals();
 });
 
 describe("NativeTerminalView helpers", () => {
@@ -724,6 +751,24 @@ describe("NativeTerminalView helpers", () => {
     );
     // Out of range falls back.
     expect(terminalColorToCss({ kind: "indexed", index: 256 }, "#fff")).toBe("#fff");
+  });
+});
+
+describe("NativeTerminalView test harness cleanup", () => {
+  it("restores globals changed by installDomStubs", () => {
+    expect(Object.getOwnPropertyDescriptor(window, "devicePixelRatio")?.value).toBe(2);
+    expect(Object.getOwnPropertyDescriptor(globalThis, "IS_REACT_ACT_ENVIRONMENT")?.value).toBe(
+      true,
+    );
+
+    restoreDomStubGlobals();
+
+    expect(Object.getOwnPropertyDescriptor(window, "devicePixelRatio")?.value).not.toBe(2);
+    expect(
+      Object.getOwnPropertyDescriptor(globalThis, "IS_REACT_ACT_ENVIRONMENT"),
+    ).toBeUndefined();
+
+    installDomStubs();
   });
 });
 
