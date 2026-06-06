@@ -292,10 +292,187 @@ export interface KeyMods {
   meta: boolean;
 }
 
-/** Build the structured Enter command from a modifier set. Used by both the
- *  keydown path and the `beforeinput insertLineBreak` fallback, so Shift+Enter
- *  emits `{shiftKey:true}` (→ CSI-u newline) regardless of which path the
- *  WKWebView text system actually delivers the keystroke through. */
+export interface CapturedEnterMods {
+  mods: KeyMods;
+  at: number;
+}
+
+export interface TerminalModifierTracking {
+  mods: KeyMods;
+  capturedEnter: CapturedEnterMods | null;
+}
+
+type KeyboardModifierEvent = Pick<
+  KeyboardEvent,
+  "shiftKey" | "altKey" | "ctrlKey" | "metaKey"
+> & {
+  getModifierState?: (keyArg: string) => boolean;
+};
+
+const ENTER_CAPTURE_TTL_MS = 1000;
+const ENTER_DEDUPE_MS = 100;
+
+const EMPTY_KEY_MODS: KeyMods = { shift: false, alt: false, ctrl: false, meta: false };
+
+function isEnterKey(event: Pick<KeyboardEvent, "key" | "code">): boolean {
+  return event.key === "Enter" || event.code === "Enter";
+}
+
+function isModifierKey(key: string): boolean {
+  return key === "Meta" || key === "Control" || key === "Alt" || key === "Shift";
+}
+
+export function keyModsFromEvent(
+  event: KeyboardModifierEvent,
+): KeyMods {
+  const hasModifier = (key: string) =>
+    typeof event.getModifierState === "function" ? event.getModifierState(key) : false;
+  return {
+    shift: event.shiftKey || hasModifier("Shift"),
+    alt: event.altKey || hasModifier("Alt"),
+    ctrl: event.ctrlKey || hasModifier("Control"),
+    meta: event.metaKey || hasModifier("Meta"),
+  };
+}
+
+function mergedKeyMods(...mods: KeyMods[]): KeyMods {
+  return mods.reduce<KeyMods>(
+    (current, next) => ({
+      shift: current.shift || next.shift,
+      alt: current.alt || next.alt,
+      ctrl: current.ctrl || next.ctrl,
+      meta: current.meta || next.meta,
+    }),
+    EMPTY_KEY_MODS,
+  );
+}
+
+function freshCapturedEnter(
+  captured: CapturedEnterMods | null,
+  now: number,
+  ttlMs = ENTER_CAPTURE_TTL_MS,
+): KeyMods | null {
+  if (!captured || now - captured.at > ttlMs) return null;
+  return captured.mods;
+}
+
+export function resetTerminalModifierTracking(): TerminalModifierTracking {
+  return { mods: EMPTY_KEY_MODS, capturedEnter: null };
+}
+
+export function recordTerminalKeyDown(
+  event: Pick<
+    KeyboardEvent,
+    "key" | "code" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey"
+  >,
+  current: TerminalModifierTracking,
+  now: number,
+): TerminalModifierTracking {
+  const eventMods = keyModsFromEvent(event);
+  if (isEnterKey(event)) {
+    return {
+      mods: current.mods,
+      capturedEnter: {
+        mods: mergedKeyMods(current.mods, eventMods),
+        at: now,
+      },
+    };
+  }
+  return {
+    mods: eventMods,
+    capturedEnter: isModifierKey(event.key) ? current.capturedEnter : null,
+  };
+}
+
+export function recordTerminalKeyUp(
+  event: Pick<
+    KeyboardEvent,
+    "key" | "code" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey"
+  >,
+  current: TerminalModifierTracking,
+): TerminalModifierTracking {
+  if (isEnterKey(event)) return current;
+  return { mods: keyModsFromEvent(event), capturedEnter: current.capturedEnter };
+}
+
+export function effectiveTerminalEnterMods(
+  event: KeyboardModifierEvent,
+  current: TerminalModifierTracking,
+  now: number,
+): KeyMods {
+  return mergedKeyMods(
+    keyModsFromEvent(event),
+    current.mods,
+    freshCapturedEnter(current.capturedEnter, now) ?? EMPTY_KEY_MODS,
+  );
+}
+
+export function effectiveTerminalLineBreakMods(
+  current: TerminalModifierTracking,
+  now: number,
+  _inputType: string,
+): KeyMods {
+  return mergedKeyMods(
+    { ...EMPTY_KEY_MODS, shift: true },
+    current.mods,
+    freshCapturedEnter(current.capturedEnter, now) ?? EMPTY_KEY_MODS,
+  );
+}
+
+export function isTerminalLineBreakInput(
+  event: Pick<InputEvent, "inputType"> & Partial<Pick<InputEvent, "data">>,
+): boolean {
+  return (
+    event.inputType === "insertLineBreak" ||
+    event.inputType === "insertParagraph" ||
+    (event.inputType === "insertText" &&
+      (event.data === "\n" || event.data === "\r" || event.data === "\r\n"))
+  );
+}
+
+export function terminalEnterAlreadyHandled(
+  now: number,
+  handledAt: number,
+  windowMs = ENTER_DEDUPE_MS,
+): boolean {
+  return handledAt > 0 && now - handledAt < windowMs;
+}
+
+export function terminalLineBreakCommand(
+  _inputType: string,
+  _current: TerminalModifierTracking,
+  now: number,
+  handledAt: number,
+  composing: boolean,
+  inputComposing?: boolean,
+): TerminalInputCommand | null {
+  if (composing || inputComposing) return null;
+  if (terminalEnterAlreadyHandled(now, handledAt)) return null;
+  return lineBreakCommand();
+}
+
+export function nativeShiftEnterCommand(
+  event: Pick<
+    KeyboardEvent,
+    "key" | "code" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey"
+  > & {
+    getModifierState?: (keyArg: string) => boolean;
+  },
+  current: TerminalModifierTracking,
+  now: number,
+  composing: boolean,
+): TerminalInputCommand | null {
+  if (composing || !isEnterKey(event)) return null;
+  const mods = effectiveTerminalEnterMods(event, current, now);
+  if (!mods.shift || mods.alt || mods.ctrl || mods.meta) return null;
+  return lineBreakCommand();
+}
+
+export function lineBreakCommand(): TerminalInputCommand {
+  return { type: "lineBreak" };
+}
+
+/** Build the structured Enter command from a modifier set. */
 export function enterCommandFromMods(mods: KeyMods): TerminalInputCommand {
   return {
     type: "key",
@@ -306,6 +483,13 @@ export function enterCommandFromMods(mods: KeyMods): TerminalInputCommand {
     ctrlKey: mods.ctrl,
     metaKey: mods.meta,
   };
+}
+
+export function terminalEnterCommandFromMods(mods: KeyMods): TerminalInputCommand {
+  if (mods.shift && !mods.alt && !mods.ctrl && !mods.meta) {
+    return lineBreakCommand();
+  }
+  return enterCommandFromMods(mods);
 }
 
 export const NativeTerminalView = memo(
@@ -328,6 +512,7 @@ export const NativeTerminalView = memo(
     // captured from non-Enter key events instead. enterHandledAtRef dedupes the
     // keydown path against the beforeinput(insertLineBreak) fallback.
     const modsRef = useRef<KeyMods>({ shift: false, alt: false, ctrl: false, meta: false });
+    const capturedEnterRef = useRef<CapturedEnterMods | null>(null);
     const enterHandledAtRef = useRef(0);
 
     // Retained terminal grid + metrics (mutated outside React for paint speed).
@@ -781,26 +966,22 @@ export const NativeTerminalView = memo(
     const onKeyDown = useCallback(
       (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         const native = event.nativeEvent;
-        // Track modifier state from every NON-Enter key event (those carry
-        // reliable modifier flags). The Enter event itself may have Shift
-        // stripped by macOS, so we never let it overwrite the tracked state.
-        if (event.key !== "Enter") {
-          modsRef.current = {
-            shift: native.shiftKey,
-            alt: native.altKey,
-            ctrl: native.ctrlKey,
-            meta: native.metaKey,
-          };
-        }
+        const now = performance.now();
+        const tracking = recordTerminalKeyDown(
+          native,
+          { mods: modsRef.current, capturedEnter: capturedEnterRef.current },
+          now,
+        );
+        modsRef.current = tracking.mods;
+        capturedEnterRef.current = tracking.capturedEnter;
         const composing = native.isComposing || composingRef.current;
         // Effective modifiers for an Enter: prefer the event's own flags, but
-        // fall back to the tracked held state when WKWebView stripped them.
-        const mods: KeyMods = {
-          shift: native.shiftKey || modsRef.current.shift,
-          alt: native.altKey || modsRef.current.alt,
-          ctrl: native.ctrlKey || modsRef.current.ctrl,
-          meta: native.metaKey || modsRef.current.meta,
-        };
+        // fall back to tracked/captured state when WKWebView stripped them.
+        const mods = effectiveTerminalEnterMods(
+          native,
+          { mods: modsRef.current, capturedEnter: capturedEnterRef.current },
+          now,
+        );
 
         if (event.key === "Enter" || event.code === "Enter") {
           if (composing) {
@@ -815,8 +996,9 @@ export const NativeTerminalView = memo(
             return;
           }
           event.preventDefault();
-          enterHandledAtRef.current = performance.now();
-          onInput(enterCommandFromMods(mods));
+          enterHandledAtRef.current = now;
+          capturedEnterRef.current = null;
+          onInput(terminalEnterCommandFromMods(mods));
           return;
         }
 
@@ -831,20 +1013,21 @@ export const NativeTerminalView = memo(
 
     const onKeyUp = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const native = event.nativeEvent;
-      if (event.key !== "Enter") {
-        modsRef.current = {
-          shift: native.shiftKey,
-          alt: native.altKey,
-          ctrl: native.ctrlKey,
-          meta: native.metaKey,
-        };
-      }
+      const tracking = recordTerminalKeyUp(native, {
+        mods: modsRef.current,
+        capturedEnter: capturedEnterRef.current,
+      });
+      modsRef.current = tracking.mods;
+      capturedEnterRef.current = tracking.capturedEnter;
     }, []);
 
     // Reset tracked modifiers when focus/window leaves, so a missed keyup can't
     // latch a modifier and mislabel a later plain Enter as Shift+Enter.
     const resetMods = useCallback(() => {
-      modsRef.current = { shift: false, alt: false, ctrl: false, meta: false };
+      const tracking = resetTerminalModifierTracking();
+      modsRef.current = tracking.mods;
+      capturedEnterRef.current = tracking.capturedEnter;
+      enterHandledAtRef.current = 0;
     }, []);
 
     useEffect(() => {
@@ -852,18 +1035,90 @@ export const NativeTerminalView = memo(
       return () => window.removeEventListener("blur", resetMods);
     }, [resetMods]);
 
+    useEffect(() => {
+      const focusedOnThisTerminal = () => document.activeElement === textareaRef.current;
+      const onNativeKeyDown = (event: KeyboardEvent) => {
+        if (!focusedOnThisTerminal()) return;
+        const now = performance.now();
+        const tracking = recordTerminalKeyDown(
+          event,
+          { mods: modsRef.current, capturedEnter: capturedEnterRef.current },
+          now,
+        );
+        modsRef.current = tracking.mods;
+        capturedEnterRef.current = tracking.capturedEnter;
+        const command = nativeShiftEnterCommand(
+          event,
+          { mods: modsRef.current, capturedEnter: capturedEnterRef.current },
+          now,
+          composingRef.current,
+        );
+        if (!command) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        enterHandledAtRef.current = now;
+        capturedEnterRef.current = null;
+        onInput(command);
+      };
+      const onNativeKeyUp = (event: KeyboardEvent) => {
+        if (!focusedOnThisTerminal()) return;
+        const tracking = recordTerminalKeyUp(event, {
+          mods: modsRef.current,
+          capturedEnter: capturedEnterRef.current,
+        });
+        modsRef.current = tracking.mods;
+        capturedEnterRef.current = tracking.capturedEnter;
+      };
+      window.addEventListener("keydown", onNativeKeyDown, true);
+      window.addEventListener("keyup", onNativeKeyUp, true);
+      return () => {
+        window.removeEventListener("keydown", onNativeKeyDown, true);
+        window.removeEventListener("keyup", onNativeKeyUp, true);
+      };
+    }, [onInput]);
+
+    const handleLineBreakInput = useCallback(
+      (native: InputEvent, target: HTMLTextAreaElement) => {
+        target.value = "";
+        const now = performance.now();
+        const command = terminalLineBreakCommand(
+          native.inputType,
+          { mods: modsRef.current, capturedEnter: capturedEnterRef.current },
+          now,
+          enterHandledAtRef.current,
+          composingRef.current,
+          native.isComposing,
+        );
+        if (!command) return;
+        enterHandledAtRef.current = now;
+        capturedEnterRef.current = null;
+        onInput(command);
+      },
+      [onInput],
+    );
+
+    useEffect(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const onNativeBeforeInput = (event: Event) => {
+        const native = event as InputEvent;
+        if (!isTerminalLineBreakInput(native)) return;
+        event.preventDefault();
+        handleLineBreakInput(native, ta);
+      };
+      ta.addEventListener("beforeinput", onNativeBeforeInput, true);
+      return () => ta.removeEventListener("beforeinput", onNativeBeforeInput, true);
+    }, [handleLineBreakInput]);
+
     const onBeforeInput = useCallback(
       (event: React.FormEvent<HTMLTextAreaElement>) => {
         const native = event.nativeEvent as InputEvent;
         // Enter often reaches WKWebView only as a text-edit (Shift+Enter →
         // insertLineBreak, with the keydown consumed/stripped). Catch it here
         // using the tracked modifier state, deduped against the keydown path.
-        if (native.inputType === "insertLineBreak" || native.inputType === "insertParagraph") {
+        if (isTerminalLineBreakInput(native)) {
           event.preventDefault();
-          event.currentTarget.value = "";
-          if (composingRef.current || native.isComposing) return;
-          if (performance.now() - enterHandledAtRef.current < 100) return;
-          onInput(enterCommandFromMods(modsRef.current));
+          handleLineBreakInput(native, event.currentTarget);
           return;
         }
         const text = terminalBeforeInputToText(native, composingRef.current);
@@ -873,12 +1128,16 @@ export const NativeTerminalView = memo(
         compositionSessionRef.current = null;
         onInput({ type: "text", text });
       },
-      [onInput],
+      [handleLineBreakInput, onInput],
     );
 
     const onTextInput = useCallback(
       (event: React.FormEvent<HTMLTextAreaElement>) => {
         const native = event.nativeEvent as InputEvent;
+        if (isTerminalLineBreakInput(native)) {
+          handleLineBreakInput(native, event.currentTarget);
+          return;
+        }
         // Never touch the textarea value mid-composition — that text is the
         // live jamo the user is looking at.
         if (composingRef.current || native.isComposing) return;
@@ -893,7 +1152,7 @@ export const NativeTerminalView = memo(
         compositionSessionRef.current = null;
         onInput({ type: "text", text });
       },
-      [onInput],
+      [handleLineBreakInput, onInput],
     );
 
     const onCompositionStart = useCallback(() => {
@@ -920,15 +1179,14 @@ export const NativeTerminalView = memo(
         const enter = enterDuringCompositionRef.current;
         if (enter) {
           enterDuringCompositionRef.current = null;
-          onInput({
-            type: "key",
-            key: "Enter",
-            code: "Enter",
-            shiftKey: enter.shiftKey,
-            altKey: enter.altKey,
-            ctrlKey: enter.ctrlKey,
-            metaKey: enter.metaKey,
-          });
+          onInput(
+            terminalEnterCommandFromMods({
+              shift: enter.shiftKey,
+              alt: enter.altKey,
+              ctrl: enter.ctrlKey,
+              meta: enter.metaKey,
+            }),
+          );
         }
         requestPaint([cursorRef.current.row]);
       },

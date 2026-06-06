@@ -9,6 +9,7 @@ pub enum TerminalInputCommand {
     Paste {
         text: String,
     },
+    LineBreak,
     Key {
         key: String,
         #[serde(default)]
@@ -80,6 +81,9 @@ pub fn encode_terminal_input(
                 Some(text.clone())
             }
         }
+        TerminalInputCommand::LineBreak => {
+            encode_line_break(kind, kitty_keyboard_active, bracketed_paste_active)
+        }
         TerminalInputCommand::Key {
             key,
             shift_key,
@@ -95,6 +99,7 @@ pub fn encode_terminal_input(
             *ctrl_key,
             *meta_key,
             kitty_keyboard_active,
+            bracketed_paste_active,
         ),
         // Mouse/Wheel are routed through `encode_mouse_input`, which needs the
         // terminal's active mouse modes; keyboard-path callers ignore them.
@@ -228,20 +233,10 @@ fn encode_key(
     ctrl: bool,
     meta: bool,
     kitty_keyboard_active: bool,
+    bracketed_paste_active: bool,
 ) -> Option<String> {
-    // Shift+Enter must reach AI CLIs as the CSI-u encoding so they insert a
-    // newline instead of submitting. Fire it when the session was launched as an
-    // AI kind, OR whenever the foreground program has enabled the kitty keyboard
-    // protocol — which is exactly what `claude`/`codex` do when run directly
-    // from a shell session, so Shift+Enter works there too.
-    if key == "Enter"
-        && shift
-        && !alt
-        && !ctrl
-        && !meta
-        && (kind == "claude" || kind == "codex" || kitty_keyboard_active)
-    {
-        return Some("\x1b[13;2u".to_string());
+    if key == "Enter" && shift && !alt && !ctrl && !meta {
+        return encode_line_break(kind, kitty_keyboard_active, bracketed_paste_active);
     }
 
     let mut encoded = match key {
@@ -268,6 +263,25 @@ fn encode_key(
         encoded.insert(0, '\x1b');
     }
     Some(encoded)
+}
+
+fn encode_line_break(
+    kind: &str,
+    kitty_keyboard_active: bool,
+    bracketed_paste_active: bool,
+) -> Option<String> {
+    // In Claude/Codex TUIs, bracketed-paste newline is the most stable way to
+    // express "insert a line break" because it does not depend on the app's
+    // enhanced-keyboard detection path. Shell sessions still use CSI-u once the
+    // foreground program explicitly enables the kitty keyboard protocol.
+    let ai_kind = kind == "claude" || kind == "codex";
+    if ai_kind && bracketed_paste_active {
+        return Some("\x1b[200~\n\x1b[201~".to_string());
+    }
+    if ai_kind || kitty_keyboard_active {
+        return Some("\x1b[13;2u".to_string());
+    }
+    Some("\r".to_string())
 }
 
 fn ctrl_encoded(value: &str) -> Option<String> {
@@ -312,6 +326,57 @@ mod tests {
         }
     }
 
+    fn line_break() -> TerminalInputCommand {
+        TerminalInputCommand::LineBreak
+    }
+
+    #[test]
+    fn line_break_deserializes_from_ipc_shape() {
+        let command: TerminalInputCommand =
+            serde_json::from_str(r#"{"type":"lineBreak"}"#).unwrap();
+        assert_eq!(command, TerminalInputCommand::LineBreak);
+    }
+
+    #[test]
+    fn line_break_ai_uses_bracketed_paste_when_active() {
+        assert_eq!(
+            encode_terminal_input("claude", &line_break(), false, true),
+            Some("\x1b[200~\n\x1b[201~".to_string())
+        );
+        assert_eq!(
+            encode_terminal_input("codex", &line_break(), true, true),
+            Some("\x1b[200~\n\x1b[201~".to_string())
+        );
+    }
+
+    #[test]
+    fn line_break_ai_falls_back_to_csi_u() {
+        assert_eq!(
+            encode_terminal_input("claude", &line_break(), false, false),
+            Some("\x1b[13;2u".to_string())
+        );
+        assert_eq!(
+            encode_terminal_input("codex", &line_break(), true, false),
+            Some("\x1b[13;2u".to_string())
+        );
+    }
+
+    #[test]
+    fn line_break_shell_without_kitty_stays_enter() {
+        assert_eq!(
+            encode_terminal_input("shell", &line_break(), false, false),
+            Some("\r".to_string())
+        );
+    }
+
+    #[test]
+    fn line_break_shell_with_kitty_uses_csi_u() {
+        assert_eq!(
+            encode_terminal_input("shell", &line_break(), true, false),
+            Some("\x1b[13;2u".to_string())
+        );
+    }
+
     #[test]
     fn shift_enter_ai_uses_csi_u_without_observed_kitty_mode() {
         assert_eq!(
@@ -321,6 +386,18 @@ mod tests {
         assert_eq!(
             encode_terminal_input("codex", &key("Enter", true), false, false),
             Some("\x1b[13;2u".to_string())
+        );
+    }
+
+    #[test]
+    fn shift_enter_ai_uses_bracketed_paste_newline_when_active() {
+        assert_eq!(
+            encode_terminal_input("claude", &key("Enter", true), false, true),
+            Some("\x1b[200~\n\x1b[201~".to_string())
+        );
+        assert_eq!(
+            encode_terminal_input("codex", &key("Enter", true), true, true),
+            Some("\x1b[200~\n\x1b[201~".to_string())
         );
     }
 
@@ -346,6 +423,10 @@ mod tests {
         // kitty keyboard protocol, so Shift+Enter must insert a newline.
         assert_eq!(
             encode_terminal_input("shell", &key("Enter", true), true, false),
+            Some("\x1b[13;2u".to_string())
+        );
+        assert_eq!(
+            encode_terminal_input("shell", &key("Enter", true), true, true),
             Some("\x1b[13;2u".to_string())
         );
     }

@@ -5,13 +5,13 @@ mod snapshot;
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::env;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use std::env;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::cli_path::{augmented_path, merge_path_env, resolve_program};
@@ -333,7 +333,13 @@ fn spawn_output_pump(
     // FRAME_COALESCE_MS, sending only the rows alacritty reports as damaged.
     let dirty = Arc::new(AtomicBool::new(true));
     let running = Arc::new(AtomicBool::new(true));
-    let emitter = spawn_frame_emitter(app, session_id, model.clone(), dirty.clone(), running.clone());
+    let emitter = spawn_frame_emitter(
+        app,
+        session_id,
+        model.clone(),
+        dirty.clone(),
+        running.clone(),
+    );
 
     thread::spawn(move || {
         let mut buf = [0_u8; 8192];
@@ -426,7 +432,7 @@ fn build_terminal_command_spec(
 }
 
 fn default_term_program(kind: &str) -> &'static str {
-    if kind == "claude" {
+    if kind == "claude" || kind == "codex" {
         "ghostty"
     } else {
         "Anchor"
@@ -527,7 +533,7 @@ mod tests {
         let codex = build_terminal_command_spec("codex", Some(&cwd_str), None, None, None).unwrap();
         assert_eq!(codex.program, "codex");
         assert_eq!(codex.args, vec!["--cd", cwd_str.as_str()]);
-        assert_eq!(codex.extra_env["TERM_PROGRAM"], "Anchor");
+        assert_eq!(codex.extra_env["TERM_PROGRAM"], "ghostty");
 
         let shell = build_terminal_command_spec("shell", Some(&cwd_str), None, None, None).unwrap();
         assert!(!shell.program.is_empty());

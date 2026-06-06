@@ -230,6 +230,35 @@ pub fn write_shared(writer: &SharedTerminalWriter, bytes: &[u8]) -> Result<(), S
 mod tests {
     use super::*;
 
+    #[derive(Clone)]
+    struct CaptureWriter {
+        bytes: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl CaptureWriter {
+        fn new() -> Self {
+            Self {
+                bytes: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn output(&self) -> String {
+            let bytes = self.bytes.lock().unwrap().clone();
+            String::from_utf8(bytes).unwrap()
+        }
+    }
+
+    impl Write for CaptureWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.bytes.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
     #[test]
     fn model_parses_plain_text_and_ansi_color() {
         let mut model = TerminalModel::new(8, 2, NullTerminalWriter);
@@ -272,6 +301,19 @@ mod tests {
         assert!(model.kitty_keyboard_active());
         model.advance(b"\x1b[<1u");
         assert!(!model.kitty_keyboard_active());
+    }
+
+    #[test]
+    fn model_reports_kitty_keyboard_mode_queries() {
+        let writer = CaptureWriter::new();
+        let mut model = TerminalModel::new(20, 5, writer.clone());
+
+        model.advance(b"\x1b[?u");
+        assert!(writer.output().contains("\x1b[?0u"));
+
+        model.advance(b"\x1b[>7u");
+        model.advance(b"\x1b[?u");
+        assert!(writer.output().contains("\x1b[?7u"));
     }
 
     #[test]

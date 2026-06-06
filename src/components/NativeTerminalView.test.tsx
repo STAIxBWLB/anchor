@@ -4,19 +4,31 @@ import {
   cellDisplayText,
   cellDisplayWidth,
   domButtonToTerminal,
+  effectiveTerminalEnterMods,
+  effectiveTerminalLineBreakMods,
   enterCommandFromMods,
   finalCompositionText,
   frameLineToText,
   frameToText,
   isTrailingCompositionDuplicate,
+  isTerminalLineBreakInput,
+  keyModsFromEvent,
+  lineBreakCommand,
+  nativeShiftEnterCommand,
   normalizeSelection,
   normalizeTerminalInputText,
+  recordTerminalKeyDown,
+  recordTerminalKeyUp,
+  resetTerminalModifierTracking,
   selectedTerminalText,
   selectionSpanForRow,
   terminalBeforeInputToText,
   terminalColorToCss,
+  terminalEnterAlreadyHandled,
+  terminalEnterCommandFromMods,
   terminalInputEventToText,
   terminalKeyEventToInput,
+  terminalLineBreakCommand,
 } from "./NativeTerminalView";
 
 const baseCell: TerminalCell = {
@@ -95,8 +107,7 @@ describe("NativeTerminalView helpers", () => {
     expect(selectionSpanForRow(range, 4, 10)).toBeNull();
   });
 
-  it("builds the Enter command from tracked modifiers (Shift+Enter -> shiftKey)", () => {
-    // Shift held → Shift+Enter → backend encodes CSI-u newline.
+  it("builds Enter commands and promotes simple Shift+Enter to lineBreak", () => {
     expect(
       enterCommandFromMods({ shift: true, alt: false, ctrl: false, meta: false }),
     ).toEqual({
@@ -108,9 +119,11 @@ describe("NativeTerminalView helpers", () => {
       ctrlKey: false,
       metaKey: false,
     });
-    // No modifiers → plain Enter → backend encodes "\r" (submit).
     expect(
-      enterCommandFromMods({ shift: false, alt: false, ctrl: false, meta: false }),
+      terminalEnterCommandFromMods({ shift: true, alt: false, ctrl: false, meta: false }),
+    ).toEqual(lineBreakCommand());
+    expect(
+      terminalEnterCommandFromMods({ shift: false, alt: false, ctrl: false, meta: false }),
     ).toMatchObject({ type: "key", key: "Enter", shiftKey: false });
   });
 
@@ -166,6 +179,278 @@ describe("NativeTerminalView helpers", () => {
       altKey: false,
       ctrlKey: false,
       metaKey: false,
+    });
+  });
+
+  it("keeps captured Shift+Enter when the React Enter event is stripped", () => {
+    let tracking = resetTerminalModifierTracking();
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Shift",
+        code: "ShiftLeft",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      10,
+    );
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Enter",
+        code: "Enter",
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      20,
+    );
+
+    const mods = effectiveTerminalEnterMods(
+      {
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      21,
+    );
+
+    expect(terminalEnterCommandFromMods(mods)).toEqual({ type: "lineBreak" });
+  });
+
+  it("uses getModifierState when WebKit strips shiftKey on Enter", () => {
+    const stripped = {
+      shiftKey: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      getModifierState: (key: string) => key === "Shift",
+    };
+
+    expect(keyModsFromEvent(stripped)).toMatchObject({
+      shift: true,
+      alt: false,
+      ctrl: false,
+      meta: false,
+    });
+    expect(
+      nativeShiftEnterCommand(
+        {
+          key: "Enter",
+          code: "Enter",
+          ...stripped,
+        },
+        resetTerminalModifierTracking(),
+        30,
+        false,
+      ),
+    ).toEqual({ type: "lineBreak" });
+  });
+
+  it("does not native-capture plain Enter or modified Shift+Enter chords", () => {
+    expect(
+      nativeShiftEnterCommand(
+        {
+          key: "Enter",
+          code: "Enter",
+          shiftKey: false,
+          altKey: false,
+          ctrlKey: false,
+          metaKey: false,
+        },
+        resetTerminalModifierTracking(),
+        30,
+        false,
+      ),
+    ).toBeNull();
+    expect(
+      nativeShiftEnterCommand(
+        {
+          key: "Enter",
+          code: "Enter",
+          shiftKey: true,
+          altKey: true,
+          ctrlKey: false,
+          metaKey: false,
+        },
+        resetTerminalModifierTracking(),
+        30,
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  it("uses tracked Shift for beforeinput line breaks", () => {
+    let tracking = resetTerminalModifierTracking();
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Shift",
+        code: "ShiftLeft",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      10,
+    );
+
+    expect(isTerminalLineBreakInput({ inputType: "insertLineBreak" })).toBe(true);
+    expect(effectiveTerminalLineBreakMods(tracking, 15, "insertLineBreak")).toMatchObject({
+      shift: true,
+    });
+    expect(
+      terminalLineBreakCommand("insertLineBreak", tracking, 15, 0, false, false),
+    ).toEqual({
+      type: "lineBreak",
+    });
+  });
+
+  it("treats bare insertLineBreak as a newline intent even when Shift was stripped", () => {
+    const tracking = resetTerminalModifierTracking();
+
+    expect(
+      terminalLineBreakCommand("insertLineBreak", tracking, 25, 0, false, false),
+    ).toEqual({ type: "lineBreak" });
+  });
+
+  it("treats bare insertParagraph as a newline intent when no keydown handled it", () => {
+    const tracking = resetTerminalModifierTracking();
+
+    expect(
+      terminalLineBreakCommand("insertParagraph", tracking, 25, 0, false, false),
+    ).toEqual({ type: "lineBreak" });
+  });
+
+  it("treats insertText newline payloads as line-break input", () => {
+    const tracking = resetTerminalModifierTracking();
+
+    expect(isTerminalLineBreakInput({ inputType: "insertText", data: "\n" })).toBe(true);
+    expect(terminalLineBreakCommand("insertText", tracking, 25, 0, false, false)).toEqual({
+      type: "lineBreak",
+    });
+  });
+
+  it("treats fallback-only insertParagraph as a newline intent", () => {
+    let tracking = resetTerminalModifierTracking();
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Shift",
+        code: "ShiftLeft",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      10,
+    );
+
+    expect(isTerminalLineBreakInput({ inputType: "insertParagraph" })).toBe(true);
+    expect(
+      terminalLineBreakCommand("insertParagraph", tracking, 25, 0, false, false),
+    ).toEqual({ type: "lineBreak" });
+  });
+
+  it("keeps plain Enter plain when no Shift is tracked or captured", () => {
+    let tracking = resetTerminalModifierTracking();
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Enter",
+        code: "Enter",
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      10,
+    );
+
+    const mods = effectiveTerminalEnterMods(
+      {
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      11,
+    );
+
+    expect(terminalEnterCommandFromMods(mods)).toMatchObject({
+      type: "key",
+      key: "Enter",
+      shiftKey: false,
+    });
+  });
+
+  it("dedupes keydown Enter against the beforeinput line-break fallback", () => {
+    expect(terminalEnterAlreadyHandled(50, 0)).toBe(false);
+    expect(terminalEnterAlreadyHandled(1050, 1000)).toBe(true);
+    expect(terminalEnterAlreadyHandled(1125, 1000)).toBe(false);
+    expect(
+      terminalLineBreakCommand(
+        "insertLineBreak",
+        resetTerminalModifierTracking(),
+        1050,
+        1000,
+        false,
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  it("clears tracked modifiers on reset while preserving keyup updates", () => {
+    let tracking = resetTerminalModifierTracking();
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Shift",
+        code: "ShiftLeft",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      10,
+    );
+    expect(tracking.mods.shift).toBe(true);
+
+    tracking = recordTerminalKeyUp(
+      {
+        key: "Shift",
+        code: "ShiftLeft",
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+    );
+    expect(tracking.mods.shift).toBe(false);
+
+    tracking = recordTerminalKeyDown(
+      {
+        key: "Enter",
+        code: "Enter",
+        shiftKey: true,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      },
+      tracking,
+      20,
+    );
+    expect(tracking.capturedEnter).not.toBeNull();
+    expect(resetTerminalModifierTracking()).toEqual({
+      mods: { shift: false, alt: false, ctrl: false, meta: false },
+      capturedEnter: null,
     });
   });
 

@@ -1102,6 +1102,7 @@ export type TerminalMouseAction = "press" | "release" | "move";
 export type TerminalInputCommand =
   | { type: "text"; text: string }
   | { type: "paste"; text: string }
+  | { type: "lineBreak" }
   | {
       type: "key";
       key: string;
