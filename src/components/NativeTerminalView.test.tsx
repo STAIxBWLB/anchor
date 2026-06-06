@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { TerminalCell, TerminalFrame } from "../lib/api";
 import {
+  cellDisplayText,
+  cellDisplayWidth,
   finalCompositionText,
   frameLineToText,
   frameToText,
@@ -42,6 +44,14 @@ describe("NativeTerminalView helpers", () => {
     const row = [cell("안", 2), cell("", 0), cell("녕"), cell(" ")];
     expect(frameLineToText(row)).toBe("안녕");
     expect(frameToText(frame([row, [cell("o"), cell("k")]]))).toBe("안녕\nok");
+  });
+
+  it("renders wide cells across their width and spacer cells without text", () => {
+    expect(cellDisplayWidth(cell("안", 2))).toBe("2ch");
+    expect(cellDisplayText(cell("안", 2))).toBe("안");
+    expect(cellDisplayWidth(cell("", 0))).toBe("0");
+    expect(cellDisplayText(cell("", 0))).toBe("");
+    expect(cellDisplayText(cell("", 1))).toBe(" ");
   });
 
   it("extracts selected text across rows", () => {
@@ -89,6 +99,40 @@ describe("NativeTerminalView helpers", () => {
       ctrlKey: false,
       metaKey: false,
     });
+  });
+
+  it("keeps Alt-modified printable keys on the structured key path", () => {
+    expect(
+      terminalKeyEventToInput({
+        key: "f",
+        code: "KeyF",
+        shiftKey: false,
+        altKey: true,
+        ctrlKey: false,
+        metaKey: false,
+        isComposing: false,
+      }),
+    ).toEqual({
+      type: "key",
+      key: "f",
+      code: "KeyF",
+      shiftKey: false,
+      altKey: true,
+      ctrlKey: false,
+      metaKey: false,
+    });
+
+    expect(
+      terminalKeyEventToInput({
+        key: "b",
+        code: "KeyB",
+        shiftKey: false,
+        altKey: true,
+        ctrlKey: false,
+        metaKey: false,
+        isComposing: false,
+      }),
+    ).toMatchObject({ type: "key", key: "b", altKey: true });
   });
 
   it("suppresses keydown while IME is composing and emits final composition text", () => {

@@ -25,6 +25,8 @@ interface NativeTerminalViewProps {
   frame: TerminalFrame | null;
   active: boolean;
   focused: boolean;
+  resizeReady: boolean;
+  inputLabel: string;
   onInput: (command: TerminalInputCommand) => void;
   onResize: (cols: number, rows: number) => void;
 }
@@ -98,6 +100,16 @@ export function frameToText(frame: TerminalFrame | null): string {
   return frame.lines.map(frameLineToText).join("\n");
 }
 
+export function cellDisplayWidth(cell: TerminalCell): string {
+  if (cell.width <= 0) return "0";
+  return `${cell.width}ch`;
+}
+
+export function cellDisplayText(cell: TerminalCell): string {
+  if (cell.width <= 0) return "";
+  return cell.ch || " ";
+}
+
 export function selectedTerminalText(
   frame: TerminalFrame | null,
   selection: CellSelection | null,
@@ -130,7 +142,7 @@ export function terminalKeyEventToInput(
   >,
 ): TerminalInputCommand | null {
   if (event.isComposing) return null;
-  if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+  if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
     return { type: "text", text: event.key };
   }
   if (event.key === "Meta" || event.key === "Control" || event.key === "Alt" || event.key === "Shift") {
@@ -153,7 +165,7 @@ export function finalCompositionText(eventData: string, textareaValue: string): 
 
 export const NativeTerminalView = memo(
   forwardRef<NativeTerminalViewHandle, NativeTerminalViewProps>(function NativeTerminalView(
-    { sessionId, frame, active, focused, onInput, onResize },
+    { sessionId, frame, active, focused, resizeReady, inputLabel, onInput, onResize },
     ref,
   ) {
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -177,7 +189,7 @@ export const NativeTerminalView = memo(
     }, [active, focused]);
 
     useEffect(() => {
-      if (!active) return;
+      if (!active || !resizeReady) return;
       const root = rootRef.current;
       const measure = measureRef.current;
       if (!root || !measure) return;
@@ -205,7 +217,7 @@ export const NativeTerminalView = memo(
       const observer = new ResizeObserver(update);
       observer.observe(root);
       return () => observer.disconnect();
-    }, [active, onResize]);
+    }, [active, onResize, resizeReady]);
 
     const selectedText = useMemo(
       () => selectedTerminalText(frame, selection),
@@ -299,7 +311,7 @@ export const NativeTerminalView = memo(
         <textarea
           ref={textareaRef}
           className="native-terminal-input"
-          aria-label="Terminal input"
+          aria-label={inputLabel}
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect="off"
@@ -334,6 +346,7 @@ export const NativeTerminalView = memo(
                     .filter(Boolean)
                     .join(" ")}
                   style={{
+                    width: cellDisplayWidth(cell),
                     color: terminalColorToCss(cell.fg, "#d4d4d4"),
                     backgroundColor: terminalColorToCss(cell.bg, "#111111"),
                     fontWeight: cell.bold ? 700 : 400,
@@ -341,7 +354,7 @@ export const NativeTerminalView = memo(
                     textDecoration: cell.underline ? "underline" : "none",
                   }}
                 >
-                  {cell.ch || " "}
+                  {cellDisplayText(cell)}
                 </span>
               ))}
             </div>

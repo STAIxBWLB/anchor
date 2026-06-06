@@ -186,6 +186,7 @@ export const TerminalPanel = memo(
     const sessionByTabRef = useRef<Map<string, string>>(new Map());
     const tabBySessionRef = useRef<Map<string, string>>(new Map());
     const [framesBySession, setFramesBySession] = useState<Record<string, TerminalFrame>>({});
+    const [resizeReadySessions, setResizeReadySessions] = useState<Record<string, true>>({});
     const seqRef = useRef(1);
     const taskSeqRef = useRef(1);
     const autoLaunchRef = useRef(false);
@@ -247,6 +248,11 @@ export const TerminalPanel = memo(
             sessionByTabRef.current.delete(tabId);
           }
           tabBySessionRef.current.delete(event.payload.sessionId);
+          setResizeReadySessions((current) => {
+            const next = { ...current };
+            delete next[event.payload.sessionId];
+            return next;
+          });
           dispatch({
             type: "exit",
             sessionId: event.payload.sessionId,
@@ -393,6 +399,10 @@ export const TerminalPanel = memo(
             cols: 120,
             rows: 30,
           });
+          setResizeReadySessions((current) => ({
+            ...current,
+            [sessionId]: true,
+          }));
           window.requestAnimationFrame(() => {
             if (group === focusedGroup || group === "right") {
               handlesRef.current.get(tabId)?.focus();
@@ -401,6 +411,11 @@ export const TerminalPanel = memo(
         } catch (err) {
           sessionByTabRef.current.delete(tabId);
           tabBySessionRef.current.delete(sessionId);
+          setResizeReadySessions((current) => {
+            const next = { ...current };
+            delete next[sessionId];
+            return next;
+          });
           dispatch({ type: "fail", tabId });
           setError(err instanceof Error ? err.message : String(err));
         }
@@ -487,6 +502,11 @@ export const TerminalPanel = memo(
           void terminalKill(sessionId);
           sessionByTabRef.current.delete(tabId);
           tabBySessionRef.current.delete(sessionId);
+          setResizeReadySessions((current) => {
+            const next = { ...current };
+            delete next[sessionId];
+            return next;
+          });
           setFramesBySession((current) => {
             const next = { ...current };
             delete next[sessionId];
@@ -513,6 +533,11 @@ export const TerminalPanel = memo(
           void terminalKill(sessionId);
           sessionByTabRef.current.delete(tab.id);
           tabBySessionRef.current.delete(sessionId);
+          setResizeReadySessions((current) => {
+            const next = { ...current };
+            delete next[sessionId];
+            return next;
+          });
           setFramesBySession((current) => {
             const next = { ...current };
             delete next[sessionId];
@@ -1150,11 +1175,15 @@ export const TerminalPanel = memo(
                           frame={framesBySession[sessionId] ?? null}
                           active={isVisible}
                           focused={isFocused}
+                          resizeReady={resizeReadySessions[sessionId] === true}
+                          inputLabel={t("terminal.input")}
                           onInput={(command: TerminalInputCommand) => {
                             void terminalInput(sessionId, command);
                           }}
                           onResize={(cols, rows) => {
-                            void terminalResize(sessionId, cols, rows);
+                            void terminalResize(sessionId, cols, rows).catch(() => {
+                              // Session may exit between measurement and IPC delivery.
+                            });
                           }}
                         />
                       ) : null}

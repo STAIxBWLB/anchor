@@ -138,6 +138,17 @@ mod tests {
         }
     }
 
+    fn modified_key(key: &str, alt: bool, ctrl: bool) -> TerminalInputCommand {
+        TerminalInputCommand::Key {
+            key: key.to_string(),
+            code: None,
+            shift_key: false,
+            alt_key: alt,
+            ctrl_key: ctrl,
+            meta_key: false,
+        }
+    }
+
     #[test]
     fn shift_enter_ai_falls_back_to_lf_without_kitty() {
         assert_eq!(
@@ -183,17 +194,21 @@ mod tests {
 
     #[test]
     fn ctrl_letters_encode_control_bytes() {
-        let command = TerminalInputCommand::Key {
-            key: "j".to_string(),
-            code: None,
-            shift_key: false,
-            alt_key: false,
-            ctrl_key: true,
-            meta_key: false,
-        };
         assert_eq!(
-            encode_terminal_input("shell", &command, false, false),
+            encode_terminal_input("shell", &modified_key("j", false, true), false, false),
             Some("\n".to_string())
+        );
+    }
+
+    #[test]
+    fn alt_printable_keys_are_esc_prefixed() {
+        assert_eq!(
+            encode_terminal_input("shell", &modified_key("f", true, false), false, false),
+            Some("\x1bf".to_string())
+        );
+        assert_eq!(
+            encode_terminal_input("shell", &modified_key("b", true, false), false, false),
+            Some("\x1bb".to_string())
         );
     }
 }
