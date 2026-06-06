@@ -157,7 +157,10 @@ use telegram_io::{
     telegram_polling_status, TelegramIoState,
 };
 use template_fill::{template_fill_hwpx, template_get_fields, template_prepare_hwpx_template};
-use terminal::{terminal_kill, terminal_resize, terminal_spawn, terminal_write, TerminalState};
+use terminal::{
+    terminal_input, terminal_kill, terminal_resize, terminal_scroll, terminal_spawn,
+    terminal_write, TerminalState,
+};
 use terminal_hooks::{
     remove_agent_context_hint, start_terminal_hook_watcher, terminal_hooks_install,
     terminal_hooks_status, terminal_hooks_uninstall, write_agent_context_hint,
@@ -279,9 +282,11 @@ pub fn run() {
             list_ai_missions,
             read_ai_mission_log,
             stop_ai_mission,
+            terminal_input,
             terminal_spawn,
             terminal_write,
             terminal_resize,
+            terminal_scroll,
             terminal_kill,
             terminal_hooks_install,
             terminal_hooks_uninstall,
