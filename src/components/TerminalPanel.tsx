@@ -218,6 +218,7 @@ export const TerminalPanel = memo(
     const autoLaunchRef = useRef(false);
     const handledLaunchRequestRef = useRef<number | null>(null);
     const focusedTabIdRef = useRef<string | null>(null);
+    const layoutRefreshRafRef = useRef<number | null>(null);
 
     const injectContext = settings.terminal.injectActiveContext ?? true;
     const attachStyle: AttachMentionStyle = settings.terminal.attachMentionStyle ?? "mention";
@@ -336,6 +337,10 @@ export const TerminalPanel = memo(
 
     useEffect(() => {
       return () => {
+        if (layoutRefreshRafRef.current != null) {
+          window.cancelAnimationFrame(layoutRefreshRafRef.current);
+          layoutRefreshRafRef.current = null;
+        }
         for (const sessionId of sessionByTabRef.current.values()) {
           void terminalKill(sessionId);
         }
@@ -805,6 +810,37 @@ export const TerminalPanel = memo(
       const tabId = focusedTabIdRef.current;
       return tabId ? handlesRef.current.get(tabId) ?? null : null;
     }, []);
+
+    const scheduleFocusedTerminalRefresh = useCallback(
+      (options: { focus: boolean }) => {
+        if (layoutRefreshRafRef.current != null) {
+          window.cancelAnimationFrame(layoutRefreshRafRef.current);
+        }
+        layoutRefreshRafRef.current = window.requestAnimationFrame(() => {
+          layoutRefreshRafRef.current = null;
+          getFocusedTerminalHandle()?.refreshLayout(options);
+        });
+      },
+      [getFocusedTerminalHandle],
+    );
+
+    useEffect(() => {
+      if (!open) return;
+      scheduleFocusedTerminalRefresh({
+        focus: !searchOpen && renamingTaskId === null,
+      });
+    }, [
+      dock,
+      draftHeight,
+      draftWidth,
+      maximized,
+      open,
+      renamingTaskId,
+      scheduleFocusedTerminalRefresh,
+      searchOpen,
+      splitOpen,
+      splitRatio,
+    ]);
 
     const getFocusedSessionId = useCallback(() => {
       const tabId = focusedTabIdRef.current;
