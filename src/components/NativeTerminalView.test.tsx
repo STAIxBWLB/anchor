@@ -4,6 +4,7 @@ import {
   cellDisplayText,
   cellDisplayWidth,
   domButtonToTerminal,
+  enterCommandFromMods,
   finalCompositionText,
   frameLineToText,
   frameToText,
@@ -92,6 +93,25 @@ describe("NativeTerminalView helpers", () => {
     expect(selectionSpanForRow(range, 2, 10)).toEqual({ start: 0, end: 9 });
     expect(selectionSpanForRow(range, 3, 10)).toEqual({ start: 0, end: 2 });
     expect(selectionSpanForRow(range, 4, 10)).toBeNull();
+  });
+
+  it("builds the Enter command from tracked modifiers (Shift+Enter -> shiftKey)", () => {
+    // Shift held → Shift+Enter → backend encodes CSI-u newline.
+    expect(
+      enterCommandFromMods({ shift: true, alt: false, ctrl: false, meta: false }),
+    ).toEqual({
+      type: "key",
+      key: "Enter",
+      code: "Enter",
+      shiftKey: true,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    });
+    // No modifiers → plain Enter → backend encodes "\r" (submit).
+    expect(
+      enterCommandFromMods({ shift: false, alt: false, ctrl: false, meta: false }),
+    ).toMatchObject({ type: "key", key: "Enter", shiftKey: false });
   });
 
   it("maps DOM mouse buttons to terminal button codes", () => {

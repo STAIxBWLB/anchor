@@ -285,6 +285,29 @@ function mouseModeActive(mouse: TerminalMouseFlags | null | undefined): boolean 
   return Boolean(mouse && (mouse.click || mouse.motion || mouse.drag));
 }
 
+export interface KeyMods {
+  shift: boolean;
+  alt: boolean;
+  ctrl: boolean;
+  meta: boolean;
+}
+
+/** Build the structured Enter command from a modifier set. Used by both the
+ *  keydown path and the `beforeinput insertLineBreak` fallback, so Shift+Enter
+ *  emits `{shiftKey:true}` (→ CSI-u newline) regardless of which path the
+ *  WKWebView text system actually delivers the keystroke through. */
+export function enterCommandFromMods(mods: KeyMods): TerminalInputCommand {
+  return {
+    type: "key",
+    key: "Enter",
+    code: "Enter",
+    shiftKey: mods.shift,
+    altKey: mods.alt,
+    ctrlKey: mods.ctrl,
+    metaKey: mods.meta,
+  };
+}
+
 export const NativeTerminalView = memo(
   forwardRef<NativeTerminalViewHandle, NativeTerminalViewProps>(function NativeTerminalView(
     { sessionId, frame, active, focused, resizeReady, inputLabel, onInput, onResize, onScroll },
@@ -298,6 +321,14 @@ export const NativeTerminalView = memo(
     const composingRef = useRef(false);
     const compositionSessionRef = useRef<CompositionSession | null>(null);
     const enterDuringCompositionRef = useRef<EnterDuringComposition | null>(null);
+
+    // Modifier state tracked from the modifier keys' OWN events. macOS WKWebView
+    // strips/consumes the Shift bit on a Shift+Enter keydown (insertNewline:), so
+    // we cannot trust the Enter event's own modifiers — we read the held state
+    // captured from non-Enter key events instead. enterHandledAtRef dedupes the
+    // keydown path against the beforeinput(insertLineBreak) fallback.
+    const modsRef = useRef<KeyMods>({ shift: false, alt: false, ctrl: false, meta: false });
+    const enterHandledAtRef = useRef(0);
 
     // Retained terminal grid + metrics (mutated outside React for paint speed).
     const gridRef = useRef<TerminalCell[][]>([]);
@@ -750,26 +781,46 @@ export const NativeTerminalView = memo(
     const onKeyDown = useCallback(
       (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         const native = event.nativeEvent;
-        // Use the authoritative per-event flag, NOT composingRef: a missed
-        // compositionend can latch composingRef true and then swallow every
-        // subsequent Enter (incl. Shift+Enter) forever.
-        const composing = native.isComposing;
-        const modified =
-          event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
-        // A *plain* Enter mid-composition commits the syllable: defer it and
-        // replay after compositionend so the order is text-then-Enter. A
-        // modified Enter (Shift/Alt/Ctrl/Meta) is a deliberate control input —
-        // never a composition commit — so it must go straight through.
-        if (event.key === "Enter" && composing && !modified) {
-          enterDuringCompositionRef.current = {
-            shiftKey: false,
-            altKey: false,
-            ctrlKey: false,
-            metaKey: false,
+        // Track modifier state from every NON-Enter key event (those carry
+        // reliable modifier flags). The Enter event itself may have Shift
+        // stripped by macOS, so we never let it overwrite the tracked state.
+        if (event.key !== "Enter") {
+          modsRef.current = {
+            shift: native.shiftKey,
+            alt: native.altKey,
+            ctrl: native.ctrlKey,
+            meta: native.metaKey,
           };
+        }
+        const composing = native.isComposing || composingRef.current;
+        // Effective modifiers for an Enter: prefer the event's own flags, but
+        // fall back to the tracked held state when WKWebView stripped them.
+        const mods: KeyMods = {
+          shift: native.shiftKey || modsRef.current.shift,
+          alt: native.altKey || modsRef.current.alt,
+          ctrl: native.ctrlKey || modsRef.current.ctrl,
+          meta: native.metaKey || modsRef.current.meta,
+        };
+
+        if (event.key === "Enter" || event.code === "Enter") {
+          if (composing) {
+            // Commit the composition first; replay the Enter (with its real
+            // modifiers) after compositionend so order is text-then-Enter.
+            enterDuringCompositionRef.current = {
+              shiftKey: mods.shift,
+              altKey: mods.alt,
+              ctrlKey: mods.ctrl,
+              metaKey: mods.meta,
+            };
+            return;
+          }
+          event.preventDefault();
+          enterHandledAtRef.current = performance.now();
+          onInput(enterCommandFromMods(mods));
           return;
         }
-        if (composing && !modified) return;
+
+        if (composing) return;
         const command = terminalKeyEventToInput(native);
         if (!command) return;
         event.preventDefault();
@@ -778,12 +829,44 @@ export const NativeTerminalView = memo(
       [onInput],
     );
 
+    const onKeyUp = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const native = event.nativeEvent;
+      if (event.key !== "Enter") {
+        modsRef.current = {
+          shift: native.shiftKey,
+          alt: native.altKey,
+          ctrl: native.ctrlKey,
+          meta: native.metaKey,
+        };
+      }
+    }, []);
+
+    // Reset tracked modifiers when focus/window leaves, so a missed keyup can't
+    // latch a modifier and mislabel a later plain Enter as Shift+Enter.
+    const resetMods = useCallback(() => {
+      modsRef.current = { shift: false, alt: false, ctrl: false, meta: false };
+    }, []);
+
+    useEffect(() => {
+      window.addEventListener("blur", resetMods);
+      return () => window.removeEventListener("blur", resetMods);
+    }, [resetMods]);
+
     const onBeforeInput = useCallback(
       (event: React.FormEvent<HTMLTextAreaElement>) => {
-        const text = terminalBeforeInputToText(
-          event.nativeEvent as InputEvent,
-          composingRef.current,
-        );
+        const native = event.nativeEvent as InputEvent;
+        // Enter often reaches WKWebView only as a text-edit (Shift+Enter →
+        // insertLineBreak, with the keydown consumed/stripped). Catch it here
+        // using the tracked modifier state, deduped against the keydown path.
+        if (native.inputType === "insertLineBreak" || native.inputType === "insertParagraph") {
+          event.preventDefault();
+          event.currentTarget.value = "";
+          if (composingRef.current || native.isComposing) return;
+          if (performance.now() - enterHandledAtRef.current < 100) return;
+          onInput(enterCommandFromMods(modsRef.current));
+          return;
+        }
+        const text = terminalBeforeInputToText(native, composingRef.current);
         if (!text) return;
         event.preventDefault();
         event.currentTarget.value = "";
@@ -892,6 +975,8 @@ export const NativeTerminalView = memo(
           spellCheck={false}
           rows={1}
           onKeyDown={onKeyDown}
+          onKeyUp={onKeyUp}
+          onBlur={resetMods}
           onBeforeInput={onBeforeInput}
           onInput={onTextInput}
           onPaste={onPaste}
