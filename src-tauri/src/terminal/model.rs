@@ -1,10 +1,11 @@
 use alacritty_terminal::event::{Event, EventListener, WindowSize};
-use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::term::{Config, Term, TermMode};
+use alacritty_terminal::grid::{Dimensions, Scroll};
+use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
+use super::input::MouseModes;
 use super::snapshot::{snapshot_term, TerminalFrame};
 
 #[derive(Clone)]
@@ -159,7 +160,39 @@ impl TerminalModel {
 
     pub fn snapshot(&self, session_id: &str) -> TerminalFrame {
         let title = self.title.lock().ok().and_then(|guard| guard.clone());
-        snapshot_term(session_id, &self.term, title)
+        snapshot_term(session_id, &self.term, title, None)
+    }
+
+    pub fn snapshot_dirty(&self, session_id: &str, dirty: &[usize]) -> TerminalFrame {
+        let title = self.title.lock().ok().and_then(|guard| guard.clone());
+        snapshot_term(session_id, &self.term, title, Some(dirty))
+    }
+
+    /// Drain alacritty's accumulated damage into a list of changed screen rows,
+    /// resetting the damage state. Returns `None` to request a full repaint —
+    /// either the whole screen is damaged, or the user is viewing scrollback
+    /// (`display_offset != 0`), where partial damage line numbers are relative
+    /// to the live screen rather than the displayed view.
+    pub fn take_damage(&mut self) -> Option<Vec<usize>> {
+        if self.term.grid().display_offset() != 0 {
+            self.term.reset_damage();
+            return None;
+        }
+        let rows = match self.term.damage() {
+            TermDamage::Full => None,
+            TermDamage::Partial(iter) => {
+                let mut rows: Vec<usize> = iter.map(|bounds| bounds.line).collect();
+                rows.sort_unstable();
+                rows.dedup();
+                Some(rows)
+            }
+        };
+        self.term.reset_damage();
+        rows
+    }
+
+    pub fn scroll(&mut self, delta: i32) {
+        self.term.scroll_display(Scroll::Delta(delta));
     }
 
     pub fn kitty_keyboard_active(&self) -> bool {
@@ -170,6 +203,16 @@ impl TerminalModel {
 
     pub fn bracketed_paste_active(&self) -> bool {
         self.term.mode().contains(TermMode::BRACKETED_PASTE)
+    }
+
+    pub fn mouse_modes(&self) -> MouseModes {
+        let mode = self.term.mode();
+        MouseModes {
+            click: mode.contains(TermMode::MOUSE_REPORT_CLICK),
+            motion: mode.contains(TermMode::MOUSE_MOTION),
+            drag: mode.contains(TermMode::MOUSE_DRAG),
+            sgr: mode.contains(TermMode::SGR_MOUSE),
+        }
     }
 }
 
@@ -206,6 +249,20 @@ mod tests {
         assert_eq!(frame.rows, 5);
         assert_eq!(frame.lines.len(), 5);
         assert_eq!(frame.lines[0].len(), 20);
+    }
+
+    #[test]
+    fn take_damage_reports_full_then_partial_rows() {
+        let mut model = TerminalModel::new(10, 4, NullTerminalWriter);
+        model.advance(b"prep");
+        // A fresh terminal starts fully damaged: the first drain requests a full
+        // repaint (None) and resets the damage state — this is what the pump
+        // wants for the initial frame.
+        assert_eq!(model.take_damage(), None);
+        // Subsequent writes report only the rows that changed.
+        model.advance(b"\r\n\r\nthird");
+        let dirty = model.take_damage().expect("partial damage");
+        assert!(dirty.contains(&2), "row 2 should be damaged, got {dirty:?}");
     }
 
     #[test]

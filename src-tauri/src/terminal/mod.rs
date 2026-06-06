@@ -7,14 +7,15 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
-use std::{env, str};
+use std::time::Duration;
+use std::env;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::cli_path::{augmented_path, merge_path_env, resolve_program};
-pub use input::{encode_terminal_input, TerminalInputCommand};
+pub use input::{encode_mouse_input, encode_terminal_input, TerminalInputCommand};
 
 use self::model::{write_shared, SharedTerminalWriter, TerminalModel};
 
@@ -43,13 +44,6 @@ struct TerminalCommandSpec {
     args: Vec<String>,
     cwd: PathBuf,
     extra_env: HashMap<String, String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalOutputEvent {
-    pub session_id: String,
-    pub data: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -206,19 +200,53 @@ pub fn terminal_input(
     command: TerminalInputCommand,
 ) -> Result<(), String> {
     let session = get_session(&state, &session_id)?;
-    let (kitty, bracketed) = {
+    let is_mouse = matches!(
+        command,
+        TerminalInputCommand::Mouse { .. } | TerminalInputCommand::Wheel { .. }
+    );
+    let encoded = {
         let guard = session
             .model
             .lock()
             .map_err(|_| "terminal_model_poisoned".to_string())?;
-        (
-            guard.kitty_keyboard_active(),
-            guard.bracketed_paste_active(),
-        )
+        if is_mouse {
+            // Mouse reports are gated on the program's active mouse modes, read
+            // under the same lock so a stale frame can't inject bytes.
+            encode_mouse_input(&command, guard.mouse_modes())
+        } else {
+            encode_terminal_input(
+                &session.kind,
+                &command,
+                guard.kitty_keyboard_active(),
+                guard.bracketed_paste_active(),
+            )
+        }
     };
-    if let Some(data) = encode_terminal_input(&session.kind, &command, kitty, bracketed) {
+    if let Some(data) = encoded {
         write_shared(&session.writer, data.as_bytes())?;
     }
+    Ok(())
+}
+
+/// Scroll the viewport through scrollback by `delta` lines (positive = toward
+/// history). Emits a fresh full frame so the renderer shows the scrolled view.
+#[tauri::command]
+pub fn terminal_scroll(
+    app: AppHandle,
+    state: State<'_, TerminalState>,
+    session_id: String,
+    delta: i32,
+) -> Result<(), String> {
+    let session = get_session(&state, &session_id)?;
+    let frame = {
+        let mut model = session
+            .model
+            .lock()
+            .map_err(|_| "terminal_model_poisoned".to_string())?;
+        model.scroll(delta);
+        model.snapshot(&session_id)
+    };
+    let _ = app.emit("terminal://frame", frame);
     Ok(())
 }
 
@@ -298,68 +326,69 @@ fn spawn_output_pump(
     mut reader: Box<dyn Read + Send>,
     model: Arc<Mutex<TerminalModel>>,
 ) -> JoinHandle<()> {
+    // The reader thread drains the PTY at full speed (no coalescing on this
+    // path — the old in-reader `thread::sleep` was a source of input
+    // backpressure) and only flags the model dirty. A separate emitter thread
+    // coalesces dirty notifications into at most one `terminal://frame` per
+    // FRAME_COALESCE_MS, sending only the rows alacritty reports as damaged.
+    let dirty = Arc::new(AtomicBool::new(true));
+    let running = Arc::new(AtomicBool::new(true));
+    let emitter = spawn_frame_emitter(app, session_id, model.clone(), dirty.clone(), running.clone());
+
     thread::spawn(move || {
         let mut buf = [0_u8; 8192];
-        let mut carry: Vec<u8> = Vec::new();
-        let mut last_frame = Instant::now() - Duration::from_millis(FRAME_COALESCE_MS);
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    emit_compat_output(&app, &session_id, &mut carry, &buf[..n]);
-                    let frame = {
+                    {
                         let mut guard = match model.lock() {
                             Ok(guard) => guard,
                             Err(_) => break,
                         };
                         guard.advance(&buf[..n]);
-                        guard.snapshot(&session_id)
-                    };
-                    let elapsed = last_frame.elapsed();
-                    if elapsed < Duration::from_millis(FRAME_COALESCE_MS) {
-                        thread::sleep(Duration::from_millis(FRAME_COALESCE_MS) - elapsed);
                     }
-                    last_frame = Instant::now();
-                    let _ = app.emit("terminal://frame", frame);
+                    dirty.store(true, Ordering::Release);
                 }
                 Err(_) => break,
             }
         }
-        if !carry.is_empty() {
-            let data = String::from_utf8_lossy(&carry).into_owned();
-            let _ = app.emit(
-                "terminal://output",
-                TerminalOutputEvent { session_id, data },
-            );
-        }
+        running.store(false, Ordering::Release);
+        let _ = emitter.join();
     })
 }
 
-fn emit_compat_output(app: &AppHandle, session_id: &str, carry: &mut Vec<u8>, bytes: &[u8]) {
-    carry.extend_from_slice(bytes);
-    let split = valid_utf8_prefix_len(carry);
-    if split == 0 {
-        return;
-    }
-    let chunk = match str::from_utf8(&carry[..split]) {
-        Ok(s) => s.to_string(),
-        Err(_) => String::from_utf8_lossy(&carry[..split]).into_owned(),
-    };
-    carry.drain(..split);
-    let _ = app.emit(
-        "terminal://output",
-        TerminalOutputEvent {
-            session_id: session_id.to_string(),
-            data: chunk,
-        },
-    );
-}
-
-fn valid_utf8_prefix_len(bytes: &[u8]) -> usize {
-    match str::from_utf8(bytes) {
-        Ok(s) => s.len(),
-        Err(err) => err.valid_up_to(),
-    }
+fn spawn_frame_emitter(
+    app: AppHandle,
+    session_id: String,
+    model: Arc<Mutex<TerminalModel>>,
+    dirty: Arc<AtomicBool>,
+    running: Arc<AtomicBool>,
+) -> JoinHandle<()> {
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(FRAME_COALESCE_MS));
+        let was_dirty = dirty.swap(false, Ordering::AcqRel);
+        if !was_dirty {
+            // Idle: keep looping while the session lives; exit once the reader
+            // has stopped and the last frame has been flushed.
+            if running.load(Ordering::Acquire) {
+                continue;
+            }
+            break;
+        }
+        let frame = {
+            let mut guard = match model.lock() {
+                Ok(guard) => guard,
+                Err(_) => break,
+            };
+            match guard.take_damage() {
+                Some(rows) if rows.is_empty() => continue,
+                Some(rows) => guard.snapshot_dirty(&session_id, &rows),
+                None => guard.snapshot(&session_id),
+            }
+        };
+        let _ = app.emit("terminal://frame", frame);
+    })
 }
 
 fn build_terminal_command_spec(
@@ -594,55 +623,12 @@ mod tests {
     }
 
     #[test]
-    fn terminal_events_serialize_camelcase() {
-        let out = serde_json::to_value(TerminalOutputEvent {
-            session_id: "term-1".to_string(),
-            data: "hi".to_string(),
-        })
-        .unwrap();
-        assert_eq!(out, json!({ "sessionId": "term-1", "data": "hi" }));
-
+    fn terminal_exit_event_serializes_camelcase() {
         let exit = serde_json::to_value(TerminalExitEvent {
             session_id: "term-1".to_string(),
             exit_code: Some(0),
         })
         .unwrap();
         assert_eq!(exit, json!({ "sessionId": "term-1", "exitCode": 0 }));
-    }
-
-    #[test]
-    fn valid_utf8_prefix_excludes_partial_codepoints() {
-        let bytes = [0xE3, 0x81];
-        assert_eq!(valid_utf8_prefix_len(&bytes), 0);
-    }
-
-    #[test]
-    fn valid_utf8_prefix_returns_complete_prefix() {
-        let bytes = [b'o', b'k', 0xE3, 0x81];
-        assert_eq!(valid_utf8_prefix_len(&bytes), 2);
-    }
-
-    #[test]
-    fn valid_utf8_prefix_handles_pure_ascii() {
-        let bytes = b"hello world";
-        assert_eq!(valid_utf8_prefix_len(bytes), bytes.len());
-    }
-
-    #[test]
-    fn carry_buffer_pattern_decodes_split_codepoint_intact() {
-        let mut carry: Vec<u8> = Vec::new();
-        let mut emitted = String::new();
-
-        for chunk in [&[0xE3_u8, 0x81][..], &[0x8B_u8][..]] {
-            carry.extend_from_slice(chunk);
-            let split = valid_utf8_prefix_len(&carry);
-            if split == 0 {
-                continue;
-            }
-            emitted.push_str(str::from_utf8(&carry[..split]).unwrap());
-            carry.drain(..split);
-        }
-        assert_eq!(emitted, "か");
-        assert!(carry.is_empty());
     }
 }

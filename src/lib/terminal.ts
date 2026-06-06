@@ -96,9 +96,15 @@ export const TERMINAL_LAUNCHERS: Array<{
 
 type TerminalMouseMoveEvent = Pick<MouseEvent, "type" | "buttons">;
 
+/** Suppress idle hover (button-less mousemove) over the terminal so it does not
+ *  bleed into page-level handlers. When the focused program has requested a
+ *  mouse mode (claude/codex TUIs), hover is meaningful and must NOT be
+ *  suppressed — the renderer forwards it as a motion report instead. */
 export function shouldSuppressTerminalHoverMouseEvent(
   event: TerminalMouseMoveEvent,
+  mouseModeActive = false,
 ): boolean {
+  if (mouseModeActive) return false;
   return event.type === "mousemove" && event.buttons === 0;
 }
 

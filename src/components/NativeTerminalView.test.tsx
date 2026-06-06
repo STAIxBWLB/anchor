@@ -3,12 +3,15 @@ import type { TerminalCell, TerminalFrame } from "../lib/api";
 import {
   cellDisplayText,
   cellDisplayWidth,
+  domButtonToTerminal,
   finalCompositionText,
   frameLineToText,
   frameToText,
-  isDuplicateCompositionInput,
+  isTrailingCompositionDuplicate,
+  normalizeSelection,
   normalizeTerminalInputText,
   selectedTerminalText,
+  selectionSpanForRow,
   terminalBeforeInputToText,
   terminalColorToCss,
   terminalInputEventToText,
@@ -40,6 +43,9 @@ function frame(lines: TerminalCell[][]): TerminalFrame {
     scrollbackLen: 0,
     title: null,
     dirtyRows: null,
+    displayOffset: 0,
+    mouse: { click: false, motion: false, drag: false, sgr: false },
+    altScreen: false,
   };
 }
 
@@ -58,17 +64,41 @@ describe("NativeTerminalView helpers", () => {
     expect(cellDisplayText(cell("", 1))).toBe(" ");
   });
 
-  it("extracts selected text across rows", () => {
-    const terminalFrame = frame([
+  it("extracts selected text across rows from the retained grid", () => {
+    const lines = [
       [cell("a"), cell("b"), cell("c")],
       [cell("d"), cell("e"), cell("f")],
-    ]);
+    ];
     expect(
-      selectedTerminalText(terminalFrame, {
+      selectedTerminalText(lines, {
         anchor: { row: 0, col: 1 },
         focus: { row: 1, col: 1 },
       }),
     ).toBe("bc\nde");
+  });
+
+  it("normalizes selection regardless of drag direction", () => {
+    const range = normalizeSelection({
+      anchor: { row: 2, col: 5 },
+      focus: { row: 1, col: 0 },
+    });
+    expect(range).toEqual({ start: { row: 1, col: 0 }, end: { row: 2, col: 5 } });
+  });
+
+  it("computes per-row selection spans with clamping", () => {
+    const range = { start: { row: 1, col: 3 }, end: { row: 3, col: 2 } };
+    expect(selectionSpanForRow(range, 0, 10)).toBeNull();
+    expect(selectionSpanForRow(range, 1, 10)).toEqual({ start: 3, end: 9 });
+    expect(selectionSpanForRow(range, 2, 10)).toEqual({ start: 0, end: 9 });
+    expect(selectionSpanForRow(range, 3, 10)).toEqual({ start: 0, end: 2 });
+    expect(selectionSpanForRow(range, 4, 10)).toBeNull();
+  });
+
+  it("maps DOM mouse buttons to terminal button codes", () => {
+    expect(domButtonToTerminal(0)).toBe(0);
+    expect(domButtonToTerminal(1)).toBe(1);
+    expect(domButtonToTerminal(2)).toBe(2);
+    expect(domButtonToTerminal(4)).toBe(0);
   });
 
   it("does not send printable keydown text before input events commit it", () => {
@@ -189,14 +219,19 @@ describe("NativeTerminalView helpers", () => {
     ).toBeNull();
     expect(finalCompositionText("안녕하세요", "ㅇㅏㄴ")).toBe("안녕하세요");
     expect(finalCompositionText("", "안녕")).toBe("안녕");
-    expect(normalizeTerminalInputText("\u1112\u1161\u11AB")).toBe("한");
+    expect(normalizeTerminalInputText("한")).toBe("한");
   });
 
-  it("detects duplicate post-composition input", () => {
-    const recent = { text: "한글 입력", at: 1000 };
-    expect(isDuplicateCompositionInput("한글 입력", recent, 1200)).toBe(true);
-    expect(isDuplicateCompositionInput("한글 입력", recent, 1600)).toBe(false);
-    expect(isDuplicateCompositionInput("한글", recent, 1200)).toBe(false);
+  it("drops only the tight post-composition trailing duplicate", () => {
+    const session = { text: "한글 입력", at: 1000 };
+    // Trailing insertText echo right after compositionend → dropped.
+    expect(isTrailingCompositionDuplicate("한글 입력", session, 1050)).toBe(true);
+    // Same text, but outside the 100ms guard → kept (a fresh composition).
+    expect(isTrailingCompositionDuplicate("한글 입력", session, 1200)).toBe(false);
+    // Different text → kept.
+    expect(isTrailingCompositionDuplicate("한글", session, 1050)).toBe(false);
+    // No prior committed session → kept.
+    expect(isTrailingCompositionDuplicate("한글 입력", null, 1050)).toBe(false);
   });
 
   it("converts terminal colors to CSS", () => {

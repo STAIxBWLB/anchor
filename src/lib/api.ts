@@ -1074,16 +1074,30 @@ export interface TerminalCursor {
   visible: boolean;
 }
 
+export interface TerminalMouseFlags {
+  click: boolean;
+  motion: boolean;
+  drag: boolean;
+  sgr: boolean;
+}
+
 export interface TerminalFrame {
   sessionId: string;
   cols: number;
   rows: number;
   cursor: TerminalCursor;
+  /** Full grid when `dirtyRows` is null/absent; otherwise only the changed
+   *  rows, aligned 1:1 to `dirtyRows`, to be patched into the retained grid. */
   lines: TerminalCell[][];
   scrollbackLen: number;
   title?: string | null;
   dirtyRows?: number[] | null;
+  displayOffset: number;
+  mouse: TerminalMouseFlags;
+  altScreen: boolean;
 }
+
+export type TerminalMouseAction = "press" | "release" | "move";
 
 export type TerminalInputCommand =
   | { type: "text"; text: string }
@@ -1096,6 +1110,25 @@ export type TerminalInputCommand =
       altKey?: boolean;
       ctrlKey?: boolean;
       metaKey?: boolean;
+    }
+  | {
+      type: "mouse";
+      button: number;
+      col: number;
+      row: number;
+      action: TerminalMouseAction;
+      shiftKey?: boolean;
+      altKey?: boolean;
+      ctrlKey?: boolean;
+    }
+  | {
+      type: "wheel";
+      up: boolean;
+      col: number;
+      row: number;
+      shiftKey?: boolean;
+      altKey?: boolean;
+      ctrlKey?: boolean;
     };
 
 export async function terminalSpawn(
@@ -1139,6 +1172,13 @@ export async function terminalResize(
 ): Promise<void> {
   if (!isTauri()) return;
   await invoke("terminal_resize", { sessionId, cols, rows });
+}
+
+/** Scroll the viewport through scrollback by `delta` lines (positive = toward
+ *  history). The backend emits a fresh frame reflecting the scrolled view. */
+export async function terminalScroll(sessionId: string, delta: number): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("terminal_scroll", { sessionId, delta });
 }
 
 export async function terminalKill(sessionId: string): Promise<void> {

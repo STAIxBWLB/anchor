@@ -22,6 +22,41 @@ pub enum TerminalInputCommand {
         #[serde(default)]
         meta_key: bool,
     },
+    /// A mouse button event addressed to a cell. `button` is the semantic
+    /// button (0=left, 1=middle, 2=right, 3=none/motion). Encoding is gated by
+    /// the active mouse modes in `mod.rs` so it is a no-op for plain shells.
+    Mouse {
+        button: u8,
+        col: u16,
+        row: u16,
+        action: MouseAction,
+        #[serde(default)]
+        shift_key: bool,
+        #[serde(default)]
+        alt_key: bool,
+        #[serde(default)]
+        ctrl_key: bool,
+    },
+    /// A scroll-wheel tick over a cell. `up` selects wheel-up vs wheel-down.
+    Wheel {
+        up: bool,
+        col: u16,
+        row: u16,
+        #[serde(default)]
+        shift_key: bool,
+        #[serde(default)]
+        alt_key: bool,
+        #[serde(default)]
+        ctrl_key: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum MouseAction {
+    Press,
+    Release,
+    Move,
 }
 
 pub fn encode_terminal_input(
@@ -61,6 +96,127 @@ pub fn encode_terminal_input(
             *meta_key,
             kitty_keyboard_active,
         ),
+        // Mouse/Wheel are routed through `encode_mouse_input`, which needs the
+        // terminal's active mouse modes; keyboard-path callers ignore them.
+        TerminalInputCommand::Mouse { .. } | TerminalInputCommand::Wheel { .. } => None,
+    }
+}
+
+/// Active mouse-reporting modes pulled from the alacritty `TermMode`. The
+/// frontend only forwards mouse events when one of these is set, but the
+/// backend re-checks so a stale frame can never inject mouse bytes into a
+/// plain shell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MouseModes {
+    pub click: bool,
+    pub motion: bool,
+    pub drag: bool,
+    pub sgr: bool,
+}
+
+impl MouseModes {
+    fn any(&self) -> bool {
+        self.click || self.motion || self.drag
+    }
+}
+
+/// Encode a `Mouse`/`Wheel` command into a terminal mouse report, honoring the
+/// active modes. Returns `None` when the app has not requested mouse reporting,
+/// or when a motion event arrives without a mode that wants motion.
+pub fn encode_mouse_input(command: &TerminalInputCommand, modes: MouseModes) -> Option<String> {
+    if !modes.any() {
+        return None;
+    }
+    match command {
+        TerminalInputCommand::Mouse {
+            button,
+            col,
+            row,
+            action,
+            shift_key,
+            alt_key,
+            ctrl_key,
+        } => {
+            let motion = *action == MouseAction::Move;
+            if motion && !modes.motion && !modes.drag {
+                return None;
+            }
+            let release = *action == MouseAction::Release;
+            Some(encode_mouse_report(
+                *button as u32,
+                *col,
+                *row,
+                motion,
+                release,
+                *shift_key,
+                *alt_key,
+                *ctrl_key,
+                modes.sgr,
+            ))
+        }
+        TerminalInputCommand::Wheel {
+            up,
+            col,
+            row,
+            shift_key,
+            alt_key,
+            ctrl_key,
+        } => {
+            // Wheel buttons (64 up / 65 down) are reported as a press; there is
+            // no matching release in either protocol.
+            let button = if *up { 64 } else { 65 };
+            Some(encode_mouse_report(
+                button, *col, *row, false, false, *shift_key, *alt_key, *ctrl_key, modes.sgr,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// Build a single SGR (1006) or legacy X10 mouse report. Coordinates are
+/// 0-based cells; both protocols are 1-based on the wire.
+fn encode_mouse_report(
+    base_button: u32,
+    col: u16,
+    row: u16,
+    motion: bool,
+    release: bool,
+    shift: bool,
+    alt: bool,
+    ctrl: bool,
+    sgr: bool,
+) -> String {
+    let mut cb = base_button;
+    if motion {
+        cb += 32;
+    }
+    if shift {
+        cb += 4;
+    }
+    if alt {
+        cb += 8;
+    }
+    if ctrl {
+        cb += 16;
+    }
+    let x = col as u32 + 1;
+    let y = row as u32 + 1;
+    if sgr {
+        let suffix = if release { 'm' } else { 'M' };
+        format!("\x1b[<{cb};{x};{y}{suffix}")
+    } else {
+        // Legacy X10: ESC [ M Cb Cx Cy, every field offset by 32. Release is
+        // reported as button 3, and coordinates clamp at 223 (255 - 32).
+        let cb_x10 = if release { (cb & !0b11) | 0b11 } else { cb };
+        let encode = |value: u32| -> char {
+            char::from_u32((value + 32).min(255)).unwrap_or(' ')
+        };
+        format!(
+            "\x1b[M{}{}{}",
+            encode(cb_x10),
+            encode(x),
+            encode(y)
+        )
     }
 }
 
@@ -71,9 +227,20 @@ fn encode_key(
     alt: bool,
     ctrl: bool,
     meta: bool,
-    _kitty_keyboard_active: bool,
+    kitty_keyboard_active: bool,
 ) -> Option<String> {
-    if key == "Enter" && shift && !alt && !ctrl && !meta && (kind == "claude" || kind == "codex") {
+    // Shift+Enter must reach AI CLIs as the CSI-u encoding so they insert a
+    // newline instead of submitting. Fire it when the session was launched as an
+    // AI kind, OR whenever the foreground program has enabled the kitty keyboard
+    // protocol — which is exactly what `claude`/`codex` do when run directly
+    // from a shell session, so Shift+Enter works there too.
+    if key == "Enter"
+        && shift
+        && !alt
+        && !ctrl
+        && !meta
+        && (kind == "claude" || kind == "codex" || kitty_keyboard_active)
+    {
         return Some("\x1b[13;2u".to_string());
     }
 
@@ -166,10 +333,20 @@ mod tests {
     }
 
     #[test]
-    fn shift_enter_shell_stays_enter() {
+    fn shift_enter_shell_without_kitty_stays_enter() {
+        assert_eq!(
+            encode_terminal_input("shell", &key("Enter", true), false, false),
+            Some("\r".to_string())
+        );
+    }
+
+    #[test]
+    fn shift_enter_shell_uses_csi_u_when_kitty_active() {
+        // Running `claude`/`codex` directly from a shell session: they enable the
+        // kitty keyboard protocol, so Shift+Enter must insert a newline.
         assert_eq!(
             encode_terminal_input("shell", &key("Enter", true), true, false),
-            Some("\r".to_string())
+            Some("\x1b[13;2u".to_string())
         );
     }
 
@@ -208,6 +385,111 @@ mod tests {
         assert_eq!(
             encode_terminal_input("shell", &modified_key("j", false, true), false, false),
             Some("\n".to_string())
+        );
+    }
+
+    fn mouse(button: u8, col: u16, row: u16, action: MouseAction) -> TerminalInputCommand {
+        TerminalInputCommand::Mouse {
+            button,
+            col,
+            row,
+            action,
+            shift_key: false,
+            alt_key: false,
+            ctrl_key: false,
+        }
+    }
+
+    #[test]
+    fn mouse_reports_require_an_active_mode() {
+        let off = MouseModes::default();
+        assert_eq!(encode_mouse_input(&mouse(0, 4, 9, MouseAction::Press), off), None);
+    }
+
+    #[test]
+    fn mouse_press_release_use_sgr_when_active() {
+        let modes = MouseModes {
+            click: true,
+            motion: false,
+            drag: false,
+            sgr: true,
+        };
+        // cols/rows are 0-based in, 1-based out.
+        assert_eq!(
+            encode_mouse_input(&mouse(0, 4, 9, MouseAction::Press), modes),
+            Some("\x1b[<0;5;10M".to_string())
+        );
+        assert_eq!(
+            encode_mouse_input(&mouse(0, 4, 9, MouseAction::Release), modes),
+            Some("\x1b[<0;5;10m".to_string())
+        );
+    }
+
+    #[test]
+    fn mouse_motion_only_reports_when_motion_or_drag_mode() {
+        let click_only = MouseModes {
+            click: true,
+            motion: false,
+            drag: false,
+            sgr: true,
+        };
+        assert_eq!(
+            encode_mouse_input(&mouse(3, 1, 1, MouseAction::Move), click_only),
+            None
+        );
+        let any_motion = MouseModes {
+            click: true,
+            motion: true,
+            drag: false,
+            sgr: true,
+        };
+        // motion adds 32 to the button code.
+        assert_eq!(
+            encode_mouse_input(&mouse(3, 1, 1, MouseAction::Move), any_motion),
+            Some("\x1b[<35;2;2M".to_string())
+        );
+    }
+
+    #[test]
+    fn wheel_reports_buttons_64_and_65() {
+        let modes = MouseModes {
+            click: true,
+            motion: false,
+            drag: false,
+            sgr: true,
+        };
+        let up = TerminalInputCommand::Wheel {
+            up: true,
+            col: 0,
+            row: 0,
+            shift_key: false,
+            alt_key: false,
+            ctrl_key: false,
+        };
+        let down = TerminalInputCommand::Wheel {
+            up: false,
+            col: 0,
+            row: 0,
+            shift_key: false,
+            alt_key: false,
+            ctrl_key: false,
+        };
+        assert_eq!(encode_mouse_input(&up, modes), Some("\x1b[<64;1;1M".to_string()));
+        assert_eq!(encode_mouse_input(&down, modes), Some("\x1b[<65;1;1M".to_string()));
+    }
+
+    #[test]
+    fn mouse_legacy_x10_when_sgr_inactive() {
+        let modes = MouseModes {
+            click: true,
+            motion: false,
+            drag: false,
+            sgr: false,
+        };
+        // left press at (0,0): ESC [ M space ! ! (32, 33, 33).
+        assert_eq!(
+            encode_mouse_input(&mouse(0, 0, 0, MouseAction::Press), modes),
+            Some("\x1b[M\x20\x21\x21".to_string())
         );
     }
 

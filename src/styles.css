@@ -8209,63 +8209,40 @@ button.git-badge:hover {
   outline: none;
 }
 
-.native-terminal-grid {
+.native-terminal-canvas {
   position: absolute;
   inset: 0;
-  overflow: hidden;
-  white-space: pre;
-  font-variant-ligatures: none;
-  font-feature-settings: "liga" 0, "calt" 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.native-terminal-row {
-  height: 1.25em;
-  min-width: max-content;
-}
-
-.native-terminal-cell {
-  display: inline-block;
-  width: 1ch;
-  height: 1.25em;
-  overflow: hidden;
-  vertical-align: top;
-}
-
-.native-terminal-cell.selected {
-  background: #264f78 !important;
-  color: #ffffff !important;
-}
-
-.native-terminal-cell.cursor {
-  box-shadow: inset 0 -2px 0 #d4d4d4;
-}
-
+/* The input lives over the cursor cell so the IME candidate window anchors
+   correctly and live composition (jamo) renders in place. It is otherwise
+   invisible: empty value + transparent caret, with our own cursor drawn on the
+   canvas. `onCompositionStart` flips the background opaque so composing text
+   masks the cell beneath it. */
 .native-terminal-input {
   position: absolute !important;
-  left: 0 !important;
-  top: 0 !important;
-  width: 1px !important;
-  height: 1px !important;
+  left: 0;
+  top: 0;
+  height: 1.25em;
   min-width: 0 !important;
   min-height: 0 !important;
+  margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
   outline: 0 !important;
-  opacity: 0 !important;
   resize: none !important;
-  background: transparent !important;
-  color: transparent !important;
-  caret-color: transparent !important;
-  pointer-events: none !important;
-  z-index: 1;
-}
-
-.native-terminal-measure {
-  position: absolute;
-  visibility: hidden;
+  overflow: hidden !important;
+  white-space: pre !important;
+  background: transparent;
+  color: #d4d4d4;
+  caret-color: transparent;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
   pointer-events: none;
-  white-space: pre;
-  font: inherit;
+  z-index: 1;
 }
 
 .terminal-pane-close {

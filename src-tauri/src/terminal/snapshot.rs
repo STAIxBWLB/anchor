@@ -1,8 +1,8 @@
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::index::Line;
+use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
-use alacritty_terminal::term::Term;
-use alacritty_terminal::vte::ansi::Color;
+use alacritty_terminal::term::{Term, TermMode};
+use alacritty_terminal::vte::ansi::{Color, NamedColor};
 use serde::Serialize;
 
 use super::model::TerminalEventProxy;
@@ -36,6 +36,18 @@ pub enum TerminalColor {
     Rgb { r: u8, g: u8, b: u8 },
 }
 
+/// Mouse-reporting modes the running program has requested. Rides every frame
+/// so the frontend knows whether to forward mouse events without a separate
+/// query (which would race the snapshot).
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalMouseFlags {
+    pub click: bool,
+    pub motion: bool,
+    pub drag: bool,
+    pub sgr: bool,
+}
+
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalFrame {
@@ -43,32 +55,65 @@ pub struct TerminalFrame {
     pub cols: u16,
     pub rows: u16,
     pub cursor: TerminalCursor,
+    /// When `dirty_rows` is `None`, holds every visible row (a full repaint).
+    /// When `dirty_rows` is `Some(idx)`, holds only those rows, aligned 1:1 to
+    /// `idx` order, and the frontend patches them into its retained grid.
     pub lines: Vec<Vec<TerminalCell>>,
     pub scrollback_len: usize,
     pub title: Option<String>,
     pub dirty_rows: Option<Vec<usize>>,
+    pub display_offset: usize,
+    pub mouse: TerminalMouseFlags,
+    pub alt_screen: bool,
 }
 
+/// Snapshot the terminal. `dirty` selects which rows to serialize: `None`
+/// produces a full-grid frame (honoring scrollback `display_offset`), while
+/// `Some(rows)` produces a partial patch. Partial snapshots are only requested
+/// when `display_offset == 0` (see `TerminalModel::take_damage`), so this path
+/// reads the live screen directly.
 pub fn snapshot_term(
     session_id: &str,
     term: &Term<TerminalEventProxy>,
     title: Option<String>,
+    dirty: Option<&[usize]>,
 ) -> TerminalFrame {
     let grid = term.grid();
     let cols = grid.columns();
     let rows = grid.screen_lines();
-    let mut lines = Vec::with_capacity(rows);
+    let display_offset = grid.display_offset();
+    let mode = term.mode();
 
-    for row in 0..rows {
-        let line = &grid[Line(row as i32)];
+    let read_row = |visible_row: usize| -> Vec<TerminalCell> {
+        let line = &grid[Line(visible_row as i32 - display_offset as i32)];
         let mut cells = Vec::with_capacity(cols);
         for col in 0..cols {
-            cells.push(snapshot_cell(&line[alacritty_terminal::index::Column(col)]));
+            cells.push(snapshot_cell(&line[Column(col)]));
         }
-        lines.push(cells);
-    }
+        cells
+    };
+
+    let (lines, dirty_rows) = match dirty {
+        Some(indices) => {
+            let lines = indices
+                .iter()
+                .filter(|&&row| row < rows)
+                .map(|&row| read_row(row))
+                .collect();
+            let kept = indices.iter().copied().filter(|&row| row < rows).collect();
+            (lines, Some(kept))
+        }
+        None => {
+            let mut lines = Vec::with_capacity(rows);
+            for row in 0..rows {
+                lines.push(read_row(row));
+            }
+            (lines, None)
+        }
+    };
 
     let point = grid.cursor.point;
+    let cursor_visible = display_offset == 0 && mode.contains(TermMode::SHOW_CURSOR);
     TerminalFrame {
         session_id: session_id.to_string(),
         cols: cols as u16,
@@ -76,14 +121,20 @@ pub fn snapshot_term(
         cursor: TerminalCursor {
             row: point.line.0.max(0) as usize,
             col: point.column.0,
-            visible: term
-                .mode()
-                .contains(alacritty_terminal::term::TermMode::SHOW_CURSOR),
+            visible: cursor_visible,
         },
         lines,
         scrollback_len: grid.history_size(),
         title,
-        dirty_rows: Some((0..rows).collect()),
+        dirty_rows,
+        display_offset,
+        mouse: TerminalMouseFlags {
+            click: mode.contains(TermMode::MOUSE_REPORT_CLICK),
+            motion: mode.contains(TermMode::MOUSE_MOTION),
+            drag: mode.contains(TermMode::MOUSE_DRAG),
+            sgr: mode.contains(TermMode::SGR_MOUSE),
+        },
+        alt_screen: mode.contains(TermMode::ALT_SCREEN),
     }
 }
 
@@ -122,7 +173,7 @@ fn snapshot_cell(cell: &Cell) -> TerminalCell {
 fn color_to_snapshot(color: Color) -> TerminalColor {
     match color {
         Color::Named(name) => TerminalColor::Named {
-            name: format!("{name:?}"),
+            name: named_color_key(name).to_string(),
         },
         Color::Indexed(index) => TerminalColor::Indexed { index },
         Color::Spec(rgb) => TerminalColor::Rgb {
@@ -130,6 +181,45 @@ fn color_to_snapshot(color: Color) -> TerminalColor {
             g: rgb.g,
             b: rgb.b,
         },
+    }
+}
+
+/// Map alacritty's `NamedColor` to a stable key the frontend palette knows.
+/// Explicit (rather than `format!("{:?}")`) so a debug-format change in a
+/// future alacritty release cannot silently desync the two color tables.
+/// Dim variants collapse to their base hue; foreground-ish/cursor colors map
+/// to the theme foreground.
+fn named_color_key(name: NamedColor) -> &'static str {
+    match name {
+        NamedColor::Black => "Black",
+        NamedColor::Red => "Red",
+        NamedColor::Green => "Green",
+        NamedColor::Yellow => "Yellow",
+        NamedColor::Blue => "Blue",
+        NamedColor::Magenta => "Magenta",
+        NamedColor::Cyan => "Cyan",
+        NamedColor::White => "White",
+        NamedColor::BrightBlack => "BrightBlack",
+        NamedColor::BrightRed => "BrightRed",
+        NamedColor::BrightGreen => "BrightGreen",
+        NamedColor::BrightYellow => "BrightYellow",
+        NamedColor::BrightBlue => "BrightBlue",
+        NamedColor::BrightMagenta => "BrightMagenta",
+        NamedColor::BrightCyan => "BrightCyan",
+        NamedColor::BrightWhite => "BrightWhite",
+        NamedColor::DimBlack => "Black",
+        NamedColor::DimRed => "Red",
+        NamedColor::DimGreen => "Green",
+        NamedColor::DimYellow => "Yellow",
+        NamedColor::DimBlue => "Blue",
+        NamedColor::DimMagenta => "Magenta",
+        NamedColor::DimCyan => "Cyan",
+        NamedColor::DimWhite => "White",
+        NamedColor::Background => "Background",
+        NamedColor::Foreground
+        | NamedColor::Cursor
+        | NamedColor::BrightForeground
+        | NamedColor::DimForeground => "Foreground",
     }
 }
 
@@ -148,5 +238,32 @@ mod tests {
         assert_eq!(json["rows"], 3);
         assert_eq!(json["lines"][0][0]["ch"], "h");
         assert_eq!(json["lines"][0][1]["ch"], "i");
+        assert_eq!(json["dirtyRows"], serde_json::Value::Null);
+        assert_eq!(json["displayOffset"], 0);
+        assert_eq!(json["mouse"]["click"], false);
+        assert_eq!(json["altScreen"], false);
+    }
+
+    #[test]
+    fn dirty_snapshot_serializes_only_requested_rows() {
+        let mut model = TerminalModel::new(10, 4, super::super::model::NullTerminalWriter);
+        model.advance(b"row0\r\nrow1");
+        let frame = model.snapshot_dirty("term-1", &[1]);
+        assert_eq!(frame.dirty_rows.as_deref(), Some(&[1usize][..]));
+        assert_eq!(frame.lines.len(), 1);
+        assert_eq!(frame.lines[0][0].ch, "r");
+        assert_eq!(frame.lines[0][3].ch, "1");
+    }
+
+    #[test]
+    fn named_colors_map_to_stable_keys() {
+        use super::named_color_key;
+        use alacritty_terminal::vte::ansi::NamedColor;
+        assert_eq!(named_color_key(NamedColor::Red), "Red");
+        assert_eq!(named_color_key(NamedColor::BrightCyan), "BrightCyan");
+        assert_eq!(named_color_key(NamedColor::DimRed), "Red");
+        assert_eq!(named_color_key(NamedColor::Foreground), "Foreground");
+        assert_eq!(named_color_key(NamedColor::Cursor), "Foreground");
+        assert_eq!(named_color_key(NamedColor::Background), "Background");
     }
 }

@@ -30,6 +30,7 @@ import {
   terminalInput,
   terminalKill,
   terminalResize,
+  terminalScroll,
   terminalSpawn,
   terminalWrite,
   type TerminalFrame,
@@ -185,6 +186,22 @@ export const TerminalPanel = memo(
     const terminalBodyRef = useRef<HTMLDivElement | null>(null);
     const sessionByTabRef = useRef<Map<string, string>>(new Map());
     const tabBySessionRef = useRef<Map<string, string>>(new Map());
+    // One stable handler object per session so NativeTerminalView's memo() can
+    // bail out — inline closures here would re-render every grid on any state
+    // change. Pruned when the session ends.
+    const sessionHandlersRef = useRef<
+      Map<
+        string,
+        {
+          onInput: (command: TerminalInputCommand) => void;
+          onResize: (cols: number, rows: number) => void;
+          onScroll: (delta: number) => void;
+        }
+      >
+    >(new Map());
+    // Whether each session's program has requested a mouse mode; lets us stop
+    // suppressing hover so TUIs (claude/codex) receive it.
+    const mouseModesBySessionRef = useRef<Map<string, boolean>>(new Map());
     const [framesBySession, setFramesBySession] = useState<Record<string, TerminalFrame>>({});
     const [resizeReadySessions, setResizeReadySessions] = useState<Record<string, true>>({});
     const seqRef = useRef(1);
@@ -230,6 +247,11 @@ export const TerminalPanel = memo(
           if (disposed) return;
           const tabId = tabBySessionRef.current.get(event.payload.sessionId);
           if (!tabId) return;
+          const mouse = event.payload.mouse;
+          mouseModesBySessionRef.current.set(
+            event.payload.sessionId,
+            Boolean(mouse && (mouse.click || mouse.motion || mouse.drag)),
+          );
           setFramesBySession((current) => ({
             ...current,
             [event.payload.sessionId]: event.payload,
@@ -248,7 +270,15 @@ export const TerminalPanel = memo(
             sessionByTabRef.current.delete(tabId);
           }
           tabBySessionRef.current.delete(event.payload.sessionId);
+          sessionHandlersRef.current.delete(event.payload.sessionId);
+          mouseModesBySessionRef.current.delete(event.payload.sessionId);
           setResizeReadySessions((current) => {
+            const next = { ...current };
+            delete next[event.payload.sessionId];
+            return next;
+          });
+          setFramesBySession((current) => {
+            if (!(event.payload.sessionId in current)) return current;
             const next = { ...current };
             delete next[event.payload.sessionId];
             return next;
@@ -502,6 +532,8 @@ export const TerminalPanel = memo(
           void terminalKill(sessionId);
           sessionByTabRef.current.delete(tabId);
           tabBySessionRef.current.delete(sessionId);
+          sessionHandlersRef.current.delete(sessionId);
+          mouseModesBySessionRef.current.delete(sessionId);
           setResizeReadySessions((current) => {
             const next = { ...current };
             delete next[sessionId];
@@ -533,6 +565,8 @@ export const TerminalPanel = memo(
           void terminalKill(sessionId);
           sessionByTabRef.current.delete(tab.id);
           tabBySessionRef.current.delete(sessionId);
+          sessionHandlersRef.current.delete(sessionId);
+          mouseModesBySessionRef.current.delete(sessionId);
           setResizeReadySessions((current) => {
             const next = { ...current };
             delete next[sessionId];
@@ -812,12 +846,45 @@ export const TerminalPanel = memo(
 
     const handleTerminalMouseMoveCapture = useCallback(
       (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!shouldSuppressTerminalHoverMouseEvent(event.nativeEvent)) return;
+        const focusedSession = focusedTabIdRef.current
+          ? sessionByTabRef.current.get(focusedTabIdRef.current)
+          : undefined;
+        const mouseModeActive = focusedSession
+          ? mouseModesBySessionRef.current.get(focusedSession) ?? false
+          : false;
+        if (!shouldSuppressTerminalHoverMouseEvent(event.nativeEvent, mouseModeActive)) return;
         event.preventDefault();
         event.stopPropagation();
       },
       [],
     );
+
+    // Stable per-session handlers, created once and cached. Passing fresh
+    // closures here would defeat NativeTerminalView's memo() and re-render
+    // every grid on any TerminalPanel state change.
+    const getSessionHandlers = useCallback((sessionId: string) => {
+      const cache = sessionHandlersRef.current;
+      let handlers = cache.get(sessionId);
+      if (!handlers) {
+        handlers = {
+          onInput: (command: TerminalInputCommand) => {
+            void terminalInput(sessionId, command);
+          },
+          onResize: (cols: number, rows: number) => {
+            void terminalResize(sessionId, cols, rows).catch(() => {
+              // Session may exit between measurement and IPC delivery.
+            });
+          },
+          onScroll: (delta: number) => {
+            void terminalScroll(sessionId, delta).catch(() => {
+              // Session may exit before the scroll command lands.
+            });
+          },
+        };
+        cache.set(sessionId, handlers);
+      }
+      return handlers;
+    }, []);
 
     const renderTerminalTab = (tab: (typeof state.tabs)[number]) => {
       const className = tab.id === focusedTabId ? "terminal-tab active" : "terminal-tab";
@@ -1130,6 +1197,7 @@ export const TerminalPanel = memo(
                       : focusedGroup === "left"
                     : state.activeTabId === tab.id);
                 const sessionId = tab.sessionId ?? sessionByTabRef.current.get(tab.id) ?? null;
+                const handlers = sessionId ? getSessionHandlers(sessionId) : null;
                 const className = [
                   "terminal-instance",
                   isVisible ? "active" : null,
@@ -1162,7 +1230,7 @@ export const TerminalPanel = memo(
                       </button>
                     ) : null}
                     <div className="terminal-instance-host">
-                      {sessionId ? (
+                      {sessionId && handlers ? (
                         <NativeTerminalView
                           ref={(handle) => {
                             if (handle) {
@@ -1177,14 +1245,9 @@ export const TerminalPanel = memo(
                           focused={isFocused}
                           resizeReady={resizeReadySessions[sessionId] === true}
                           inputLabel={t("terminal.input")}
-                          onInput={(command: TerminalInputCommand) => {
-                            void terminalInput(sessionId, command);
-                          }}
-                          onResize={(cols, rows) => {
-                            void terminalResize(sessionId, cols, rows).catch(() => {
-                              // Session may exit between measurement and IPC delivery.
-                            });
-                          }}
+                          onInput={handlers.onInput}
+                          onResize={handlers.onResize}
+                          onScroll={handlers.onScroll}
                         />
                       ) : null}
                     </div>
