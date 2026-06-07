@@ -40,7 +40,7 @@ describe("normalizeAnchorSettings", () => {
         telegram: {
           apiHash: "super-secret-hash",
           botToken: "super-bot-token",
-          monitorConfigPath: "~/workspace/work/.secrets/services/telegram-monitor.config.yaml",
+          monitorConfigPath: "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
         },
       },
     });
@@ -186,7 +186,7 @@ describe("normalizeAnchorSettings", () => {
           intervalSeconds: 5,
           maxResults: "25",
           sessionFile: " ~/.anchor/telegram/session ",
-          monitorConfigPath: " ~/workspace/work/.secrets/services/telegram-monitor.config.yaml ",
+          monitorConfigPath: " ~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml ",
           legacyAutoDrop: true,
         },
       },
@@ -201,7 +201,7 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.comms.telegram.maxResults).toBe(25);
     expect(settings.comms.telegram.sessionFile).toBe("~/.anchor/telegram/session");
     expect(settings.comms.telegram.monitorConfigPath).toBe(
-      "~/workspace/work/.secrets/services/telegram-monitor.config.yaml",
+      "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
     );
     expect(settings.comms.telegram.legacyAutoDrop).toBe(true);
   });

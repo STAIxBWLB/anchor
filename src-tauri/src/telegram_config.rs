@@ -7,6 +7,7 @@ use serde_yaml::Value as YamlValue;
 use tauri::{AppHandle, Emitter};
 
 use crate::inbox_settings::{expand_tilde, lexical_normalize_path};
+use crate::secrets;
 use crate::vault::resolve_inside_vault;
 
 pub const SECRET_UNCHANGED: &str = "__ANCHOR_KEEP_SECRET__";
@@ -208,7 +209,7 @@ pub fn save_telegram_monitor_config(
 ) -> Result<TelegramMonitorConfigView, String> {
     let (work, path) =
         resolve_monitor_config_path(work_path.as_deref(), monitor_config_path.as_deref())?;
-    ensure_secret_config_path(&path)?;
+    ensure_secret_config_path(&work, &path)?;
     let (mut current, _) = read_config_or_default(&path)?;
     apply_save(&mut current, config);
     validate_config(&work, &current)?;
@@ -251,9 +252,7 @@ fn resolve_monitor_config_path(
         }
         return Ok((
             Some(work.clone()),
-            work.join(".secrets")
-                .join("services")
-                .join("telegram-monitor.config.yaml"),
+            secrets::default_telegram_monitor_config(work),
         ));
     }
     Err("work_path_required".to_string())
@@ -415,17 +414,17 @@ fn normalize_contexts(contexts: Vec<String>) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-fn ensure_secret_config_path(path: &Path) -> Result<(), String> {
+fn ensure_secret_config_path(work: &Option<PathBuf>, path: &Path) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "monitor_config_parent_missing".to_string())?;
     if !parent.is_dir() {
         return Err("monitor_config_parent_missing".to_string());
     }
-    if !path
-        .components()
-        .any(|component| component.as_os_str().to_string_lossy() == ".secrets")
-    {
+    let Some(work) = work else {
+        return Err("monitor_config_work_path_required".to_string());
+    };
+    if !secrets::is_managed_secret_path(work, path) {
         return Err("monitor_config_not_under_secrets".to_string());
     }
     Ok(())
@@ -744,7 +743,7 @@ notification:
             Some(&path.to_string_lossy()),
         )
         .unwrap();
-        ensure_secret_config_path(&resolved_path).unwrap();
+        ensure_secret_config_path(&work, &resolved_path).unwrap();
         let (mut current, _) = read_config_or_default(&resolved_path).unwrap();
         apply_save(&mut current, save);
         validate_config(&work, &current).unwrap();
@@ -780,7 +779,7 @@ notification:
         let tmp = TempDir::new().unwrap();
         let path = tmp
             .path()
-            .join(".secrets/services/telegram-monitor.config.yaml");
+            .join(".anchor/secrets/services/telegram-monitor.config.yaml");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(
             &path,
@@ -800,7 +799,7 @@ chats:
             Some(&path.to_string_lossy()),
         )
         .unwrap();
-        ensure_secret_config_path(&resolved_path).unwrap();
+        ensure_secret_config_path(&work, &resolved_path).unwrap();
         let (mut config, _) = read_config_or_default(&resolved_path).unwrap();
         let chat = config
             .chats

@@ -14,6 +14,7 @@
 //     workspace-state.json — workspace-scoped UI state and overrides
 //     settings.json        — legacy read-once migration source
 //     imports.json         — append-only receipts of `_sys/ → .anchor/` imports
+//     secrets/             — workspace-local secret store (gitignored)
 //     versions/            — (legacy) snapshots
 //
 // The directory is owned by anchor: contents survive `_sys/` import,
@@ -78,6 +79,7 @@ const ANCHORIGNORE_DEFAULTS: &[&str] = &[
     ".next",
     ".turbo",
     ".cache",
+    ".anchor/secrets",
     ".secrets",
     ".anchor/cache",
     ".anchor/studio",
@@ -1412,6 +1414,7 @@ mod tests {
         assert_eq!(content.matches(".venv").count(), 1);
         // Newly-required patterns are appended.
         assert!(content.contains("_sys/env"));
+        assert!(content.contains(".anchor/secrets"));
         assert!(content.contains(".secrets"));
         // Idempotent on a second run.
         ensure_anchor_dir(tmp.path()).unwrap();

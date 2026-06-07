@@ -14,6 +14,7 @@ use crate::cli_path::{augmented_path, is_executable};
 use crate::inbox_drop::{
     auth_status, stage_message_json, stage_message_outcome, ProviderAuthStatus, StageOutcome,
 };
+use crate::secrets;
 use crate::skill_host::{fs as host_fs, store};
 use crate::vault::resolve_inside_vault;
 use crate::win_process::NoWindow;
@@ -503,6 +504,10 @@ fn resolve_telegram_command_config(
                     )
                 })
                 .map(PathBuf::from)
+                .or_else(|| {
+                    work.as_deref()
+                        .map(secrets::default_telegram_monitor_config)
+                })
         });
     if let Some(path) = &monitor_config_path {
         if !path.is_file() {

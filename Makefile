@@ -204,7 +204,7 @@ macos-distribution-local-check: ## Check repo config and local Apple notarizatio
 	$(NODE) scripts/notarize-local-smoke.mjs --check
 
 .PHONY: macos-notarize-local
-macos-notarize-local: ## Build, sign, and notarize locally with secrets from ~/workspace/work/.secrets/apple
+macos-notarize-local: ## Build, sign, and notarize locally with secrets from ~/workspace/work/.anchor/secrets/apple
 	$(NODE) scripts/notarize-local-smoke.mjs "$(or $(TARGET),aarch64-apple-darwin)"
 
 .PHONY: homebrew-update

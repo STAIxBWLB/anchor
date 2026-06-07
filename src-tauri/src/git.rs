@@ -987,6 +987,8 @@ fn is_sensitive_git_path(path: &str) -> bool {
         .unwrap_or("");
     lower.starts_with(".secrets/")
         || lower.contains("/.secrets/")
+        || lower.starts_with(".anchor/secrets/")
+        || lower.contains("/.anchor/secrets/")
         || lower.starts_with(".env")
         || lower.contains("/.env")
         || name == "id_rsa"
@@ -1244,6 +1246,16 @@ mod tests {
         let err = result.unwrap_err();
         assert!(err.contains("refuses to send sensitive"));
         assert!(err.contains(".env"));
+    }
+
+    #[test]
+    fn sensitive_path_check_rejects_anchor_secrets() {
+        assert!(is_sensitive_git_path(
+            ".anchor/secrets/apple/keychain-password"
+        ));
+        assert!(is_sensitive_git_path(
+            "nested/.anchor/secrets/workspace.env"
+        ));
     }
 
     #[test]

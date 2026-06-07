@@ -17,7 +17,7 @@ describe("telegramLoginCommand", () => {
             "~/.anchor/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py",
           sessionFile: "~/.anchor/telegram/monitor.session",
           monitorConfigPath:
-            "~/workspace/work/.secrets/services/telegram-monitor.config.yaml",
+            "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
         },
       },
     }).comms.telegram;
@@ -36,7 +36,7 @@ describe("telegramLoginCommand", () => {
       '--session-file "$HOME/.anchor/telegram/monitor.session"',
     );
     expect(command.args[1]).toContain(
-      '--config-file "$HOME/workspace/work/.secrets/services/telegram-monitor.config.yaml"',
+      '--config-file "$HOME/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"',
     );
   });
 });
@@ -82,12 +82,15 @@ describe("isTelegramMonitorConfigOutsideAnchor", () => {
     expect(isTelegramMonitorConfigOutsideAnchor("/home/foo/.anchor")).toBe(false);
   });
 
-  it("warns for monitor config paths outside Anchor home", () => {
+  it("does not warn for workspace .anchor secrets paths", () => {
     expect(
       isTelegramMonitorConfigOutsideAnchor(
-        "~/workspace/work/.secrets/services/telegram-monitor.config.yaml",
+        "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
       ),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("warns for monitor config paths outside Anchor-managed paths", () => {
     expect(isTelegramMonitorConfigOutsideAnchor("/tmp/telegram-monitor.yaml")).toBe(true);
   });
 });

@@ -72,7 +72,7 @@ ANCHOR_HUB_DATABASE_URL=sqlite:///tmp/anchor-hub.db uv run uvicorn anchor_hub.ma
 # anchor: flip workspace.config.yaml
 #   hub.enabled: true
 #   hub.endpoint: http://127.0.0.1:8017/api/v1
-#   hub.api_token_ref: ~/workspace/work/.secrets/hub-token (empty file is fine for local)
+#   hub.api_token_ref: ~/workspace/work/.anchor/secrets/hub-token (empty file is fine for local)
 ```
 
 Then in Anchor: open Catalog mode → footer "마지막 스캔" populates; ⌘ ⇧ N → toggle "Hub 템플릿에서 시작" → templates load from Hub; pick `business-plan-default` → body prefills with slot hints.
@@ -449,7 +449,7 @@ Minimum Apple Developer setup for direct distribution:
    ```
 
 For a local notarization smoke test, keep Apple files under
-`~/workspace/work/.secrets/apple/`:
+`~/workspace/work/.anchor/secrets/apple/`:
 
 - `DeveloperIDApplication.p12`
 - `AuthKey_<APPLE_API_KEY_ID>.p8`

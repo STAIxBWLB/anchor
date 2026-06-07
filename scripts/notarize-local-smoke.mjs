@@ -15,7 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const defaultSecretsDir = resolve(homedir(), "workspace/work/.secrets/apple");
+const defaultSecretsDir = resolve(homedir(), "workspace/work/.anchor/secrets/apple");
 const secretsDir = resolve(process.env.ANCHOR_APPLE_SECRETS_DIR ?? defaultSecretsDir);
 const userArgs = process.argv.slice(2);
 const target = userArgs.find((arg) => !arg.startsWith("--")) ?? process.env.ANCHOR_NOTARIZE_TARGET ?? "aarch64-apple-darwin";

@@ -31,6 +31,7 @@ mod meetings;
 mod mission_state;
 mod ops_catalog;
 mod outlook_mso;
+mod secrets;
 mod share_outbox;
 mod shelf;
 mod skill_host;
@@ -120,6 +121,7 @@ use outlook_mso::{
     check_mso_auth, decide_outlook_item, decide_outlook_items, fetch_outlook_unread,
     stage_outlook_items,
 };
+use secrets::{secrets_doctor, secrets_migrate, secrets_scan};
 use share_outbox::{
     ensure_share_outbox_root, prepare_share_outbox_files, read_share_outbox_config,
     save_share_outbox_root, scan_share_outbox,
@@ -354,6 +356,9 @@ pub fn run() {
             read_anchor_settings,
             save_anchor_settings,
             read_anchor_imports,
+            secrets_scan,
+            secrets_doctor,
+            secrets_migrate,
             plan_sys_import,
             apply_sys_import,
             skills_list_sources,

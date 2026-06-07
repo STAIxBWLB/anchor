@@ -309,12 +309,12 @@ export function CommsSettingsTab({
             onChange={(event) => updateTelegram({ monitorConfigPath: event.target.value || null })}
             placeholder={
               effectiveSettings?.telegram.monitorConfigPath ??
-              "~/workspace/work/.secrets/services/telegram-monitor.config.yaml"
+              "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"
             }
             title={
               settings.telegram.monitorConfigPath ??
               effectiveSettings?.telegram.monitorConfigPath ??
-              "~/workspace/work/.secrets/services/telegram-monitor.config.yaml"
+              "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"
             }
             spellCheck={false}
           />

@@ -644,6 +644,7 @@ fn is_excluded_dir_for_bu_scan(p: &Path) -> bool {
                     | "studio"
                     | "evidence-stage"
                     | "certification"
+                    | "secrets"
                     | "versions"
             );
         }

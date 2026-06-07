@@ -1800,7 +1800,7 @@ function mockTelegramMonitorConfig(
   return {
     path:
       monitorConfigPath ??
-      `${workPath ?? MOCK_VAULT_PATH}/.secrets/services/telegram-monitor.config.yaml`,
+      `${workPath ?? MOCK_VAULT_PATH}/.anchor/secrets/services/telegram-monitor.config.yaml`,
     exists: false,
     warnings: [],
     telegram: {

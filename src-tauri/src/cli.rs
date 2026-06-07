@@ -1,5 +1,6 @@
 use std::env;
 
+use crate::secrets::{secrets_doctor, secrets_migrate, secrets_scan};
 use crate::skill_host::{
     skills_doctor, skills_import_external, skills_import_unmanage, skills_list_dirty,
     skills_reconcile_skill,
@@ -20,12 +21,230 @@ pub fn run_cli(args: Vec<String>) -> i32 {
             0
         }
         "doctor" => run_doctor(&args[1..]),
+        "secrets" => run_secrets(&args[1..]),
         "skills" => run_skills(&args[1..]),
         "terminal-hook" => crate::terminal_hooks::run_terminal_hook(&args[1..]),
         other => {
             eprintln!("unknown command: {other}");
             eprintln!("{}", usage());
             2
+        }
+    }
+}
+
+fn run_secrets(args: &[String]) -> i32 {
+    let Some(subcommand) = args.first().map(String::as_str) else {
+        eprintln!("{}", secrets_usage());
+        return 2;
+    };
+    match subcommand {
+        "scan" => run_secrets_scan(&args[1..]),
+        "doctor" => run_secrets_doctor(&args[1..]),
+        "migrate" => run_secrets_migrate(&args[1..]),
+        _ => {
+            eprintln!("{}", secrets_usage());
+            2
+        }
+    }
+}
+
+fn run_secrets_scan(args: &[String]) -> i32 {
+    let mut json = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            other => {
+                eprintln!("unknown option: {other}");
+                eprintln!("usage: anchor secrets scan [--json]");
+                return 2;
+            }
+        }
+    }
+    match secrets_scan(current_work_path().unwrap_or_else(|| ".".to_string())) {
+        Ok(report) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                );
+            } else {
+                println!(
+                    "secrets: {} managed, {} candidate(s), {} legacy symlink(s), {} issue(s)",
+                    report.managed.len(),
+                    report.candidates.len(),
+                    report.legacy_symlinks.len(),
+                    report.issues.len()
+                );
+                for issue in &report.issues {
+                    println!(
+                        "{}: {}{}",
+                        issue.code,
+                        issue.message,
+                        issue
+                            .path
+                            .as_ref()
+                            .map(|path| format!(" ({path})"))
+                            .unwrap_or_default()
+                    );
+                }
+            }
+            if report.ok {
+                0
+            } else {
+                1
+            }
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            1
+        }
+    }
+}
+
+fn run_secrets_doctor(args: &[String]) -> i32 {
+    let mut json = false;
+    let mut quiet = false;
+    for arg in args {
+        match arg.as_str() {
+            "--json" => json = true,
+            "--quiet" => quiet = true,
+            other => {
+                eprintln!("unknown option: {other}");
+                eprintln!("usage: anchor secrets doctor [--json] [--quiet]");
+                return 2;
+            }
+        }
+    }
+    match secrets_doctor(current_work_path().unwrap_or_else(|| ".".to_string())) {
+        Ok(report) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                );
+            } else if !quiet || !report.ok {
+                let error_count = report
+                    .issues
+                    .iter()
+                    .filter(|issue| issue.severity == "error")
+                    .count();
+                let warn_count = report
+                    .issues
+                    .iter()
+                    .filter(|issue| issue.severity == "warn")
+                    .count();
+                println!(
+                    "secrets doctor: {} managed, {} candidate(s), {error_count} error(s), {warn_count} warning(s)",
+                    report.managed.len(),
+                    report.candidates.len()
+                );
+                for issue in &report.issues {
+                    if issue.severity == "error" || !quiet {
+                        println!(
+                            "{}: {}{}",
+                            issue.code,
+                            issue.message,
+                            issue
+                                .path
+                                .as_ref()
+                                .map(|path| format!(" ({path})"))
+                                .unwrap_or_default()
+                        );
+                    }
+                }
+            }
+            if report.ok {
+                0
+            } else {
+                1
+            }
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            1
+        }
+    }
+}
+
+fn run_secrets_migrate(args: &[String]) -> i32 {
+    let mut json = false;
+    let mut dry_run: Option<bool> = None;
+    let mut selected = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--json" => json = true,
+            "--dry-run" => {
+                if dry_run == Some(false) {
+                    eprintln!("conflicting options: --dry-run and --apply");
+                    return 2;
+                }
+                dry_run = Some(true);
+            }
+            "--apply" => {
+                if dry_run == Some(true) {
+                    eprintln!("conflicting options: --dry-run and --apply");
+                    return 2;
+                }
+                dry_run = Some(false);
+            }
+            "--select" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    eprintln!("--select requires a workspace-relative path");
+                    return 2;
+                };
+                selected.push(value.clone());
+            }
+            other => {
+                eprintln!("unknown option: {other}");
+                eprintln!(
+                    "usage: anchor secrets migrate --dry-run|--apply [--select <relpath>] [--json]"
+                );
+                return 2;
+            }
+        }
+        index += 1;
+    }
+    let Some(dry_run) = dry_run else {
+        eprintln!("--dry-run or --apply required");
+        return 2;
+    };
+    match secrets_migrate(
+        current_work_path().unwrap_or_else(|| ".".to_string()),
+        Some(dry_run),
+        Some(selected),
+    ) {
+        Ok(report) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                );
+            } else {
+                println!(
+                    "secrets migrate: {} action(s) {}",
+                    report.actions.len(),
+                    if report.applied { "applied" } else { "planned" }
+                );
+                for action in &report.actions {
+                    println!(
+                        "{}\t{}\t{}",
+                        action.action,
+                        action.status,
+                        action.rel_path.clone().unwrap_or_default()
+                    );
+                }
+            }
+            if report.ok {
+                0
+            } else {
+                1
+            }
+        }
+        Err(err) => {
+            eprintln!("{err}");
+            1
         }
     }
 }
@@ -323,8 +542,12 @@ fn skills_usage() -> &'static str {
     "usage: anchor skills dirty|reconcile|import|import-unmanage"
 }
 
+fn secrets_usage() -> &'static str {
+    "usage: anchor secrets scan|doctor|migrate"
+}
+
 fn usage() -> &'static str {
-    "usage: anchor [--version] [--help] <command>\n\ncommands:\n  doctor [--json] [--quiet]\n  skills dirty [--json]\n  skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]\n  skills import <source-path> [--name <name>] [--copy|--link]\n  skills import-unmanage <name> [--delete-files]"
+    "usage: anchor [--version] [--help] <command>\n\ncommands:\n  doctor [--json] [--quiet]\n  secrets scan [--json]\n  secrets doctor [--json] [--quiet]\n  secrets migrate --dry-run|--apply [--select <relpath>] [--json]\n  skills dirty [--json]\n  skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]\n  skills import <source-path> [--name <name>] [--copy|--link]\n  skills import-unmanage <name> [--delete-files]"
 }
 
 #[cfg(test)]
@@ -344,6 +567,19 @@ mod tests {
     #[test]
     fn missing_skills_subcommand_is_cli_error() {
         assert_eq!(run_cli(vec!["skills".to_string()]), 2);
+    }
+
+    #[test]
+    fn missing_secrets_subcommand_is_cli_error() {
+        assert_eq!(run_cli(vec!["secrets".to_string()]), 2);
+    }
+
+    #[test]
+    fn secrets_migrate_requires_explicit_mode() {
+        assert_eq!(
+            run_cli(vec!["secrets".to_string(), "migrate".to_string()]),
+            2
+        );
     }
 
     #[test]

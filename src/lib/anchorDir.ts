@@ -14,6 +14,8 @@ import type {
   RegisterWorkspaceOutcome,
   RuleDocument,
   RuleEntry,
+  SecretsMigrationReport,
+  SecretsScanReport,
   TemplateEntry,
   WorkspaceConfig,
   WorkspaceDetect,
@@ -78,6 +80,53 @@ export async function registerWorkspaceRoots(
 export async function listWorkspaces(): Promise<WorkspaceSummary[]> {
   if (!isTauri()) return [];
   return invoke<WorkspaceSummary[]>("list_workspaces");
+}
+
+export async function scanSecrets(workPath: string): Promise<SecretsScanReport> {
+  if (!isTauri()) {
+    return {
+      ok: true,
+      root: {
+        workPath,
+        primaryRoot: `${workPath}/.anchor/secrets`,
+        primaryExists: false,
+        legacyPath: `${workPath}/.secrets`,
+        legacyExists: false,
+        legacyKind: "missing",
+        legacyTarget: null,
+      },
+      managed: [],
+      candidates: [],
+      legacySymlinks: [],
+      issues: [],
+    };
+  }
+  return invoke<SecretsScanReport>("secrets_scan", { workPath });
+}
+
+export async function doctorSecrets(workPath: string): Promise<SecretsScanReport> {
+  if (!isTauri()) return scanSecrets(workPath);
+  return invoke<SecretsScanReport>("secrets_doctor", { workPath });
+}
+
+export async function migrateSecrets(
+  workPath: string,
+  dryRun: boolean,
+  selected?: string[],
+): Promise<SecretsMigrationReport> {
+  if (!isTauri()) {
+    return {
+      applied: !dryRun,
+      ok: true,
+      scan: await scanSecrets(workPath),
+      actions: [],
+    };
+  }
+  return invoke<SecretsMigrationReport>("secrets_migrate", {
+    workPath,
+    dryRun,
+    selected: selected ?? null,
+  });
 }
 
 // === .anchor/ workspace meta ===

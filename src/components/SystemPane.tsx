@@ -37,12 +37,15 @@ import {
   listAnchorRules,
   listAnchorTemplates,
   listWorkspaceProjects,
+  doctorSecrets,
+  migrateSecrets,
   planSysImport,
   readAnchorMcp,
   readAnchorProjects,
   readAnchorRule,
   readAnchorTemplate,
   readWorkspaceConfig,
+  scanSecrets,
   saveAnchorMcp,
   saveAnchorRule,
   saveAnchorTemplate,
@@ -100,6 +103,8 @@ import type {
   ProjectPickerEntry,
   ProviderAuthStatus,
   RuleEntry,
+  SecretsMigrationReport,
+  SecretsScanReport,
   TemplateEntry,
   TelegramMonitorConfigView,
   WorkspaceConfig,
@@ -149,6 +154,7 @@ type SystemTab =
   | "meetings"
   | "tasks"
   | "inbox-channels"
+  | "secrets"
   | "connectors"
   | "rules"
   | "templates"
@@ -166,6 +172,7 @@ function isSystemTab(value: string | null | undefined): value is SystemTab {
     value === "meetings" ||
     value === "tasks" ||
     value === "inbox-channels" ||
+    value === "secrets" ||
     value === "connectors" ||
     value === "rules" ||
     value === "templates" ||
@@ -270,6 +277,7 @@ export function SystemPane({
             ["meetings", "system.tab.meetings"],
             ["tasks", "system.tab.tasks"],
             ["inbox-channels", "system.tab.inboxChannels"],
+            ["secrets", "Secrets"],
             ["connectors", "system.tab.connectors"],
             ["rules", "system.tab.rules"],
             ["templates", "system.tab.templates"],
@@ -343,6 +351,7 @@ export function SystemPane({
             onSaved={onInboxRuntimeConfigChange}
           />
         ) : null}
+        {tab === "secrets" ? <SecretsTab workPath={workPath} /> : null}
         {tab === "connectors" ? (
           <SettingsJsonTab
             title={t("system.connectors.title")}
@@ -366,6 +375,224 @@ export function SystemPane({
       </section>
     </main>
   );
+}
+
+function SecretsTab({ workPath }: { workPath: string }) {
+  const [report, setReport] = useState<SecretsScanReport | null>(null);
+  const [migration, setMigration] = useState<SecretsMigrationReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setReport(await scanSecrets(workPath));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [workPath]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const runDoctor = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setReport(await doctorSecrets(workPath));
+      setMigration(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runMigration = async (dryRun: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await migrateSecrets(workPath, dryRun);
+      setMigration(next);
+      setReport(next.scan);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="settings-form">
+      <section className="settings-section-panel">
+        <div className="settings-section-heading">
+          <div>
+            <strong>Workspace Secrets</strong>
+            <span>Managed under .anchor/secrets with .secrets kept as a compatibility symlink.</span>
+          </div>
+          <div className="system-detail-actions compact">
+            <Button size="sm" variant="ghost" icon={<RefreshCcw size={14} />} onClick={refresh} disabled={busy}>
+              Scan
+            </Button>
+            <Button size="sm" variant="ghost" icon={<ShieldCheck size={14} />} onClick={runDoctor} disabled={busy}>
+              Doctor
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => runMigration(true)} disabled={busy}>
+              Dry run
+            </Button>
+            <Button size="sm" onClick={() => runMigration(false)} disabled={busy}>
+              Apply
+            </Button>
+          </div>
+        </div>
+        {error ? (
+          <div className="comms-setup-banner warn">
+            <AlertTriangle size={14} />
+            <div>{error}</div>
+          </div>
+        ) : null}
+        {report ? (
+          <div className="settings-grid two">
+            <ReadOnlyPath label="Primary root" value={report.root.primaryRoot} />
+            <ReadOnlyPath
+              label="Legacy .secrets"
+              value={`${report.root.legacyKind}${report.root.legacyTarget ? ` -> ${report.root.legacyTarget}` : ""}`}
+            />
+            <ReadOnlyPath label="Managed files" value={String(report.managed.length)} />
+            <ReadOnlyPath label="Unmanaged candidates" value={String(report.candidates.length)} />
+          </div>
+        ) : null}
+      </section>
+
+      {report?.issues.length ? (
+        <section className="settings-section-panel">
+          <div className="settings-section-heading">
+            <div>
+              <strong>Issues</strong>
+              <span>Policy or compatibility checks that need attention.</span>
+            </div>
+          </div>
+          <div className="system-list">
+            {report.issues.map((issue, index) => (
+              <div className="system-list-item" key={`${issue.code}-${index}`}>
+                <strong>{issue.code}</strong>
+                <span>{issue.message}</span>
+                {issue.path ? <code>{issue.path}</code> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {report?.candidates.length ? (
+        <section className="settings-section-panel">
+          <div className="settings-section-heading">
+            <div>
+              <strong>Unmanaged Candidates</strong>
+              <span>Secret-like files outside .anchor/secrets. Values are not displayed.</span>
+            </div>
+          </div>
+          <div className="system-list">
+            {report.candidates.map((candidate) => (
+              <div className="system-list-item" key={candidate.relPath}>
+                <strong>{candidate.relPath}</strong>
+                <span>{candidate.reason}</span>
+                <code>{candidate.recommendedRelPath}</code>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {report?.legacySymlinks.length ? (
+        <section className="settings-section-panel">
+          <div className="settings-section-heading">
+            <div>
+              <strong>Legacy Symlinks</strong>
+              <span>Runtime links still pointing at .secrets and eligible for retargeting.</span>
+            </div>
+          </div>
+          <div className="system-list">
+            {report.legacySymlinks.map((candidate) => (
+              <div className="system-list-item" key={candidate.relPath}>
+                <strong>{candidate.relPath}</strong>
+                <span>{candidate.reason}</span>
+                <code>{candidate.recommendedRelPath}</code>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {report?.managed.length ? (
+        <section className="settings-section-panel">
+          <div className="settings-section-heading">
+            <div>
+              <strong>Managed Inventory</strong>
+              <span>Path, size, and permission metadata only.</span>
+            </div>
+          </div>
+          <div className="system-list">
+            {report.managed.slice(0, 80).map((item) => (
+              <div className="system-list-item" key={`${item.root}-${item.relPath}`}>
+                <strong>{item.relPath}</strong>
+                <span>
+                  {item.root} · {item.kind} · {formatBytes(item.sizeBytes)}
+                  {item.mode ? ` · ${item.mode}` : ""}
+                  {item.permissionsOk ? "" : " · permission warning"}
+                </span>
+              </div>
+            ))}
+            {report.managed.length > 80 ? (
+              <div className="system-list-item">
+                <strong>{report.managed.length - 80} more</strong>
+                <span>Additional managed secret files hidden from this compact view.</span>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {migration ? (
+        <section className="settings-section-panel">
+          <div className="settings-section-heading">
+            <div>
+              <strong>{migration.applied ? "Applied Migration" : "Migration Dry Run"}</strong>
+              <span>{migration.actions.length} action(s)</span>
+            </div>
+          </div>
+          <div className="system-list">
+            {migration.actions.map((action, index) => (
+              <div className="system-list-item" key={`${action.action}-${index}`}>
+                <strong>{action.action}</strong>
+                <span>{action.status}</span>
+                {action.relPath ? <code>{action.relPath}</code> : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function ReadOnlyPath({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input value={value} readOnly spellCheck={false} />
+    </label>
+  );
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function CommsSettingsSystemTab({

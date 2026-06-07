@@ -860,6 +860,66 @@ export interface WorkspaceConfig {
   [extra: string]: unknown;
 }
 
+export interface SecretsRootStatus {
+  workPath: string;
+  primaryRoot: string;
+  primaryExists: boolean;
+  legacyPath: string;
+  legacyExists: boolean;
+  legacyKind: string;
+  legacyTarget: string | null;
+}
+
+export interface SecretInventoryItem {
+  relPath: string;
+  absPath: string;
+  root: string;
+  kind: string;
+  sizeBytes: number;
+  mode: string | null;
+  permissionsOk: boolean;
+  symlinkTarget: string | null;
+}
+
+export interface SecretCandidate {
+  relPath: string;
+  absPath: string;
+  reason: string;
+  recommendedRelPath: string;
+  recommendedAbsPath: string;
+}
+
+export interface SecretIssue {
+  severity: string;
+  code: string;
+  path: string | null;
+  message: string;
+}
+
+export interface SecretsScanReport {
+  ok: boolean;
+  root: SecretsRootStatus;
+  managed: SecretInventoryItem[];
+  candidates: SecretCandidate[];
+  legacySymlinks: SecretCandidate[];
+  issues: SecretIssue[];
+}
+
+export interface SecretsMigrationAction {
+  action: string;
+  sourcePath: string | null;
+  targetPath: string | null;
+  relPath: string | null;
+  status: string;
+}
+
+export interface SecretsMigrationReport {
+  applied: boolean;
+  ok: boolean;
+  scan: SecretsScanReport;
+  actions: SecretsMigrationAction[];
+}
+
 export interface WorkspaceDetect {
   workPath: string;
   configPath: string;
