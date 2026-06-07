@@ -22,6 +22,12 @@ Use this order:
 If the selected title has no Hangul, do not keep an internal English filename.
 Inspect the document and provide `--title`.
 
+Exception — international recipients: when the file is being shared with
+non-Korean recipients (e.g., overseas partner institutions), an English title
+is appropriate. Pass an explicit `--title "English Title"` together with
+`--allow-english`. The Hangul check is skipped only with this explicit opt-in;
+derived internal filenames are still rejected without it.
+
 ## Suffix Replacement
 
 Strip only trailing operational suffixes from the title stem, then append the

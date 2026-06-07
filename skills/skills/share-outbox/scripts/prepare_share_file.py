@@ -146,8 +146,11 @@ def resolve_title(args: argparse.Namespace, source: Path, config: dict) -> tuple
     title = normalize_text(strip_suffixes(stem, patterns))
     if not title:
         fail("Cannot derive an outgoing title")
-    if not title_has_hangul(title):
-        fail("Outgoing title has no Hangul. Inspect the content and pass --title with a Korean title.")
+    if not title_has_hangul(title) and not args.allow_english:
+        fail(
+            "Outgoing title has no Hangul. Inspect the content and pass --title with a Korean title, "
+            "or pass --allow-english for international recipients."
+        )
     return title, source_kind, raw_name
 
 
@@ -218,6 +221,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("source", help="Source file to copy")
     parser.add_argument("--config", help="workspace.config.yaml path")
     parser.add_argument("--title", help="Korean outgoing title without extension")
+    parser.add_argument(
+        "--allow-english",
+        action="store_true",
+        help="Allow a non-Korean (e.g., English) outgoing title for international recipients",
+    )
     parser.add_argument("--author", help="Author key from share_outbox.authors")
     parser.add_argument("--timestamp", help="ISO timestamp or YYMMDD-HHMM literal")
     parser.add_argument("--inbox-item", help="Inbox item directory containing manifest.yaml")

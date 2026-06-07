@@ -36,6 +36,8 @@ email, upload to cloud storage, create public links, or write to a vault.
      internal author codes.
    - If the resulting title is not Korean, inspect the content and choose a
      concise Korean title before running the script with `--title`.
+   - Exception: when the recipients are international (non-Korean), an English
+     title is allowed — pass `--title "English Title" --allow-english`.
 3. Resolve the author key from the user request or
    `share_outbox.default_author`; read the public suffix from
    `share_outbox.authors.<key>.suffix`.
@@ -57,6 +59,7 @@ Typical usage:
 
 ```bash
 ~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "한글 제목"
+~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "English Title" --allow-english
 ~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --inbox-item inbox/items/done/item-id
 ~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --dry-run
 ```
