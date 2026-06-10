@@ -1391,20 +1391,61 @@ export const NativeTerminalView = memo(
       enterHandledAtRef.current = 0;
     }, []);
 
-    // On window blur, remember whether this terminal's textarea owned focus;
-    // on window focus, restore it — WKWebView does not reliably restore the
-    // first responder after an app switch. Gated on the focused/active props
-    // (so a hidden tab or unfocused split pane never steals focus) and on
-    // wasFocusedRef (so non-terminal UI keeps its focus untouched).
+    // Composition state must not outlive focus reality: WKWebView can abandon
+    // an IME composition without delivering compositionend (Korean input +
+    // Cmd+Tab), which would leave composingRef stuck true and silently
+    // swallow ALL input until something blurs the textarea. Reset at every
+    // blur boundary; a late compositionend stays harmless — onCompositionEnd
+    // is idempotent and prefers event.data over the cleared textarea value.
+    const resetComposition = useCallback(() => {
+      composingRef.current = false;
+      compositionSessionRef.current = null;
+      enterDuringCompositionRef.current = null;
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.value = "";
+        ta.style.background = "transparent";
+      }
+      requestPaint([cursorRef.current.row]);
+    }, [requestPaint]);
+
+    const onTextareaBlur = useCallback(() => {
+      resetMods();
+      resetComposition();
+    }, [resetComposition, resetMods]);
+
+    // Track DOM-focus ownership continuously: sampling activeElement at
+    // window-blur time races WKWebView, which may blur the textarea before
+    // the window blur event fires. A focusin anywhere else falsifies
+    // ownership; blur-to-body (window deactivation) fires no focusin and
+    // keeps it.
+    useEffect(() => {
+      // The mount-time focus effect runs before this listener attaches, so
+      // seed ownership from the current activeElement.
+      wasFocusedRef.current = document.activeElement === textareaRef.current;
+      const onFocusIn = (event: FocusEvent) => {
+        wasFocusedRef.current = event.target === textareaRef.current;
+      };
+      document.addEventListener("focusin", onFocusIn, true);
+      return () => document.removeEventListener("focusin", onFocusIn, true);
+    }, []);
+
+    // On window blur, drop modifier and composition state (macOS detaches the
+    // IME at deactivation; a missed keyup must not latch a modifier). On
+    // window focus, restore the textarea focus WKWebView fails to restore —
+    // gated on the focused/active props (a hidden tab or unfocused split pane
+    // never steals focus), on ownership, and on never stealing from another
+    // genuinely focused element.
     useEffect(() => {
       const onWindowBlur = () => {
-        wasFocusedRef.current = document.activeElement === textareaRef.current;
         resetMods();
+        resetComposition();
       };
       const onWindowFocus = () => {
-        if (!wasFocusedRef.current) return;
-        wasFocusedRef.current = false;
-        if (focused && active) textareaRef.current?.focus();
+        if (!wasFocusedRef.current || !focused || !active) return;
+        const el = document.activeElement;
+        if (el && el !== document.body && el !== textareaRef.current) return;
+        textareaRef.current?.focus();
       };
       window.addEventListener("blur", onWindowBlur);
       window.addEventListener("focus", onWindowFocus);
@@ -1412,7 +1453,7 @@ export const NativeTerminalView = memo(
         window.removeEventListener("blur", onWindowBlur);
         window.removeEventListener("focus", onWindowFocus);
       };
-    }, [active, focused, resetMods]);
+    }, [active, focused, resetComposition, resetMods]);
 
     useEffect(() => {
       const focusedOnThisTerminal = () => document.activeElement === textareaRef.current;
@@ -1629,13 +1670,22 @@ export const NativeTerminalView = memo(
           rows={1}
           onKeyDown={onKeyDown}
           onKeyUp={onKeyUp}
-          onBlur={resetMods}
+          onBlur={onTextareaBlur}
           onBeforeInput={onBeforeInput}
           onInput={onTextInput}
           onPaste={onPaste}
           onCompositionStart={onCompositionStart}
           onCompositionUpdate={() => {
-            /* WKWebView renders the in-progress jamo in the textarea itself. */
+            // WKWebView renders the in-progress jamo in the textarea itself.
+            // A composition resumed after an app switch arrives without a new
+            // compositionstart (the blur-boundary reset cleared the flag) —
+            // re-arm so the cursor/backdrop reflect the live composition.
+            if (!composingRef.current) {
+              composingRef.current = true;
+              const ta = textareaRef.current;
+              if (ta) ta.style.background = DEFAULT_BG;
+              requestPaint([cursorRef.current.row]);
+            }
           }}
           onCompositionEnd={onCompositionEnd}
         />

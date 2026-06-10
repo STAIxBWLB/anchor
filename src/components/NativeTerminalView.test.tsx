@@ -1078,6 +1078,175 @@ describe("NativeTerminalView window focus restore", () => {
   });
 });
 
+describe("NativeTerminalView input recovery", () => {
+  // jsdom lacks TextEvent, so React's polyfilled onBeforeInput cannot be
+  // driven by dispatching native beforeinput — committed text is driven
+  // through the native "input" event (onTextInput) instead. A dispatched
+  // compositionend with data also makes React synthesize an onBeforeInput
+  // via its fallback path; the component discards it because inputType is
+  // undefined, so no double-emit.
+  function fireComposition(target: HTMLTextAreaElement, type: string, data = "") {
+    act(() => {
+      target.dispatchEvent(new CompositionEvent(type, { bubbles: true, data }));
+    });
+  }
+
+  function fireInsertText(target: HTMLTextAreaElement, data: string) {
+    act(() => {
+      target.dispatchEvent(
+        new InputEvent("input", { bubbles: true, data, inputType: "insertText" }),
+      );
+    });
+  }
+
+  function fireEnterKey(target: HTMLTextAreaElement) {
+    act(() => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+  }
+
+  function textCommands(onInput: ReturnType<typeof vi.fn>): string[] {
+    return onInput.mock.calls
+      .filter(([command]) => command.type === "text")
+      .map(([command]) => command.text as string);
+  }
+
+  function enterCommands(onInput: ReturnType<typeof vi.fn>): unknown[] {
+    return onInput.mock.calls
+      .map(([command]) => command)
+      .filter(
+        (command) =>
+          command.type === "lineBreak" ||
+          (command.type === "key" && command.key === "Enter"),
+      );
+  }
+
+  function setupFocused() {
+    const rendered = renderNativeTerminalView({ focused: true });
+    const textarea = rendered.container.querySelector(
+      ".native-terminal-input",
+    ) as HTMLTextAreaElement;
+    expect(document.activeElement).toBe(textarea);
+    return { ...rendered, textarea };
+  }
+
+  it("recovers from a stuck composition when the textarea blurs", () => {
+    const { textarea, onInput } = setupFocused();
+
+    fireComposition(textarea, "compositionstart");
+    expect(textarea.style.background).not.toBe("transparent");
+    fireInsertText(textarea, "a");
+    expect(textCommands(onInput)).toEqual([]);
+
+    act(() => {
+      textarea.blur();
+      textarea.focus();
+    });
+    expect(textarea.style.background).toBe("transparent");
+    expect(textarea.value).toBe("");
+
+    fireInsertText(textarea, "b");
+    expect(textCommands(onInput)).toEqual(["b"]);
+  });
+
+  it("recovers from a stuck composition across an app switch that keeps DOM focus", () => {
+    const { textarea, onInput } = setupFocused();
+
+    fireComposition(textarea, "compositionstart");
+    fireEnterKey(textarea); // shelved for replay-after-composition
+    expect(enterCommands(onInput)).toEqual([]);
+
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(document.activeElement).toBe(textarea);
+
+    fireInsertText(textarea, "b");
+    expect(textCommands(onInput)).toEqual(["b"]);
+
+    fireEnterKey(textarea);
+    // The shelved Enter was dropped by the reset; only the new one fires.
+    expect(enterCommands(onInput)).toHaveLength(1);
+  });
+
+  it("commits a late compositionend exactly once after a window-blur reset", () => {
+    const { textarea, onInput } = setupFocused();
+
+    fireComposition(textarea, "compositionstart");
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    fireComposition(textarea, "compositionend", "안");
+    expect(textCommands(onInput)).toEqual(["안"]);
+
+    fireInsertText(textarea, "b");
+    expect(textCommands(onInput)).toEqual(["안", "b"]);
+  });
+
+  it("restores focus even when the textarea blurs before the window does", () => {
+    const { textarea } = setupFocused();
+
+    act(() => {
+      textarea.blur();
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(document.activeElement).not.toBe(textarea);
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("does not steal focus after an in-page focus move to another element", () => {
+    const { textarea } = setupFocused();
+    const other = document.createElement("input");
+    document.body.appendChild(other);
+
+    act(() => {
+      other.focus();
+    });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(document.activeElement).toBe(other);
+    expect(document.activeElement).not.toBe(textarea);
+  });
+
+  it("does not steal focus when blur-to-body precedes focusing another element", () => {
+    const { textarea } = setupFocused();
+    const other = document.createElement("input");
+    document.body.appendChild(other);
+
+    act(() => {
+      textarea.blur(); // e.g. click on non-focusable chrome
+    });
+    act(() => {
+      other.focus(); // then the user focuses the editor
+    });
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(document.activeElement).toBe(other);
+  });
+});
+
 describe("NativeTerminalView test harness cleanup", () => {
   it("restores globals changed by installDomStubs", () => {
     expect(Object.getOwnPropertyDescriptor(window, "devicePixelRatio")?.value).toBe(2);
