@@ -263,6 +263,33 @@ pub fn terminal_scroll(
     Ok(())
 }
 
+/// Clear the visible screen and scrollback (Cmd+K). On the primary screen
+/// also sends a form feed so a shell at a prompt redraws it at the top;
+/// no-op while the alternate screen is active (vim, TUIs).
+#[tauri::command]
+pub fn terminal_clear(
+    app: AppHandle,
+    state: State<'_, TerminalState>,
+    session_id: String,
+) -> Result<(), String> {
+    let session = get_session(&state, &session_id)?;
+    let frame = {
+        let mut model = session
+            .model
+            .lock()
+            .map_err(|_| "terminal_model_poisoned".to_string())?;
+        if !model.clear() {
+            return Ok(());
+        }
+        model.snapshot(&session_id)
+    };
+    // Best-effort: the model is already cleared, so the frame must reach the
+    // renderer even if the PTY write fails (dead shell).
+    let _ = write_shared(&session.writer, b"\x0c");
+    let _ = app.emit("terminal://frame", frame);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn terminal_text(
     state: State<'_, TerminalState>,
