@@ -46,6 +46,16 @@ PYEOF
         ok=1
     fi
 
+    # Bundled Node runtime (md2docx docx-js 실행용). End-to-end check: the bundled
+    # node can require the env-installed docx via NODE_PATH.
+    if [[ -x "$target/node/bin/node" ]] && \
+       NODE_PATH="$target/node_modules" "$target/node/bin/node" -e "require('docx')" 2>/dev/null; then
+        echo "  ✅ node-runtime: $("$target/node/bin/node" --version) + docx require OK"
+    else
+        echo "  ❌ node-runtime: $target/node/bin/node 누락 또는 docx 로드 실패 (setup-node.sh)"
+        ok=1
+    fi
+
     jre=""
     for c in \
         "$target/jre" \
@@ -120,6 +130,7 @@ if $DRY_RUN; then
     echo ""
     echo "Would install uv/python packages into ${VENV_DIR}"
     echo "Would install node packages into ${TARGET_DIR}/node_modules"
+    echo "Would install bundled Node LTS into ${TARGET_DIR}/node"
     echo "Would create runtime directories under ${TARGET_DIR}"
     exit 0
 fi
@@ -169,6 +180,18 @@ else
     echo "☕ Temurin JDK 다운로드 → $JRE_TARGET"
     bash "${PROJECT_DIR}/scripts/setup-jre.sh" "$JRE_TARGET" || \
         echo "⚠️  JRE 설치 실패 — hwpx Java 기능 비활성 (bash ${PROJECT_DIR}/scripts/setup-jre.sh $JRE_TARGET)" >&2
+fi
+
+# 3c. Node 런타임 설치 (md2docx docx-js 변환 실행용)
+# ~/.anchor/env/node 에 번들 — 실행 시 시스템 node(fnm/nvm) 의존 제거.
+# pnpm 설치(3)는 node_modules 만 생성; 이 런타임이 docx-js 변환기를 실행한다.
+NODE_TARGET="${TARGET_DIR}/node"
+if [[ -x "$NODE_TARGET/bin/node" ]] && "$NODE_TARGET/bin/node" --version 2>/dev/null | grep -q '^v22\.'; then
+    echo "⬢ Node 이미 설치됨: $NODE_TARGET ($("$NODE_TARGET/bin/node" --version))"
+else
+    echo "⬢ Node LTS 다운로드 → $NODE_TARGET"
+    bash "${PROJECT_DIR}/scripts/setup-node.sh" "$NODE_TARGET" || \
+        echo "⚠️  Node 설치 실패 — md2docx docx-js 변환 비활성 (bash ${PROJECT_DIR}/scripts/setup-node.sh $NODE_TARGET)" >&2
 fi
 
 # 4. 디렉토리 구조 확인/생성

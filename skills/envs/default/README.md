@@ -1,8 +1,9 @@
 # 문서 처리 환경 (envs/default → ~/.anchor/env)
 
-HWP/HWPX/PDF 파일 처리를 위한 공유 Python 가상환경 + Node + 번들 JRE.
+HWP/HWPX/PDF 파일 처리를 위한 공유 Python 가상환경 + 번들 Node 런타임 + 번들 JRE.
 이 디렉토리(`envs/default`)는 source scaffold 이며, `setup.sh --target ~/.anchor/env`
-로 정규 런타임 `~/.anchor/env`(`.venv` + `node_modules` + `jre`)에 프로비저닝된다.
+로 정규 런타임 `~/.anchor/env`(`.venv` + `node` + `node_modules` + `jre`)에 프로비저닝된다.
+번들 Node(`node/`)는 md2docx(docx-js) 변환기를 시스템 node 의존 없이 실행한다.
 Claude Code SessionStart hook(`init-env.sh`)이 세션에서 이 환경을 자동 활성화한다.
 
 ## 구조
@@ -33,8 +34,9 @@ env/
 
 ## 설치된 패키지
 
-이 repo에는 재현 가능한 source scaffold만 추적한다. `.venv/`, `jre/`,
-`node_modules/`, `input/`, `output/`, `temp/`, `logs/`는 로컬 runtime 산출물이다.
+이 repo에는 재현 가능한 source scaffold만 추적한다(`pyproject.toml`/`uv.lock`,
+`package.json`/`pnpm-lock.yaml`). `.venv/`, `jre/`, `node/`, `node_modules/`,
+`input/`, `output/`, `temp/`, `logs/`는 로컬 runtime 산출물이다.
 
 | 카테고리 | 패키지 | 용도 |
 |---------|--------|------|
@@ -42,6 +44,7 @@ env/
 | PDF | pymupdf, pymupdf4llm, pdfplumber, pdfminer-six | PDF 텍스트/표 추출 |
 | OCR | pytesseract, pdf2image, ocrmypdf, pillow | 스캔 PDF OCR |
 | 유틸 | click, tqdm, python-magic, chardet, beautifulsoup4, lxml, six | 파일 처리 보조 |
+| Node | docx (`package.json`) | md2docx 스킬 docx-js 변환 (번들 `node/` 런타임으로 실행) |
 
 ## 사용법
 
@@ -95,4 +98,5 @@ make sync
 
 - **hwp-cli**: `~/.cargo/bin/hwp` (Rust 단일 바이너리, 외부 의존성 0) — `.hwp`/`.hwpx` 읽기·변환·렌더·편집. `extract_all.py`가 1순위 추출 엔진으로 사용 (구 hwp-toolkit 대체)
 - **hwpx 스킬**: `~/.anchor/skills/hwpx` — HWPX 작성·편집 + `.hwp` 읽기 자동 위임(hwp-cli) + `render-pdf`/`to-html`
+- **md2docx 스킬**: `~/.anchor/skills/md2docx` — markdown → 세련된 `.docx`(docx-js). 번들 `node/` 런타임 + `node_modules/docx` 사용 (pandoc 미사용)
 - **skills**: `~/.anchor/skills/` (federation; inbox-process 등이 이 환경에 의존)

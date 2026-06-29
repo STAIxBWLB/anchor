@@ -1,6 +1,7 @@
 # 가상환경
 .venv/
 jre/
+node/
 node_modules/
 
 # 입력/출력 데이터
