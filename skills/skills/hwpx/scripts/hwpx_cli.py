@@ -10,10 +10,10 @@ Subcommands:
   fill <template.hwpx> [--data json_file] [--kv key=value ...] [-o out.hwpx] [--stdin-json]
   slots <template.hwpx> [--format text|json]
   edit <in.hwpx> <out.hwpx> --replace OLD NEW [--limit N]
-  add-rows <file> --count N [--table T] [--template-row R] [--set-cell "T:row:col=val" ...] [-o out]
+  add-rows <file> --count N [--table T] [--set-cell "T:row:col=val" ...] [-o out]
   fill-table <file> --data tables.json [-o out]   (행 자동 증식 + 셀 채우기)
   create <out.hwpx> [--markdown md_file | --title T --body B | --json j_file]
-  styled -o <out.hwpx> [--preset gongmun|bogoseo] [--reference form.hwpx]
+  styled -o <out.hwpx> [--preset gongmun|bogoseo (no-op, 하위호환)] [--reference form.hwpx]
          [--markdown md | --json j | --stdin-markdown | --stdin-json] [--header H] [--footer F]
   validate <file.hwpx>
   analyze <file.hwpx> [--section-file section0.xml] [--format text|json]
@@ -362,14 +362,19 @@ def _run_hwp(argv: list) -> subprocess.CompletedProcess:
 
 
 def _new_from_markdown(md_text: str, out: Path, preset: str = "plain") -> int:
-    """markdown을 임시 파일로 써서 hwp-cli `new`에 위임 (문서 생성 통합 경로)."""
+    """markdown을 임시 파일로 써서 hwp-cli `new`에 위임 (문서 생성 통합 경로).
+
+    preset은 하위호환용으로 받되 무시한다 — hwp-cli가 `new --preset`을 제거해 기본
+    스타일로만 생성한다.
+    """
     import tempfile
 
+    _ = preset  # ponytail: hwp-cli --preset 제거됨 → 무시(기본 스타일). 인자 시그니처만 유지.
     tf = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
     try:
         tf.write(md_text)
         tf.close()
-        proc = _run_hwp(["new", "--preset", preset, "--from", tf.name, "-o", str(out)])
+        proc = _run_hwp(["new", "--from", tf.name, "-o", str(out)])
     finally:
         os.unlink(tf.name)
     if proc.returncode != 0:
@@ -589,23 +594,28 @@ def cmd_edit(args) -> int:
 def cmd_add_rows(args) -> int:
     """표 행 추가 (양식 변형) → hwp edit --add-row 위임. .hwp/.hwpx 모두.
 
-    마지막의 병합 없는 행을 복제해 빈 행 N개를 추가하고, --set-cell 로 같은 호출에서
-    채울 수 있다(새 행 인덱스는 기존 행 수부터). 병합/부분 행은 --template-row 로
-    전 열을 채우는 행을 지정한다.
+    표의 마지막 행을 복제해 빈 행 N개를 추가하고, --set-cell 로 새 행을 채울 수 있다
+    (새 행 인덱스는 기존 행 수부터). --template-row 는 hwp-cli 모델(항상 마지막 행 복제)
+    에서 미지원이라 무시한다.
     """
     src = _ensure_file(args.in_file)
     out = Path(args.output or _derive_output(args.in_file, suffix=f"-grown{Path(args.in_file).suffix}"))
-    spec = (
-        f"{args.table}:{args.template_row}:{args.count}"
-        if args.template_row is not None
-        else f"{args.table}:{args.count}"
-    )
-    cmd = ["edit", str(src), "-o", str(out), "--add-row", spec]
-    for sc in args.set_cell or []:
-        cmd += ["--set-cell", sc]
+    # hwp edit --add-row 는 표 인덱스 1개당 1행(마지막 행 복제) → count 만큼 반복한다.
+    cmd = ["edit", str(src), "-o", str(out)]
+    for _ in range(args.count):
+        cmd += ["--add-row", str(args.table)]
     proc = _run_hwp(cmd)
     if proc.returncode != 0:
         _die(2, f"add-rows 실패: {proc.stderr.strip()}")
+    # --set-cell 은 edit 안에서 --add-row 보다 먼저 적용돼(새 행이 아직 없음) 같은 호출로는
+    # 새 행을 못 채운다 → 행 추가 후 2차 패스로 채운다(edit 는 전체 IR 왕복이라 제자리 안전).
+    if args.set_cell:
+        cmd2 = ["edit", str(out), "-o", str(out)]
+        for sc in args.set_cell:
+            cmd2 += ["--set-cell", sc]
+        proc2 = _run_hwp(cmd2)
+        if proc2.returncode != 0:
+            _die(2, f"add-rows 셀 채우기 실패: {proc2.stderr.strip()}")
     print(f"[hwpx] 표{args.table}에 {args.count}행 추가 -> {out}", file=sys.stderr)
     return 0
 
@@ -656,7 +666,8 @@ def cmd_write_java(args) -> int:
 
 
 def cmd_styled(args) -> int:
-    """프리셋 생성은 hwp-cli `new --preset`에 위임; --reference(슬롯 채우기)·블록 JSON은 lxml 코어 유지."""
+    """비참조 생성은 hwp-cli `new`에 위임(기본 스타일 — --preset은 hwp-cli에서 제거됨,
+    인자는 하위호환용 무시); --reference(슬롯 채우기)·블록 JSON은 lxml 코어 유지."""
     if not args.reference and (args.markdown or args.stdin_markdown):
         md_path = args.markdown
         tmp = None
@@ -668,16 +679,15 @@ def cmd_styled(args) -> int:
             tf.close()
             md_path = tf.name
             tmp = tf.name
-        preset = args.preset if args.preset in ("plain", "gongmun", "bogoseo") else "plain"
         out = Path(args.output) if args.output else Path(_derive_output(md_path, suffix=".hwpx"))
         try:
-            proc = _run_hwp(["new", "--preset", preset, "--from", str(md_path), "-o", str(out)])
+            proc = _run_hwp(["new", "--from", str(md_path), "-o", str(out)])
         finally:
             if tmp:
                 os.unlink(tmp)
         if proc.returncode != 0:
             _die(2, f"styled 실패: {proc.stderr.strip()}")
-        print(f"[hwpx] styled(hwp-cli, preset={preset}) -> {out}", file=sys.stderr)
+        print(f"[hwpx] styled(hwp-cli) -> {out}", file=sys.stderr)
         return 0
     return _styled_legacy(args)
 
@@ -720,9 +730,8 @@ def _styled_legacy(args) -> int:
     else:
         _die(1, "소스 없음: --markdown / --json / --stdin-markdown / --stdin-json 중 하나 필요")
     md = "\n\n".join(_json_payload_to_markdown(payload))
-    preset = args.preset if args.preset in ("plain", "gongmun", "bogoseo") else "plain"
-    _new_from_markdown(md, Path(args.output), preset)
-    print(f"[hwpx] styled(hwp-cli, preset={preset}) -> {args.output}", file=sys.stderr)
+    _new_from_markdown(md, Path(args.output))
+    print(f"[hwpx] styled(hwp-cli) -> {args.output}", file=sys.stderr)
     return 0
 
 
