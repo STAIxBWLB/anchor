@@ -46,7 +46,7 @@ export function RibbonFormat() {
         <button
           key={preset.id}
           type="button"
-          className="anchor-diagram-color-preset"
+          className="maru-diagram-color-preset"
           disabled={disabled}
           onClick={() => apply(preset)}
           title={t(preset.labelKey)}

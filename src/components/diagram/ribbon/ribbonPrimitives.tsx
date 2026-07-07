@@ -10,9 +10,9 @@ export interface RibbonGroupProps {
 export function RibbonGroup({ labelKey, children }: RibbonGroupProps) {
   const { t } = useTranslation();
   return (
-    <div className="anchor-diagram-ribbon-group" role="group" aria-label={t(labelKey)}>
-      <div className="anchor-diagram-ribbon-group-body">{children}</div>
-      <div className="anchor-diagram-ribbon-group-label">{t(labelKey)}</div>
+    <div className="maru-diagram-ribbon-group" role="group" aria-label={t(labelKey)}>
+      <div className="maru-diagram-ribbon-group-body">{children}</div>
+      <div className="maru-diagram-ribbon-group-label">{t(labelKey)}</div>
     </div>
   );
 }
@@ -45,31 +45,31 @@ export function RibbonButton({
   return (
     <button
       type="button"
-      className={`anchor-diagram-ribbon-button${active ? " is-active" : ""}${variant === "primary" ? " is-primary" : ""}`}
+      className={`maru-diagram-ribbon-button${active ? " is-active" : ""}${variant === "primary" ? " is-primary" : ""}`}
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
       aria-label={ariaLabel ?? label}
     >
-      {icon ? <span className="anchor-diagram-ribbon-button-icon">{icon}</span> : null}
-      {children ?? (label ? <span className="anchor-diagram-ribbon-button-label">{label}</span> : null)}
+      {icon ? <span className="maru-diagram-ribbon-button-icon">{icon}</span> : null}
+      {children ?? (label ? <span className="maru-diagram-ribbon-button-label">{label}</span> : null)}
     </button>
   );
 }
 
 export function RibbonSeparator() {
-  return <span className="anchor-diagram-ribbon-sep" aria-hidden="true" />;
+  return <span className="maru-diagram-ribbon-sep" aria-hidden="true" />;
 }
 
 export function RibbonStack({ children }: { children: ReactNode }) {
-  return <div className="anchor-diagram-ribbon-stack">{children}</div>;
+  return <div className="maru-diagram-ribbon-stack">{children}</div>;
 }
 
 export function RibbonRow({ children }: { children: ReactNode }) {
-  return <div className="anchor-diagram-ribbon-row">{children}</div>;
+  return <div className="maru-diagram-ribbon-row">{children}</div>;
 }
 
 export function RibbonEmptyTab({ messageKey }: { messageKey: string }) {
   const { t } = useTranslation();
-  return <div className="anchor-diagram-ribbon-empty">{t(messageKey)}</div>;
+  return <div className="maru-diagram-ribbon-empty">{t(messageKey)}</div>;
 }

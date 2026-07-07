@@ -19,7 +19,7 @@ export interface DiagramSnapshotMeta {
   size: number;
 }
 
-const MOCK_DIAGRAM_PREFIX = "anchor:diagram:mock-documents:";
+const MOCK_DIAGRAM_PREFIX = "maru:diagram:mock-documents:";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__);

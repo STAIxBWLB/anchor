@@ -1,7 +1,7 @@
 ---
 type: Document
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - RISE
   - 보고서
@@ -11,10 +11,10 @@ people:
 created_at: 2026-04-20T09:00:00+09:00
 updated_at: 2026-04-27T09:00:00+09:00
 ---
-# 2026 Anchor Project 운영 보고
+# 2026 Maru Project 운영 보고
 
 ## 추진 개요
-제주한라대학교 Anchor Project는 AI Native Campus 전환과 지역혁신 중심 인재양성을 함께 추진한다.
+제주한라대학교 Maru Project는 AI Native Campus 전환과 지역혁신 중심 인재양성을 함께 추진한다.
 
 ## 주요 쟁점
 - 핵심인재양성본부의 AI 융합전공 참여 지표 확정 필요

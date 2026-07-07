@@ -45,7 +45,7 @@ describe("classifyInboxItem runtime routing", () => {
   });
 
   it("routes the configured runtime to the generic agent bridge", async () => {
-    const extraEnv = { ANCHOR_WORKSPACE: "/tmp/work", ANCHOR_APP_MODE: "inbox" };
+    const extraEnv = { MARU_WORKSPACE: "/tmp/work", MARU_APP_MODE: "inbox" };
     const pending = classifyInboxItem(
       item,
       "codex",

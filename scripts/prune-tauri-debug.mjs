@@ -4,7 +4,7 @@ import { join, resolve, sep } from 'node:path';
 const repoRoot = resolve(import.meta.dirname, '..');
 const targetRoot = resolve(repoRoot, 'src-tauri/target');
 const debugRoot = resolve(targetRoot, 'debug');
-const statePath = resolve(targetRoot, '.anchor-debug-prune.json');
+const statePath = resolve(targetRoot, '.maru-debug-prune.json');
 
 const GIB = 1024 ** 3;
 const DEFAULT_MAX_BYTES = 4 * GIB;
@@ -79,10 +79,10 @@ const pruneTargets = [
   'examples',
   'incremental',
   '.fingerprint',
-  'anchor',
-  'anchor-cli',
-  'anchor.d',
-  'anchor-cli.d',
+  'maru',
+  'maru-cli',
+  'maru.d',
+  'maru-cli.d',
 ].map((name) => resolve(debugRoot, name));
 
 const removed = [];

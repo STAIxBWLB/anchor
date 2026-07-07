@@ -1,10 +1,10 @@
 use crate::inbox_settings::{self, InboxRuntimeConfig, InboxSettings};
 use crate::vault::normalize_existing_dir;
 use crate::vault::{
-    lexical_normalize, load_anchorignore, matches_anchorignore, resolve_inside_vault, ScanFilter,
+    lexical_normalize, load_maruignore, matches_maruignore, resolve_inside_vault, ScanFilter,
     ScanOptions,
 };
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use crate::workspace_files::{
     copy_source, move_source, resolve_target_dir, unique_path, FileQueueSourceKind,
 };
@@ -375,7 +375,7 @@ pub fn trash_inbox_items(
 ) -> Result<Vec<InboxTrashOutcome>, String> {
     crate::approval::require_approval(&approvals, approval_id, INBOX_FILE_TRASH_KIND)?;
     let work = normalize_existing_dir(&work_path)?;
-    assert_anchor_can_write(&work.to_string_lossy(), WorkspaceWriteAction::Delete)?;
+    assert_maru_can_write(&work.to_string_lossy(), WorkspaceWriteAction::Delete)?;
     let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
     Ok(trash_inbox_items_with(
         &work,
@@ -394,7 +394,7 @@ pub fn stage_inbox_drop_files(
     source_paths: Vec<String>,
 ) -> Result<Vec<InboxDropStageOutcome>, String> {
     let work = normalize_existing_dir(&work_path)?;
-    assert_anchor_can_write(&work.to_string_lossy(), WorkspaceWriteAction::Create)?;
+    assert_maru_can_write(&work.to_string_lossy(), WorkspaceWriteAction::Create)?;
     let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
     let target = resolve_file_drop_target(&work, &config, channel, drop_path)?;
     fs::create_dir_all(&target.target_dir)
@@ -524,7 +524,7 @@ pub fn apply_inbox_decisions(
         &[INBOX_ROUTE_KIND, INBOX_BULK_KIND],
     )?;
     let work = normalize_existing_dir(&work_path)?;
-    assert_anchor_can_write(&work.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&work.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
     let config = inbox_settings::load_runtime_config_or_legacy(&work)?;
     let root = inbox_settings::resolve_runtime_root(&work, &config)?;
     let mut outcomes = Vec::new();
@@ -806,7 +806,7 @@ fn scan_inbox_with_settings(
         ));
     }
 
-    let ignore_patterns = load_anchorignore(vault);
+    let ignore_patterns = load_maruignore(vault);
     let allow_all_sources = settings.sources.is_empty();
 
     let mut items = Vec::new();
@@ -818,7 +818,7 @@ fn scan_inbox_with_settings(
                 return false;
             }
             let rel = path.strip_prefix(vault).unwrap_or(path);
-            !matches_anchorignore(rel, &ignore_patterns)
+            !matches_maruignore(rel, &ignore_patterns)
         })
         .filter_map(Result::ok)
     {
@@ -876,7 +876,7 @@ fn scan_inbox_entries_with_config(
     scan_filter: &ScanFilter,
 ) -> Result<Vec<InboxEntry>, String> {
     let root = inbox_settings::resolve_runtime_root(work, config)?;
-    let ignore_patterns = load_anchorignore(work);
+    let ignore_patterns = load_maruignore(work);
     let mut entries = Vec::new();
 
     for (channel_key, channel) in &config.channels {
@@ -899,7 +899,7 @@ fn scan_inbox_entries_with_config(
                         return false;
                     }
                     let rel = path.strip_prefix(work).unwrap_or(path);
-                    !matches_anchorignore(rel, &ignore_patterns)
+                    !matches_maruignore(rel, &ignore_patterns)
                 })
                 .filter_map(Result::ok)
             {
@@ -959,7 +959,7 @@ fn scan_inbox_entries_with_config(
                     return false;
                 }
                 let rel = path.strip_prefix(work).unwrap_or(path);
-                !matches_anchorignore(rel, &ignore_patterns)
+                !matches_maruignore(rel, &ignore_patterns)
             })
             .filter_map(Result::ok)
         {
@@ -2084,7 +2084,7 @@ fn accept_inbox_item_at(
     id: String,
     target_folder: Option<String>,
 ) -> Result<InboxDecisionOutcome, String> {
-    assert_anchor_can_write(&vault.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&vault.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
     let settings = inbox_settings::load(vault);
     let source = resolve_inbox_source(vault, &settings, &id)?;
     let target_folder = target_folder
@@ -2097,7 +2097,7 @@ fn accept_inbox_item_at(
 }
 
 fn reject_inbox_item_at(vault: &Path, id: String) -> Result<InboxDecisionOutcome, String> {
-    assert_anchor_can_write(&vault.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&vault.to_string_lossy(), WorkspaceWriteAction::RenameMove)?;
     let settings = inbox_settings::load(vault);
     let source = resolve_inbox_source(vault, &settings, &id)?;
     let target_dir = rejected_target_dir(vault, &settings, &source.source)?;
@@ -2283,9 +2283,9 @@ mod tests {
         let root = tmp.path();
         fs::create_dir_all(root.join("incoming/spool/alpha")).unwrap();
         fs::write(root.join("incoming/spool/alpha/note.md"), b"hi").unwrap();
-        fs::create_dir_all(root.join(".anchor")).unwrap();
+        fs::create_dir_all(root.join(".maru")).unwrap();
         fs::write(
-            root.join(".anchor/inbox.json"),
+            root.join(".maru/inbox.json"),
             r#"{"inboxRoot":"incoming/spool","sources":["alpha"]}"#,
         )
         .unwrap();
@@ -2305,9 +2305,9 @@ mod tests {
         fs::create_dir_all(root.join("inbox/downloads/random")).unwrap();
         fs::write(root.join("inbox/downloads/outlook/a.pdf"), b"a").unwrap();
         fs::write(root.join("inbox/downloads/random/b.pdf"), b"b").unwrap();
-        fs::create_dir_all(root.join(".anchor")).unwrap();
+        fs::create_dir_all(root.join(".maru")).unwrap();
         fs::write(
-            root.join(".anchor/inbox.json"),
+            root.join(".maru/inbox.json"),
             r#"{"inboxRoot":"inbox/downloads","sources":["outlook"]}"#,
         )
         .unwrap();
@@ -2383,9 +2383,9 @@ mod tests {
         let root = tmp.path();
         fs::create_dir_all(root.join("incoming/spool/alpha")).unwrap();
         fs::write(root.join("incoming/spool/alpha/note.md"), b"no").unwrap();
-        fs::create_dir_all(root.join(".anchor")).unwrap();
+        fs::create_dir_all(root.join(".maru")).unwrap();
         fs::write(
-            root.join(".anchor/inbox.json"),
+            root.join(".maru/inbox.json"),
             r#"{"inboxRoot":"incoming/spool","sources":["alpha"]}"#,
         )
         .unwrap();
@@ -2598,9 +2598,9 @@ inbox:
     fn scan_inbox_entries_uses_legacy_settings_when_workspace_config_has_no_inbox() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        fs::create_dir_all(root.join(".anchor")).unwrap();
+        fs::create_dir_all(root.join(".maru")).unwrap();
         fs::write(
-            root.join(".anchor/inbox.json"),
+            root.join(".maru/inbox.json"),
             r#"{"inboxRoot":"incoming/spool","sources":["alpha"]}"#,
         )
         .unwrap();

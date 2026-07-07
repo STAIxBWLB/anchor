@@ -164,7 +164,7 @@ export function subscribeSiteViewEvents(handlers: SiteViewEventHandlers): () => 
     }
     unlisteners.push(offNavigated, offPageLoad, offTitle);
   })().catch((err) => {
-    console.info("[anchor] site view listeners unavailable:", err);
+    console.info("[maru] site view listeners unavailable:", err);
   });
   return () => {
     disposed = true;

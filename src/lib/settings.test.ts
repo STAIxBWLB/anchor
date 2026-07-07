@@ -1,50 +1,50 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEFAULT_ANCHOR_SETTINGS,
+  DEFAULT_MARU_SETTINGS,
   applyWorkspaceCommsOverrides,
   applyWorkspaceMeetingsOverrides,
   applyWorkspaceTasksOverrides,
-  normalizeAnchorSettings,
+  normalizeMaruSettings,
   parseBinaryFileIncludePatternsText,
   resolveClassifierRuntime,
-  serializeAnchorSettings,
+  serializeMaruSettings,
 } from "./settings";
 
-describe("normalizeAnchorSettings", () => {
+describe("normalizeMaruSettings", () => {
   it("returns defaults for invalid or broken input", () => {
-    expect(normalizeAnchorSettings(null)).toEqual(DEFAULT_ANCHOR_SETTINGS);
-    expect(normalizeAnchorSettings("not-json")).toEqual(DEFAULT_ANCHOR_SETTINGS);
+    expect(normalizeMaruSettings(null)).toEqual(DEFAULT_MARU_SETTINGS);
+    expect(normalizeMaruSettings("not-json")).toEqual(DEFAULT_MARU_SETTINGS);
   });
 
   it("accepts the 'both' document label mode and falls back for unknown values", () => {
-    expect(normalizeAnchorSettings({ ui: { documentLabelMode: "both" } }).ui.documentLabelMode).toBe(
+    expect(normalizeMaruSettings({ ui: { documentLabelMode: "both" } }).ui.documentLabelMode).toBe(
       "both",
     );
     expect(
-      normalizeAnchorSettings({ ui: { documentLabelMode: "nonsense" } }).ui.documentLabelMode,
+      normalizeMaruSettings({ ui: { documentLabelMode: "nonsense" } }).ui.documentLabelMode,
     ).toBe("title");
   });
 
   it("accepts the shareOutbox right-pane tab and falls back for unknown values", () => {
-    expect(normalizeAnchorSettings({ ui: { rightPaneTab: "shareOutbox" } }).ui.rightPaneTab).toBe(
+    expect(normalizeMaruSettings({ ui: { rightPaneTab: "shareOutbox" } }).ui.rightPaneTab).toBe(
       "shareOutbox",
     );
-    expect(normalizeAnchorSettings({ ui: { rightPaneTab: "bogus" } }).ui.rightPaneTab).toBe(
+    expect(normalizeMaruSettings({ ui: { rightPaneTab: "bogus" } }).ui.rightPaneTab).toBe(
       "workspace",
     );
   });
 
-  it("does not persist Telegram monitor secrets in Anchor settings", () => {
-    const settings = normalizeAnchorSettings({
+  it("does not persist Telegram monitor secrets in Maru settings", () => {
+    const settings = normalizeMaruSettings({
       comms: {
         telegram: {
           apiHash: "super-secret-hash",
           botToken: "super-bot-token",
-          monitorConfigPath: "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
+          monitorConfigPath: "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml",
         },
       },
     });
-    const serializedSettings = serializeAnchorSettings(settings);
+    const serializedSettings = serializeMaruSettings(settings);
     const serialized = JSON.stringify(serializedSettings);
     expect(serialized).not.toMatch(/"apiHash"\s*:/);
     expect(serialized).not.toMatch(/"botToken"\s*:/);
@@ -53,7 +53,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("merges partial settings with terminal defaults", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "inbox",
         activeWorkspaceVisibility: "public",
@@ -171,7 +171,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("parses comms mode and clamps comms settings", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "comms",
       },
@@ -185,8 +185,8 @@ describe("normalizeAnchorSettings", () => {
           polling: true,
           intervalSeconds: 5,
           maxResults: "25",
-          sessionFile: " ~/.anchor/telegram/session ",
-          monitorConfigPath: " ~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml ",
+          sessionFile: " ~/.maru/telegram/session ",
+          monitorConfigPath: " ~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml ",
           legacyAutoDrop: true,
         },
       },
@@ -199,15 +199,15 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.comms.telegram.polling).toBe(true);
     expect(settings.comms.telegram.intervalSeconds).toBe(30);
     expect(settings.comms.telegram.maxResults).toBe(25);
-    expect(settings.comms.telegram.sessionFile).toBe("~/.anchor/telegram/session");
+    expect(settings.comms.telegram.sessionFile).toBe("~/.maru/telegram/session");
     expect(settings.comms.telegram.monitorConfigPath).toBe(
-      "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
+      "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml",
     );
     expect(settings.comms.telegram.legacyAutoDrop).toBe(true);
   });
 
   it("parses meetings mode and normalizes meetings settings", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "meetings",
       },
@@ -248,7 +248,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("parses tasks mode and normalizes tasks settings", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "tasks",
       },
@@ -283,8 +283,8 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.tasks.hooks.appendVaultLog).toBe(false);
   });
 
-  it("parses e2e mode for the guided Anchor flow", () => {
-    const settings = normalizeAnchorSettings({
+  it("parses e2e mode for the guided Maru flow", () => {
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "e2e",
       },
@@ -294,7 +294,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("round-trips the sites app mode", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         activeAppMode: "sites",
       },
@@ -304,26 +304,26 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("normalizes diagram workspace state", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       diagram: {
         lastDocument: "  roadmap  ",
       },
     });
 
     expect(settings.diagram.lastDocument).toBe("roadmap");
-    expect(normalizeAnchorSettings({ diagram: { lastDocument: "" } }).diagram.lastDocument).toBeNull();
+    expect(normalizeMaruSettings({ diagram: { lastDocument: "" } }).diagram.lastDocument).toBeNull();
   });
 
   it("parses catalog and studio modes for document operations", () => {
     expect(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ui: {
           activeAppMode: "catalog",
         },
       }).ui.activeAppMode,
     ).toBe("catalog");
     expect(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ui: {
           activeAppMode: "studio",
         },
@@ -332,7 +332,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("applies workspace io provider overrides without rewriting base comms defaults", () => {
-    const base = normalizeAnchorSettings({
+    const base = normalizeMaruSettings({
       comms: {
         outlook: { maxResults: 20 },
         telegram: { intervalSeconds: 60, maxResults: 40 },
@@ -350,7 +350,7 @@ describe("normalizeAnchorSettings", () => {
           telegram: {
             interval_seconds: 7200,
             max_results: 15,
-            python_path: "/opt/anchor/python",
+            python_path: "/opt/maru/python",
             session_file: "/tmp/telegram.session",
             secrets: {
               monitor_config: "/tmp/telegram-monitor.yaml",
@@ -367,14 +367,14 @@ describe("normalizeAnchorSettings", () => {
     expect(effective.outlook.m365Path).toBe("/usr/local/bin/m365");
     expect(effective.telegram.intervalSeconds).toBe(7200);
     expect(effective.telegram.maxResults).toBe(15);
-    expect(effective.telegram.pythonPath).toBe("/opt/anchor/python");
+    expect(effective.telegram.pythonPath).toBe("/opt/maru/python");
     expect(effective.telegram.sessionFile).toBe("/tmp/telegram.session");
     expect(effective.telegram.monitorConfigPath).toBe("/tmp/telegram-monitor.yaml");
     expect(effective.telegram.legacyAutoDrop).toBe(true);
   });
 
   it("applies workspace meeting note overrides without rewriting base meetings defaults", () => {
-    const base = normalizeAnchorSettings({
+    const base = normalizeMaruSettings({
       meetings: {
         root: "meetings",
         defaultTypes: ["회의", "상담"],
@@ -414,7 +414,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("applies workspace task-management overrides without rewriting base tasks defaults", () => {
-    const base = normalizeAnchorSettings({
+    const base = normalizeMaruSettings({
       tasks: {
         root: "tasks",
         defaultView: "list",
@@ -461,7 +461,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("defaults first-run terminal layout to collapsed shell autoload", () => {
-    const settings = normalizeAnchorSettings({});
+    const settings = normalizeMaruSettings({});
 
     expect(settings.ui.explorerPaneMode).toBe("documents");
     expect(settings.ui.activeAppMode).toBe("pkm");
@@ -470,16 +470,16 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.ui.rightPaneTab).toBe("workspace");
     expect(settings.ui.workspaceFileFilter).toBe("all");
     expect(settings.ui.filesListAttributes).toEqual(
-      DEFAULT_ANCHOR_SETTINGS.ui.filesListAttributes,
+      DEFAULT_MARU_SETTINGS.ui.filesListAttributes,
     );
     expect(settings.meetings.root).toBe("meetings");
     expect(settings.tasks.root).toBe("tasks");
     expect(settings.tasks.defaultView).toBe("week");
     expect(settings.meetings.defaultTypes).toEqual(
-      DEFAULT_ANCHOR_SETTINGS.meetings.defaultTypes,
+      DEFAULT_MARU_SETTINGS.meetings.defaultTypes,
     );
     expect(settings.ui.binaryFileIncludePatterns).toEqual(
-      DEFAULT_ANCHOR_SETTINGS.ui.binaryFileIncludePatterns,
+      DEFAULT_MARU_SETTINGS.ui.binaryFileIncludePatterns,
     );
     expect(settings.ui.documentViews).toEqual([]);
     expect(settings.ui.fileQueueDefaultOperation).toBe("copy");
@@ -492,24 +492,24 @@ describe("normalizeAnchorSettings", () => {
 
   it("normalizes Files list attributes and preserves explicit all-off state", () => {
     expect(
-      normalizeAnchorSettings({ ui: { filesListAttributes: ["binary", "size", "binary"] } })
+      normalizeMaruSettings({ ui: { filesListAttributes: ["binary", "size", "binary"] } })
         .ui.filesListAttributes,
     ).toEqual(["binary", "size"]);
     expect(
-      normalizeAnchorSettings({ ui: { filesListAttributes: ["unknown"] } }).ui
+      normalizeMaruSettings({ ui: { filesListAttributes: ["unknown"] } }).ui
         .filesListAttributes,
-    ).toEqual(DEFAULT_ANCHOR_SETTINGS.ui.filesListAttributes);
-    expect(normalizeAnchorSettings({ ui: { filesListAttributes: [] } }).ui.filesListAttributes)
+    ).toEqual(DEFAULT_MARU_SETTINGS.ui.filesListAttributes);
+    expect(normalizeMaruSettings({ ui: { filesListAttributes: [] } }).ui.filesListAttributes)
       .toEqual([]);
   });
 
   it("accepts the evidence binder right-pane tab", () => {
-    const settings = normalizeAnchorSettings({ ui: { rightPaneTab: "evidence" } });
+    const settings = normalizeMaruSettings({ ui: { rightPaneTab: "evidence" } });
     expect(settings.ui.rightPaneTab).toBe("evidence");
   });
 
   it("uses persisted layout over legacy terminal defaults", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         layout: {
           documentsPaneOpen: false,
@@ -557,16 +557,16 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("normalizes terminal dock while preserving uncapped right-dock widths", () => {
-    expect(normalizeAnchorSettings({ ui: { layout: { terminalDock: "side" } } }).ui.layout
+    expect(normalizeMaruSettings({ ui: { layout: { terminalDock: "side" } } }).ui.layout
       .terminalDock).toBe("bottom");
-    expect(normalizeAnchorSettings({ ui: { layout: { terminalWidth: 12 } } }).ui.layout
+    expect(normalizeMaruSettings({ ui: { layout: { terminalWidth: 12 } } }).ui.layout
       .terminalWidth).toBe(320);
-    expect(normalizeAnchorSettings({ ui: { layout: { terminalWidth: 4096 } } }).ui.layout
+    expect(normalizeMaruSettings({ ui: { layout: { terminalWidth: 4096 } } }).ui.layout
       .terminalWidth).toBe(4096);
   });
 
   it("migrates legacy AI runtime labels into terminal launcher settings", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ai: {
         runtimes: {
           "claude-code": {
@@ -587,7 +587,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("normalizes typed AI settings and trims command overrides", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ai: {
         defaultRuntime: "codex",
         classifierRuntime: "claude",
@@ -606,7 +606,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("falls back to AI defaults on invalid values", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ai: { defaultRuntime: "gpt", permissionMode: "nope", classifierRuntime: 7 },
     });
     expect(settings.ai.defaultRuntime).toBe("claude");
@@ -616,7 +616,7 @@ describe("normalizeAnchorSettings", () => {
   });
 
   it("round-trips AI settings through serialize/normalize without data loss", () => {
-    const custom = normalizeAnchorSettings({
+    const custom = normalizeMaruSettings({
       ai: {
         defaultRuntime: "codex",
         classifierRuntime: "inherit",
@@ -625,13 +625,13 @@ describe("normalizeAnchorSettings", () => {
         legacyFlag: true,
       },
     });
-    const round = normalizeAnchorSettings(serializeAnchorSettings(custom));
+    const round = normalizeMaruSettings(serializeMaruSettings(custom));
     expect(round.ai).toEqual(custom.ai);
     expect(round.ai.extra.legacyFlag).toBe(true);
   });
 
   it("normalizes terminal reliability settings", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       terminal: {
         copyOnSelect: true,
         shortcuts: {
@@ -647,7 +647,7 @@ describe("normalizeAnchorSettings", () => {
     expect(settings.terminal.shortcuts.find).toBeNull();
     expect(settings.terminal.shortcuts.copy).toBe("mod+c");
 
-    const round = normalizeAnchorSettings(serializeAnchorSettings(settings));
+    const round = normalizeMaruSettings(serializeMaruSettings(settings));
     expect(round.terminal.copyOnSelect).toBe(true);
     expect(round.terminal.shortcuts).toEqual(settings.terminal.shortcuts);
   });
@@ -663,7 +663,7 @@ docs/*.html
 `),
     ).toEqual(["*.tgz", "*.PDF", "docs/*.html"]);
 
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         binaryFileIncludePatterns: "# docs\n*.docx\n\n*.pptx",
       },

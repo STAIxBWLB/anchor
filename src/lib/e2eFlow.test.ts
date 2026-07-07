@@ -15,11 +15,11 @@ afterEach(() => {
 describe("buildE2EFlowFixture", () => {
   it("creates deterministic report, slide, metadata, and TODO artifacts", () => {
     const result = buildE2EFlowFixture({
-      workPath: "mock://anchor-sample-workspace",
+      workPath: "mock://maru-sample-workspace",
       baselineAverageMs: 4019.88,
     });
 
-    expect(result.metadata.schemaVersion).toBe("anchor_e2e_development_plan_v1");
+    expect(result.metadata.schemaVersion).toBe("maru_e2e_development_plan_v1");
     expect(result.metadata.sourceOfTruth).toBe("README.md");
     expect(result.metadata.coreTracks).toEqual([
       "existing-feature-optimization",
@@ -28,11 +28,11 @@ describe("buildE2EFlowFixture", () => {
       "local-server-storage-integration",
       "presentation-slide-generation",
     ]);
-    expect(result.reportMarkdown).toContain("# Anchor E2E Development Report");
-    expect(result.reportMarkdown).toContain("Anchor 사업 주간 점검 회의");
+    expect(result.reportMarkdown).toContain("# Maru E2E Development Report");
+    expect(result.reportMarkdown).toContain("Maru 사업 주간 점검 회의");
     expect(result.slidesHtml).toContain("<!doctype html>");
-    expect(result.slidesHtml).toContain("Anchor E2E Flow");
-    expect(result.metadata.localStorageResult.id).toMatch(/^anchor-e2e-/);
+    expect(result.slidesHtml).toContain("Maru E2E Flow");
+    expect(result.metadata.localStorageResult.id).toMatch(/^maru-e2e-/);
     expect(result.todos).toContainEqual(
       expect.objectContaining({
         id: "readme-slide-export-conflict",
@@ -82,13 +82,13 @@ describe("compareE2EFlowTimings", () => {
 
 describe("summarizeE2EArtifacts", () => {
   it("returns queryable metadata for the saved artifact lookup", () => {
-    const fixture = buildE2EFlowFixture({ workPath: "mock://anchor-sample-workspace" });
+    const fixture = buildE2EFlowFixture({ workPath: "mock://maru-sample-workspace" });
     const summary = summarizeE2EArtifacts(fixture);
 
     expect(summary.id).toBe(fixture.metadata.localStorageResult.id);
     expect(summary.files).toEqual(["metadata.json", "report.md", "slides.html", "todos.json", "timings.json"]);
-    expect(summary.reportTitle).toBe("Anchor E2E Development Report");
-    expect(summary.slideTitle).toBe("Anchor E2E Flow");
+    expect(summary.reportTitle).toBe("Maru E2E Development Report");
+    expect(summary.slideTitle).toBe("Maru E2E Flow");
   });
 });
 
@@ -99,7 +99,7 @@ describe("isE2EFlowEnabled", () => {
 
   it("enables the E2E console from a query flag or persisted local opt-in", () => {
     vi.stubGlobal("window", {
-      location: { search: "?anchor-e2e=1" },
+      location: { search: "?maru-e2e=1" },
       localStorage: { getItem: () => null },
     });
 

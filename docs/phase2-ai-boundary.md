@@ -58,7 +58,7 @@ Only `network` and selected `model` failures are retryable by default.
 
 ## External Writer Rule
 
-If a registered vault has `externalWriter` / `external_writer`, Anchor blocks direct writes:
+If a registered vault has `externalWriter` / `external_writer`, Maru blocks direct writes:
 
 - save
 - create document

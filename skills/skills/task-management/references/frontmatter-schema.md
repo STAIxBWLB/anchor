@@ -6,7 +6,7 @@ when editing.
 ## Required Core Fields
 
 ```yaml
-title: Human-readable task title   # required; how the task is shown in Anchor
+title: Human-readable task title   # required; how the task is shown in Maru
 status: open              # open | in-progress | done | cancelled
 priority: medium          # highest | high | medium | low
 dateCreated: YYYY-MM-DD
@@ -61,7 +61,7 @@ relatedTasks: []       # [[task-note]] links
 ```
 
 ⚠ Write these on the **create** frontmatter only. Do not include them in an
-Anchor schedule-update payload — `UpdateTaskScheduleFields` is
+Maru schedule-update payload — `UpdateTaskScheduleFields` is
 `deny_unknown_fields` and accepts only `project`/`priority`/`due`/
 `calendarStart`/`calendarEnd`/`estimateMinutes`. Emit a `[[wiki-link]]` only for
 entities that enrichment actually resolved.
@@ -77,7 +77,7 @@ entities that enrichment actually resolved.
 
 ## Display Title
 
-Anchor resolves the title shown in lists and the calendar as
+Maru resolves the title shown in lists and the calendar as
 `title -> name -> filename`. Always write a human-readable `title` to
 frontmatter; the body `# {title}` H1 alone is **not** used for display, so a
 missing `title` makes the note appear as its raw filename.

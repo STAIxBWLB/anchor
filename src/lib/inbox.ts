@@ -308,11 +308,11 @@ export function buildInboxProcessPrompt({
 
   const reviewBlock = reviewFlow
     ? [
-        "Review mode (reviewFlow): follow the skill's Anchor Run Contract —",
+        "Review mode (reviewFlow): follow the skill's Maru Run Contract —",
         "process every selected item in this one run, emit phase markers, and",
-        "return exactly one anchor_inbox_review_v1 JSON listing a decision per",
+        "return exactly one maru_inbox_review_v1 JSON listing a decision per",
         "item. Do NOT move items to done/failed/duplicate, do NOT file originals",
-        "into project folders, and do NOT write receipts; Anchor applies the",
+        "into project folders, and do NOT write receipts; Maru applies the",
         "confirmed routes after the user reviews them.",
         "",
       ]

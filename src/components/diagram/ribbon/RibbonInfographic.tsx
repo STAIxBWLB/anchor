@@ -110,7 +110,7 @@ export function RibbonInfographic() {
       </RibbonGroup>
       <RibbonSeparator />
       <RibbonGroup labelKey="diagram.ribbon.group.tableMeta">
-        <span className="anchor-diagram-ribbon-hint">{t("diagram.info.insertHint")}</span>
+        <span className="maru-diagram-ribbon-hint">{t("diagram.info.insertHint")}</span>
       </RibbonGroup>
     </>
   );

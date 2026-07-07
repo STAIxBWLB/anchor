@@ -6,27 +6,27 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname, "..");
-const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "anchor-e2e-mcp-"));
-const runId = "anchor-e2e-smoke";
-const runDir = path.join(tmp, ".anchor", "e2e-runs", runId);
+const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "maru-e2e-mcp-"));
+const runId = "maru-e2e-smoke";
+const runDir = path.join(tmp, ".maru", "e2e-runs", runId);
 await fs.mkdir(runDir, { recursive: true });
 await fs.writeFile(
   path.join(runDir, "metadata.json"),
   JSON.stringify({
-    schemaVersion: "anchor_e2e_development_plan_v1",
+    schemaVersion: "maru_e2e_development_plan_v1",
     localStorageResult: { id: runId, status: "saved" },
-    reportArtifact: { title: "Anchor E2E Development Report" },
-    slideArtifact: { title: "Anchor E2E Flow" },
+    reportArtifact: { title: "Maru E2E Development Report" },
+    slideArtifact: { title: "Maru E2E Flow" },
   }),
 );
-await fs.writeFile(path.join(runDir, "report.md"), "# Anchor E2E Development Report\n");
-await fs.writeFile(path.join(runDir, "slides.html"), "<!doctype html><title>Anchor E2E Flow</title>");
+await fs.writeFile(path.join(runDir, "report.md"), "# Maru E2E Development Report\n");
+await fs.writeFile(path.join(runDir, "slides.html"), "<!doctype html><title>Maru E2E Flow</title>");
 await fs.writeFile(path.join(runDir, "todos.json"), "[]");
 await fs.writeFile(path.join(runDir, "timings.json"), "{}");
 
-const child = spawn(process.execPath, [path.join(root, "sidecars/anchor-mcp/index.mjs")], {
+const child = spawn(process.execPath, [path.join(root, "sidecars/maru-mcp/index.mjs")], {
   cwd: tmp,
-  env: { ...process.env, ANCHOR_MCP_WORKSPACE: tmp },
+  env: { ...process.env, MARU_MCP_WORKSPACE: tmp },
   stdio: ["pipe", "pipe", "inherit"],
 });
 

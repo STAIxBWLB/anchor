@@ -1,0 +1,7 @@
+# Maru sample vault — gitignore-style segment patterns. The defaults
+# baked into vault::DEFAULT_MARU_IGNORE already cover .DS_Store,
+# .gitkeep, .keep, Thumbs.db, and Icon\r — list them here only if you
+# want them documented per-vault.
+node_modules
+target
+.venv

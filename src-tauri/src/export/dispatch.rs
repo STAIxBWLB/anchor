@@ -358,7 +358,7 @@ fn find_soffice() -> Option<PathBuf> {
 }
 
 fn find_hwpx_tool() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("ANCHOR_HWPX_BIN").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("MARU_HWPX_BIN").map(PathBuf::from) {
         if is_executable(&path) {
             return Some(path);
         }
@@ -366,8 +366,8 @@ fn find_hwpx_tool() -> Option<PathBuf> {
     find_program("hwpx").or_else(|| {
         let mut candidates = Vec::new();
         if let Some(home) = dirs::home_dir() {
-            candidates.push(home.join(".anchor/skills/hwpx/hwpx"));
-            candidates.push(home.join(".anchor/skills/_builtin/skills/hwpx/hwpx"));
+            candidates.push(home.join(".maru/skills/hwpx/hwpx"));
+            candidates.push(home.join(".maru/skills/_builtin/skills/hwpx/hwpx"));
         }
         candidates
             .push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../skills/skills/hwpx/hwpx"));

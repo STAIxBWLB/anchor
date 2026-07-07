@@ -12,7 +12,7 @@ export interface StartupProfileMeasure {
   detail?: unknown;
 }
 
-export interface AnchorStartupProfile {
+export interface MaruStartupProfile {
   enabled: boolean;
   marks: StartupProfileMark[];
   measures: StartupProfileMeasure[];
@@ -20,11 +20,11 @@ export interface AnchorStartupProfile {
 
 declare global {
   interface Window {
-    __ANCHOR_STARTUP_PROFILE__?: AnchorStartupProfile;
+    __MARU_STARTUP_PROFILE__?: MaruStartupProfile;
   }
 }
 
-const STARTUP_PROFILE_KEY = "anchor:startup:profile";
+const STARTUP_PROFILE_KEY = "maru:startup:profile";
 
 interface OptionalIdleCallbacks {
   requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
@@ -46,16 +46,16 @@ export function startupProfileEnabled(): boolean {
   }
 }
 
-function profile(): AnchorStartupProfile | null {
+function profile(): MaruStartupProfile | null {
   if (!startupProfileEnabled()) return null;
-  if (!window.__ANCHOR_STARTUP_PROFILE__) {
-    window.__ANCHOR_STARTUP_PROFILE__ = {
+  if (!window.__MARU_STARTUP_PROFILE__) {
+    window.__MARU_STARTUP_PROFILE__ = {
       enabled: true,
       marks: [],
       measures: [],
     };
   }
-  return window.__ANCHOR_STARTUP_PROFILE__;
+  return window.__MARU_STARTUP_PROFILE__;
 }
 
 export function markStartup(name: string, detail?: unknown): void {
@@ -63,7 +63,7 @@ export function markStartup(name: string, detail?: unknown): void {
   if (!target) return;
   const entry = { name, at: now(), detail };
   target.marks.push(entry);
-  console.debug("[anchor-startup]", name, entry);
+  console.debug("[maru-startup]", name, entry);
 }
 
 export async function measureStartup<T>(

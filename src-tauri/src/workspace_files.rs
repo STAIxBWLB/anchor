@@ -1,7 +1,7 @@
 use crate::vault::{
-    load_anchorignore, matches_anchorignore, normalize_existing_dir, ScanFilter, ScanOptions,
+    load_maruignore, matches_maruignore, normalize_existing_dir, ScanFilter, ScanOptions,
 };
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -149,7 +149,7 @@ pub fn apply_file_queue(
             FileQueueOperation::Copy => WorkspaceWriteAction::Create,
             FileQueueOperation::Move => WorkspaceWriteAction::RenameMove,
         };
-        assert_anchor_can_write(&vault.to_string_lossy(), action)?;
+        assert_maru_can_write(&vault.to_string_lossy(), action)?;
         let source_path = PathBuf::from(&item.source_path);
         validate_queue_source(&source_path, item.source_kind)?;
         let target_dir = resolve_target_dir(&vault, &item.target_dir)?;
@@ -293,7 +293,7 @@ fn scan_workspace_files_at(
     vault: &Path,
     scan_filter: &ScanFilter,
 ) -> Result<Vec<WorkspaceFileEntry>, String> {
-    let ignore_patterns = load_anchorignore(vault);
+    let ignore_patterns = load_maruignore(vault);
     let tracked = git_tracked_paths(vault);
     let mut entries = Vec::new();
     for entry in WalkDir::new(vault)
@@ -308,7 +308,7 @@ fn scan_workspace_files_at(
                 return false;
             }
             let rel = path.strip_prefix(vault).unwrap_or(path);
-            !matches_anchorignore(rel, &ignore_patterns)
+            !matches_maruignore(rel, &ignore_patterns)
         })
         .filter_map(Result::ok)
     {
@@ -500,14 +500,14 @@ mod tests {
     }
 
     #[test]
-    fn scanner_excludes_git_generated_hidden_and_anchorignored_paths() {
+    fn scanner_excludes_git_generated_hidden_and_maruignored_paths() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         write_file(root, "keep.md", b"# Keep\n");
         write_file(root, ".git/config", b"private");
         write_file(root, "node_modules/pkg/readme.md", b"# Dep\n");
-        write_file(root, ".anchor/cache/file.json", b"{}");
-        write_file(root, ".anchorignore", b"ignored\n");
+        write_file(root, ".maru/cache/file.json", b"{}");
+        write_file(root, ".maruignore", b"ignored\n");
         write_file(root, "ignored/file.txt", b"ignore me");
 
         let entries = scan_workspace_files_at(root, &ScanFilter::default()).unwrap();

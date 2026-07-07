@@ -1,5 +1,5 @@
 use crate::vault::{
-    load_anchorignore, matches_anchorignore, normalize_existing_dir, resolve_inside_vault,
+    load_maruignore, matches_maruignore, normalize_existing_dir, resolve_inside_vault,
 };
 use std::fs;
 use std::path::Path;
@@ -19,7 +19,7 @@ pub fn search_calendar_notes(
     }
     let needle = trimmed.to_lowercase();
     let work = normalize_existing_dir(&work_path)?;
-    let ignore_patterns = load_anchorignore(&work);
+    let ignore_patterns = load_maruignore(&work);
     let mut hits: Vec<String> = Vec::new();
     for root in roots {
         let trimmed_root = root.trim();
@@ -51,7 +51,7 @@ pub fn search_calendar_notes(
                 continue;
             }
             let rel = rel_path_for(&work, path);
-            if matches_anchorignore(Path::new(&rel), &ignore_patterns) {
+            if matches_maruignore(Path::new(&rel), &ignore_patterns) {
                 continue;
             }
             let Ok(body) = fs::read_to_string(path) else {
@@ -139,10 +139,10 @@ mod tests {
     }
 
     #[test]
-    fn respects_anchorignore() {
+    fn respects_maruignore() {
         let dir = tempdir().unwrap();
         let work = dir.path();
-        write(&work.join(".anchorignore"), "skipme\n");
+        write(&work.join(".maruignore"), "skipme\n");
         write(&work.join("tasks/skipme/a.md"), "needle");
         write(&work.join("tasks/keep/b.md"), "needle");
         let hits = search_calendar_notes(

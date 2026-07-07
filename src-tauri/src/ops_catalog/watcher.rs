@@ -190,10 +190,10 @@ fn is_catalog_relevant(path: &Path, root: &Path) -> bool {
     }
 
     // 캐시/런타임 surface 제외
-    if rel.starts_with(".anchor/cache/")
-        || rel.starts_with(".anchor/runs/")
-        || rel.starts_with(".anchor/queue/")
-        || rel.starts_with(".anchor/studio/")
+    if rel.starts_with(".maru/cache/")
+        || rel.starts_with(".maru/runs/")
+        || rel.starts_with(".maru/queue/")
+        || rel.starts_with(".maru/studio/")
     {
         return false;
     }
@@ -203,7 +203,7 @@ fn is_catalog_relevant(path: &Path, root: &Path) -> bool {
         || rel.starts_with("tasks/")
         || rel.contains("/02-admin-approvals/")
         || rel.contains("/03-evidence-cert/")
-        || rel.contains("/.anchor/bu-config.yaml")
+        || rel.contains("/.maru/bu-config.yaml")
 }
 
 #[cfg(test)]
@@ -234,7 +234,7 @@ mod tests {
     #[test]
     fn relevant_skips_cache() {
         let root = PathBuf::from("/ws");
-        let p = root.join(".anchor/cache/catalog.json");
+        let p = root.join(".maru/cache/catalog.json");
         assert!(!is_catalog_relevant(&p, &root));
     }
 

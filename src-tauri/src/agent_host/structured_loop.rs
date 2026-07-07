@@ -1,13 +1,13 @@
 // Tauri command that drives the five-role structured loop (`roles.rs`) against a
 // real CLI provider (Claude/Codex). The loop runs lead → planner → worker →
 // reviewer (plus an advisor when high-risk/ambiguous) with bounded rework, then
-// emits a single `anchor_skill_proposal_v1` proposal.
+// emits a single `maru_skill_proposal_v1` proposal.
 //
 // Because the loop performs several sequential CLI spawns (each potentially tens
 // of seconds), the command returns the run id immediately and runs the loop on a
 // worker thread — matching the fire-and-forget model of `ai_router`/`dispatch`.
 // Progress is observable two ways:
-//   1. run events under `<cwd>/.anchor/runs/skills/<run_id>/events.jsonl`
+//   1. run events under `<cwd>/.maru/runs/skills/<run_id>/events.jsonl`
 //      (`run.started` / `role.output` / `proposal.created` / `run.completed|failed`),
 //      so the existing `SkillRunsPanel` review→apply path reconstructs the proposal
 //      with no new apply code; and
@@ -66,7 +66,7 @@ pub fn agent_run_structured_loop(
         &cwd,
         &run_id,
         "run.started",
-        "anchor.structured_loop",
+        "maru.structured_loop",
         json!({
             "runtimeProvider": provider_kind.id(),
             "directive": directive,
@@ -131,7 +131,7 @@ pub fn agent_run_structured_loop(
                             &cwd_thread,
                             &run_id_thread,
                             "proposal.created",
-                            "anchor.structured_loop",
+                            "maru.structured_loop",
                             json!({ "proposal": proposal }),
                         );
                     }
@@ -140,7 +140,7 @@ pub fn agent_run_structured_loop(
                     &cwd_thread,
                     &run_id_thread,
                     "run.completed",
-                    "anchor.structured_loop",
+                    "maru.structured_loop",
                     json!({
                         "status": result.status,
                         "iterations": result.iterations,
@@ -163,7 +163,7 @@ pub fn agent_run_structured_loop(
                     &cwd_thread,
                     &run_id_thread,
                     "run.failed",
-                    "anchor.structured_loop",
+                    "maru.structured_loop",
                     json!({ "error": err }),
                 );
                 mission_state::fail_mission(&app_thread, &run_id_thread, &err);
@@ -208,7 +208,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let count = dir.path().join("count");
         let script = format!(
-            "#!/bin/sh\nN=$(cat '{c}' 2>/dev/null || echo 0)\nN=$((N+1))\necho \"$N\" > '{c}'\ncase \"$N\" in\n1) echo 'lead directive' ;;\n2) echo 'a plan' ;;\n3) echo '{{\"summary\":\"do it\",\"files\":[],\"commands\":[],\"risks\":[],\"requiresApproval\":true,\"schemaVersion\":\"anchor_skill_proposal_v1\"}}' ;;\n*) echo '{{\"passed\":true,\"findings\":[]}}' ;;\nesac\n",
+            "#!/bin/sh\nN=$(cat '{c}' 2>/dev/null || echo 0)\nN=$((N+1))\necho \"$N\" > '{c}'\ncase \"$N\" in\n1) echo 'lead directive' ;;\n2) echo 'a plan' ;;\n3) echo '{{\"summary\":\"do it\",\"files\":[],\"commands\":[],\"risks\":[],\"requiresApproval\":true,\"schemaVersion\":\"maru_skill_proposal_v1\"}}' ;;\n*) echo '{{\"passed\":true,\"findings\":[]}}' ;;\nesac\n",
             c = count.display()
         );
         let cli = write_fake_cli(dir.path().join("fake-claude"), &script);

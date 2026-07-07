@@ -1,7 +1,7 @@
 ---
 type: Template
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - 회의록
 created_at: 2026-04-22T11:00:00+09:00
@@ -13,7 +13,7 @@ updated_at: 2026-04-22T11:00:00+09:00
 |---|---|
 | 일시 | YYYY. MM. DD. HH:MM |
 | 장소 | 미정 |
-| 주관 | Anchor Project |
+| 주관 | Maru Project |
 | 참석자 | 확인 필요 |
 
 ## 안건

@@ -2,7 +2,7 @@
 // here so the main thread never blocks: init pre-runs to alpha<0.01 (or
 // ~300 ticks) and streams throttled positions; drag re-heats locally with
 // alphaTarget(0.3). Positions are session memory only.
-// ponytail: pin 사용이 잦아지면 .anchor/cache/graph-layout.json 영속화.
+// ponytail: pin 사용이 잦아지면 .maru/cache/graph-layout.json 영속화.
 
 import {
   forceCollide,

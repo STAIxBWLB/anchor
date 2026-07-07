@@ -68,7 +68,7 @@ export function SkillRunsPanel({
 }: SkillRunsPanelProps) {
   const { t } = useTranslation();
   const storageKey = useMemo(
-    () => `anchor:skill-runs:cleared:${workPath ?? "no-workspace"}`,
+    () => `maru:skill-runs:cleared:${workPath ?? "no-workspace"}`,
     [workPath],
   );
   const [clearedIds, setClearedIds] = useState<Set<string>>(() => readClearedRunIds(storageKey));
@@ -225,7 +225,7 @@ export function SkillRunsPanel({
     try {
       const target = await chooseSaveFile(
         t("skillRuns.export.title"),
-        `${cwd}/.anchor/run-summaries/${mission.id}.json`,
+        `${cwd}/.maru/run-summaries/${mission.id}.json`,
       );
       if (target) {
         const written = await agentWriteRedactedRunSummary(cwd, mission.id, target);

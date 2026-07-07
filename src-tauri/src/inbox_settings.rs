@@ -1,4 +1,4 @@
-// Per-vault inbox configuration. Stored at `<vault>/.anchor/inbox.json`.
+// Per-vault inbox configuration. Stored at `<vault>/.maru/inbox.json`.
 // Loaded by `scan_inbox_drop` and `start_inbox_watcher` so the user can
 // retarget the inbox root (`inbox/downloads` by default) and restrict
 // which subdirectories are recognized as classification sources.
@@ -331,12 +331,12 @@ impl Default for InboxSettings {
 }
 
 fn settings_path(vault: &Path) -> PathBuf {
-    vault.join(".anchor").join("inbox.json")
+    vault.join(".maru").join("inbox.json")
 }
 
-fn ensure_anchor_dir(vault: &Path) -> Result<(), String> {
-    let dir = vault.join(".anchor");
-    fs::create_dir_all(&dir).map_err(|err| format!("Cannot create .anchor directory: {err}"))
+fn ensure_maru_dir(vault: &Path) -> Result<(), String> {
+    let dir = vault.join(".maru");
+    fs::create_dir_all(&dir).map_err(|err| format!("Cannot create .maru directory: {err}"))
 }
 
 pub fn load(vault: &Path) -> InboxSettings {
@@ -674,7 +674,7 @@ pub fn save_inbox_settings(
     settings: InboxSettings,
 ) -> Result<InboxSettings, String> {
     let vault = resolve_inside_vault(&vault_path, ".")?;
-    ensure_anchor_dir(&vault)?;
+    ensure_maru_dir(&vault)?;
     let serialized = serde_json::to_string_pretty(&settings)
         .map_err(|err| format!("Cannot serialize inbox settings: {err}"))?;
     fs::write(settings_path(&vault), format!("{serialized}\n"))
@@ -712,11 +712,11 @@ mod tests {
     }
 
     #[test]
-    fn save_creates_anchor_directory() {
+    fn save_creates_maru_directory() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().to_string_lossy().to_string();
         save_inbox_settings(path, InboxSettings::default()).unwrap();
-        assert!(tmp.path().join(".anchor/inbox.json").exists());
+        assert!(tmp.path().join(".maru/inbox.json").exists());
     }
 
     #[test]
@@ -880,11 +880,11 @@ projects:
     }
 
     #[test]
-    fn runtime_config_falls_back_to_legacy_anchor_inbox_json() {
+    fn runtime_config_falls_back_to_legacy_maru_inbox_json() {
         let tmp = TempDir::new().unwrap();
-        fs::create_dir_all(tmp.path().join(".anchor")).unwrap();
+        fs::create_dir_all(tmp.path().join(".maru")).unwrap();
         fs::write(
-            tmp.path().join(".anchor/inbox.json"),
+            tmp.path().join(".maru/inbox.json"),
             r#"{"inboxRoot":"incoming/spool","sources":["alpha"]}"#,
         )
         .unwrap();

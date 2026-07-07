@@ -15,10 +15,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const defaultSecretsDir = resolve(homedir(), "workspace/work/.anchor/secrets/apple");
-const secretsDir = resolve(process.env.ANCHOR_APPLE_SECRETS_DIR ?? defaultSecretsDir);
+const defaultSecretsDir = resolve(homedir(), "workspace/work/.maru/secrets/apple");
+const secretsDir = resolve(process.env.MARU_APPLE_SECRETS_DIR ?? defaultSecretsDir);
 const userArgs = process.argv.slice(2);
-const target = userArgs.find((arg) => !arg.startsWith("--")) ?? process.env.ANCHOR_NOTARIZE_TARGET ?? "aarch64-apple-darwin";
+const target = userArgs.find((arg) => !arg.startsWith("--")) ?? process.env.MARU_NOTARIZE_TARGET ?? "aarch64-apple-darwin";
 const checkOnly = process.argv.includes("--check");
 
 const secretFileCandidates = {
@@ -133,7 +133,7 @@ function ensureDeveloperIdIntermediate() {
     return cached;
   }
 
-  const downloaded = join(tmpdir(), `anchor-devidg2-${process.pid}.der`);
+  const downloaded = join(tmpdir(), `maru-devidg2-${process.pid}.der`);
   runStep("download Apple Developer ID G2 intermediate", "curl", [
     "-fsSL",
     "http://certs.apple.com/devidg2.der",
@@ -191,13 +191,13 @@ if (!apiKeyId) {
   missing.push("api-key-id");
 }
 const keychainPassword = ensureKeychainPassword(missing);
-const updaterKey = updaterSecret("anchor-updater.key", "TAURI_SIGNING_PRIVATE_KEY");
-const updaterKeyPassword = updaterSecret("anchor-updater.key.password", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
+const updaterKey = updaterSecret("maru-updater.key", "TAURI_SIGNING_PRIVATE_KEY");
+const updaterKeyPassword = updaterSecret("maru-updater.key.password", "TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
 if (!updaterKey) {
-  missing.push("~/.tauri/anchor-updater.key or TAURI_SIGNING_PRIVATE_KEY");
+  missing.push("~/.tauri/maru-updater.key or TAURI_SIGNING_PRIVATE_KEY");
 }
 if (!updaterKeyPassword) {
-  missing.push("~/.tauri/anchor-updater.key.password or TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
+  missing.push("~/.tauri/maru-updater.key.password or TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
 }
 
 if (missing.length > 0) {
@@ -218,12 +218,12 @@ if (checkOnly) {
   process.exit(0);
 }
 
-const keychainPath = join(tmpdir(), `anchor-notary-${process.pid}.keychain-db`);
+const keychainPath = join(tmpdir(), `maru-notary-${process.pid}.keychain-db`);
 const originalKeychains = parseKeychainList(outputOf("security", ["list-keychains", "-d", "user"]));
 const originalDefaultKeychain = outputOf("security", ["default-keychain", "-d", "user"]).trim().replace(/^"|"$/g, "");
 
 function cleanup() {
-  if (process.env.ANCHOR_KEEP_NOTARY_KEYCHAIN === "1") {
+  if (process.env.MARU_KEEP_NOTARY_KEYCHAIN === "1") {
     console.log(`[warn] keeping temporary keychain: ${keychainPath}`);
     return;
   }
@@ -299,7 +299,7 @@ try {
     TAURI_SIGNING_PRIVATE_KEY_PASSWORD: updaterKeyPassword,
   };
 
-  runStep("build, sign, notarize, and bundle Anchor", "pnpm", ["tauri", "build", "--target", target], { env });
+  runStep("build, sign, notarize, and bundle Maru", "pnpm", ["tauri", "build", "--target", target], { env });
   console.log("\n[ok] local notarized Tauri build completed");
 } catch (error) {
   console.error(`\n[error] ${error.message}`);

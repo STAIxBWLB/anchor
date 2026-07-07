@@ -310,12 +310,12 @@ mod tests {
             tmp.path(),
             source.to_string_lossy().as_ref(),
             &[ExportFormat::Pdf],
-            Some("projects/x/.anchor/exports/draft"),
+            Some("projects/x/.maru/exports/draft"),
         )
         .unwrap();
-        assert!(path.to_string_lossy().contains(".anchor/exports/draft"));
+        assert!(path.to_string_lossy().contains(".maru/exports/draft"));
         let pdf = &manifest.outputs[0];
-        assert!(pdf.path.starts_with("projects/x/.anchor/exports/draft/"));
+        assert!(pdf.path.starts_with("projects/x/.maru/exports/draft/"));
     }
 
     #[test]

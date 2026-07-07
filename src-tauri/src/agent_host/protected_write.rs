@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::agent_host::contracts::PROTECTED_WRITE_CLAIM_SCHEMA_VERSION;
 use crate::vault::resolve_inside_vault;
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -79,7 +79,7 @@ pub fn apply_protected_write_claim(
 
     match claim.operation.as_str() {
         "create" => {
-            assert_anchor_can_write(cwd, WorkspaceWriteAction::Create)?;
+            assert_maru_can_write(cwd, WorkspaceWriteAction::Create)?;
             if exists {
                 return Err("write_conflict: target_exists".to_string());
             }
@@ -89,14 +89,14 @@ pub fn apply_protected_write_claim(
             )?;
         }
         "replace" => {
-            assert_anchor_can_write(cwd, WorkspaceWriteAction::Modify)?;
+            assert_maru_can_write(cwd, WorkspaceWriteAction::Modify)?;
             write_content(
                 &target,
                 content.ok_or_else(|| "write_content_required".to_string())?,
             )?;
         }
         "append" => {
-            assert_anchor_can_write(cwd, WorkspaceWriteAction::Modify)?;
+            assert_maru_can_write(cwd, WorkspaceWriteAction::Modify)?;
             let existing = if exists {
                 fs::read_to_string(&target).map_err(|err| format!("Cannot read target: {err}"))?
             } else {
@@ -107,7 +107,7 @@ pub fn apply_protected_write_claim(
             write_content(&target, &next)?;
         }
         "delete" => {
-            assert_anchor_can_write(cwd, WorkspaceWriteAction::Delete)?;
+            assert_maru_can_write(cwd, WorkspaceWriteAction::Delete)?;
             if exists {
                 fs::remove_file(&target).map_err(|err| format!("Cannot delete target: {err}"))?;
             }
@@ -137,7 +137,7 @@ fn write_content(path: &Path, content: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("Cannot create parent: {err}"))?;
     }
-    let tmp = path.with_extension("anchor-write.tmp");
+    let tmp = path.with_extension("maru-write.tmp");
     fs::write(&tmp, content).map_err(|err| format!("Cannot write temp file: {err}"))?;
     replace_file(&tmp, path)
 }

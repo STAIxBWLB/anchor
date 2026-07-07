@@ -18,8 +18,8 @@ const OUTLOOK_REJECT_KIND: &str = "outlook.reject";
 const OUTLOOK_STAGE_KIND: &str = "outlook.stage";
 const COMMS_BULK_KIND: &str = "comms.bulk";
 const INBOX_BULK_KIND: &str = "inbox.bulk";
-const ACCEPTED_CATEGORY: &str = "anchor-accepted";
-const REJECTED_CATEGORY: &str = "anchor-rejected";
+const ACCEPTED_CATEGORY: &str = "maru-accepted";
+const REJECTED_CATEGORY: &str = "maru-rejected";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

@@ -11,9 +11,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-# Resolve the Anchor skills python interpreter, most-specific first.
-# Honors $SKILL_PYTHON, then host-injected $ANCHOR_SKILLS_ENV,
-# then the canonical ~/.anchor/env, then a repo-local walk-up (dev-in-tree).
+# Resolve the Maru skills python interpreter, most-specific first.
+# Honors $SKILL_PYTHON, then host-injected $MARU_SKILLS_ENV,
+# then the canonical ~/.maru/env, then a repo-local walk-up (dev-in-tree).
 # Canonical snippet — keep in sync with skills/envs/default/REFERENCE.md.
 find_env_python() {
     local c dir
@@ -21,8 +21,8 @@ find_env_python() {
         printf '%s\n' "$SKILL_PYTHON"; return 0
     fi
     for c in \
-        "${ANCHOR_SKILLS_ENV:+$ANCHOR_SKILLS_ENV/.venv/bin/python3}" \
-        "$HOME/.anchor/env/.venv/bin/python3"; do
+        "${MARU_SKILLS_ENV:+$MARU_SKILLS_ENV/.venv/bin/python3}" \
+        "$HOME/.maru/env/.venv/bin/python3"; do
         [ -n "$c" ] && [ -x "$c" ] && printf '%s\n' "$c" && return 0
     done
     dir="$SCRIPT_DIR"
@@ -42,9 +42,9 @@ VENV_PY="$(find_env_python || true)"
 if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
     if command -v python3 >/dev/null 2>&1; then
         VENV_PY="$(command -v python3)"
-        echo "[xlsx-toolkit] ~/.anchor/env/.venv 미발견, system python3 fallback: $VENV_PY" >&2
+        echo "[xlsx-toolkit] ~/.maru/env/.venv 미발견, system python3 fallback: $VENV_PY" >&2
     else
-        echo "[xlsx-toolkit] python 없음. 'bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env' 실행" >&2
+        echo "[xlsx-toolkit] python 없음. 'bash ~/.maru/skills/_builtin/envs/default/setup.sh --target ~/.maru/env' 실행" >&2
         exit 1
     fi
 fi

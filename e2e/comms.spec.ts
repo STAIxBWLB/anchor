@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    if (window.sessionStorage.getItem("anchor:e2e:storage-cleared") === "true") return;
+    if (window.sessionStorage.getItem("maru:e2e:storage-cleared") === "true") return;
     window.localStorage.clear();
-    window.sessionStorage.setItem("anchor:e2e:storage-cleared", "true");
+    window.sessionStorage.setItem("maru:e2e:storage-cleared", "true");
   });
 });
 

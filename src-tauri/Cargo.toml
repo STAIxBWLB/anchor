@@ -1,24 +1,24 @@
 [package]
-name = "anchor"
-version = "0.2.40"
-description = "Local-first Anchor Workspace and AI editing desktop app"
-authors = ["Anchor Contributors"]
+name = "maru"
+version = "0.3.0"
+description = "Local-first Maru Workspace and AI editing desktop app"
+authors = ["Maru Contributors"]
 license = "UNLICENSED"
 edition = "2021"
 rust-version = "1.77.2"
-default-run = "anchor"
+default-run = "maru"
 
 [lib]
-name = "anchor_lib"
+name = "maru_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "anchor"
+name = "maru"
 path = "src/main.rs"
 
 [[bin]]
-name = "anchor-cli"
-path = "src/bin/anchor-cli.rs"
+name = "maru-cli"
+path = "src/bin/maru-cli.rs"
 
 [build-dependencies]
 tauri-build = { version = "2.5.4", features = [] }

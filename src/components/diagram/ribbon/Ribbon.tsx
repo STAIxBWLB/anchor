@@ -79,13 +79,13 @@ export function Ribbon({
 }: RibbonProps) {
   const { t } = useTranslation();
   return (
-    <div className="anchor-diagram-ribbon">
-      <nav className="anchor-diagram-ribbon-tabs" aria-label={t("mode.diagram")}>
+    <div className="maru-diagram-ribbon">
+      <nav className="maru-diagram-ribbon-tabs" aria-label={t("mode.diagram")}>
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`anchor-diagram-ribbon-tab${active === tab.id ? " is-active" : ""}`}
+            className={`maru-diagram-ribbon-tab${active === tab.id ? " is-active" : ""}`}
             onClick={() => onTabChange(tab.id)}
             role="tab"
             aria-selected={active === tab.id}
@@ -94,7 +94,7 @@ export function Ribbon({
           </button>
         ))}
       </nav>
-      <div className="anchor-diagram-ribbon-panel" role="tabpanel">
+      <div className="maru-diagram-ribbon-panel" role="tabpanel">
         {panelFor(active, fileProps, insertProps, viewProps, toolsProps)}
       </div>
     </div>

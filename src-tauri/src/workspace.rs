@@ -4,7 +4,7 @@
 // Standalone single-folder workspaces still work — this module is a no-op
 // for any folder lacking the YAML.
 
-use crate::anchor_dir::{ensure_anchor_dir, set_owner_name, set_paired_vault_path};
+use crate::maru_dir::{ensure_maru_dir, set_owner_name, set_paired_vault_path};
 use crate::vault_list::{
     list_workspace_roots, set_active_workspace_root, upsert_workspace_root,
     ProviderPermissionSummary, WorkspaceCapabilities, WorkspaceRegistry, WorkspaceRootEntry,
@@ -45,10 +45,10 @@ pub struct WorkspaceOwner {
     pub github: Option<String>,
 }
 
-/// User's `workspace.config.yaml`. We only model the fields anchor cares
+/// User's `workspace.config.yaml`. We only model the fields maru cares
 /// about (paths, owner, ssot map, skills hint, inbox). Unknown keys are
 /// captured in `extra` so future round-trips don't lose data — but
-/// anchor never writes back to this file (it's the user's SSOT).
+/// maru never writes back to this file (it's the user's SSOT).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceConfig {
     pub version: u32,
@@ -77,7 +77,7 @@ pub struct WorkspaceDetect {
     /// if the resolved path doesn't exist we surface it anyway so the UI can warn.
     pub resolved_private_path: Option<String>,
     pub resolved_private_exists: bool,
-    /// Resolved public workspace path. Public is optional; if absent, Anchor
+    /// Resolved public workspace path. Public is optional; if absent, Maru
     /// still boots and edits the private workspace normally.
     /// If the resolved path doesn't exist
     /// we surface it anyway so the UI can warn.
@@ -333,10 +333,10 @@ pub fn read_workspace_config(work_path: String) -> Result<WorkspaceConfig, Strin
 ///
 /// 1. Canonicalize the config directory. Required — must exist.
 /// 2. If `workspace.config.yaml` is present, parse owner / paths.
-/// 3. Bootstrap `<private>/.anchor/`.
+/// 3. Bootstrap `<private>/.maru/`.
 /// 4. Upsert the private root.
 /// 5. If a public root resolves to a real directory, upsert it.
-/// 6. Stamp public path + owner_name into `.anchor/workspace.json`.
+/// 6. Stamp public path + owner_name into `.maru/workspace.json`.
 /// 7. Set the active private root.
 ///
 /// Idempotent — re-running the same call yields the same registry state.
@@ -361,9 +361,9 @@ pub fn register_workspace_roots(work_path: String) -> Result<RegisterOutcome, St
         .unwrap_or_else(|| config_root.to_string_lossy().to_string());
     let private_path = PathBuf::from(&private);
 
-    // Bootstrap .anchor/ before touching the registry — if it fails the
+    // Bootstrap .maru/ before touching the registry — if it fails the
     // registry stays untouched.
-    ensure_anchor_dir(&private_path)?;
+    ensure_maru_dir(&private_path)?;
 
     // Derive labels. Prefer config owner.name when registering the work
     // half (label tells the user which workspace it is); fall back to
@@ -423,7 +423,7 @@ pub fn register_workspace_roots(work_path: String) -> Result<RegisterOutcome, St
     }
     let public_workspace_path = registered_public_paths.first().cloned();
 
-    // Stamp anchor's workspace meta with the optional public root + owner.
+    // Stamp maru's workspace meta with the optional public root + owner.
     set_paired_vault_path(&private_path, public_workspace_path.clone())?;
     if let Some(owner) = detected
         .as_ref()

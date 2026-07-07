@@ -1,13 +1,13 @@
-// Global site registry (~/.anchor/sites.json) + work-sites directory scanner.
+// Global site registry (~/.maru/sites.json) + work-sites directory scanner.
 //
 // Registry envelope (same convention as skills.json / imports.json):
 //   { "version": 1, "sites": [ ...entries owned by the frontend... ] }
 //
 // `read_sites` is ensure-on-read: a missing or empty file is seeded with the
-// default envelope. Paths resolve through skill_host::fs::anchor_home which
-// honors the ANCHOR_TEST_HOME override under cfg(test), and all logic lives
+// default envelope. Paths resolve through skill_host::fs::maru_home which
+// honors the MARU_TEST_HOME override under cfg(test), and all logic lives
 // in `_internal` functions taking explicit paths so tests never touch the
-// real ~/.anchor.
+// real ~/.maru.
 //
 // The scanner walks the immediate children of a directory (typically
 // ~/workspace/work/sites) and proposes SiteCandidate records. It is
@@ -29,11 +29,11 @@ const SITES_SCHEMA_VERSION: u32 = 1;
 const TEXT_CAP: usize = 256 * 1024;
 
 // ---------------------------------------------------------------------------
-// Registry: ~/.anchor/sites.json
+// Registry: ~/.maru/sites.json
 // ---------------------------------------------------------------------------
 
 fn sites_json_path() -> Result<PathBuf, String> {
-    Ok(host_fs::anchor_home()?.join("sites.json"))
+    Ok(host_fs::maru_home()?.join("sites.json"))
 }
 
 fn default_sites_value() -> JsonValue {
@@ -132,7 +132,7 @@ const URL_DOMAIN_DENYLIST: &[&str] = &["shields.io", "astro.build"];
 fn astro_site_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     // matches:  site: 'https://halla.ai',  |  site: "https://x"  |  site: `https://x`
-    // \b instead of a line anchor so one-line configs
+    // \b instead of a line maru so one-line configs
     // (`export default { site: '...' }`) match too.
     RE.get_or_init(|| {
         Regex::new(r#"\bsite\s*:\s*["'`](https?://[^"'`\s]+)["'`]"#).unwrap()
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn read_sites_seeds_envelope_when_missing() {
         let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join(".anchor/sites.json");
+        let path = tmp.path().join(".maru/sites.json");
         let value = read_sites_internal(&path).unwrap();
         assert_eq!(value, json!({ "version": 1, "sites": [] }));
         let on_disk = fs::read_to_string(&path).unwrap();

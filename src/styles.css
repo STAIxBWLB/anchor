@@ -15729,7 +15729,7 @@ button.git-badge:hover {
 .cat-meeting-type-4 { --cal-cat: var(--cal-cat-meeting-4); }
 .cat-meeting-type-5 { --cal-cat: var(--cal-cat-meeting-5); }
 
-/* ─── Anchor E2E flow pane ─────────────────────────────────────────── */
+/* ─── Maru E2E flow pane ─────────────────────────────────────────── */
 
 .e2e-pane {
   min-width: 0;
@@ -16764,7 +16764,7 @@ button.git-badge:hover {
   padding: 24px;
 }
 
-/* The native webview covers the normal bottom-right toast corner — anchor
+/* The native webview covers the normal bottom-right toast corner — maru
    toasts over the DOM sidebar instead while in sites mode. */
 .app-shell.sites-mode .toast-stack {
   right: auto;

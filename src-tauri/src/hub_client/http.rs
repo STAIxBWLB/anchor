@@ -1,4 +1,4 @@
-// HTTP client for the Anchor Hub. Read-only `GET /api/v1/<resource>`.
+// HTTP client for the Maru Hub. Read-only `GET /api/v1/<resource>`.
 //
 // Uses reqwest blocking client (we're called from Tauri commands that run on
 // a thread pool already). Honors ETag — if the cached etag is present we send

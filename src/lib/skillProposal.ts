@@ -1,7 +1,7 @@
 import type { AgentRunEvent, SkillProposal, SkillProposalFile } from "./skills";
 
 // Schema-agnostic helpers shared by every skill review flow (meetings, tasks, …).
-// These deal only with `anchor_skill_proposal_v1` proposals and generic JSON
+// These deal only with `maru_skill_proposal_v1` proposals and generic JSON
 // extraction; per-skill review artifacts live in their own modules.
 
 export type UnknownRecord = Record<string, unknown>;
@@ -42,7 +42,7 @@ export function extractSkillProposal(events: AgentRunEvent[]): SkillProposal | n
       schemaVersion:
         typeof proposal.schemaVersion === "string"
           ? proposal.schemaVersion
-          : "anchor_skill_proposal_v1",
+          : "maru_skill_proposal_v1",
     };
   }
   return null;

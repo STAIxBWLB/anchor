@@ -46,8 +46,8 @@ playwright-report/
 playwright/.cache/
 test-results/
 
-# === Anchor runtime ===
-# Per-vault SQLite cache will live at <vault>/.anchor/cache.db
+# === Maru runtime ===
+# Per-vault SQLite cache will live at <vault>/.maru/cache.db
 *.db-journal
 *.db-shm
 *.db-wal

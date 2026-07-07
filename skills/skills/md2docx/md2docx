@@ -8,24 +8,24 @@
 #   ./md2docx <file.md> --serif                       (Korean myeongjo body, formal)
 #   ./md2docx <file.md> --header "Running header"      (override) | --no-header
 #
-# Resolves the Anchor env Node runtime + sets NODE_PATH so the bundled `docx`
-# package (~/.anchor/env/node_modules) is importable. See skills/envs/default/REFERENCE.md.
+# Resolves the Maru env Node runtime + sets NODE_PATH so the bundled `docx`
+# package (~/.maru/env/node_modules) is importable. See skills/envs/default/REFERENCE.md.
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-# Resolve the Anchor skills Node interpreter, most-specific first.
-# Honors $SKILL_NODE, then host-injected $ANCHOR_SKILLS_ENV, then the canonical
-# ~/.anchor/env/node (bundled), then a repo-local walk-up (dev-in-tree), then system node.
+# Resolve the Maru skills Node interpreter, most-specific first.
+# Honors $SKILL_NODE, then host-injected $MARU_SKILLS_ENV, then the canonical
+# ~/.maru/env/node (bundled), then a repo-local walk-up (dev-in-tree), then system node.
 find_env_node() {
     local c dir
     if [ -n "${SKILL_NODE:-}" ] && [ -x "${SKILL_NODE}" ]; then
         printf '%s\n' "$SKILL_NODE"; return 0
     fi
     for c in \
-        "${ANCHOR_SKILLS_ENV:+$ANCHOR_SKILLS_ENV/node/bin/node}" \
-        "$HOME/.anchor/env/node/bin/node"; do
+        "${MARU_SKILLS_ENV:+$MARU_SKILLS_ENV/node/bin/node}" \
+        "$HOME/.maru/env/node/bin/node"; do
         [ -n "$c" ] && [ -x "$c" ] && printf '%s\n' "$c" && return 0
     done
     dir="$SCRIPT_DIR"
@@ -44,7 +44,7 @@ find_env_node() {
 
 NODE_BIN="$(find_env_node || true)"
 if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
-    echo "[md2docx] node 없음. 'bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env' 실행" >&2
+    echo "[md2docx] node 없음. 'bash ~/.maru/skills/_builtin/envs/default/setup.sh --target ~/.maru/env' 실행" >&2
     exit 1
 fi
 
@@ -56,7 +56,7 @@ case "$NODE_BIN" in
         _ENV_ROOT="$(cd "$(dirname "$NODE_BIN")/../.." && pwd -P)"
         ;;
     *)
-        _ENV_ROOT="${ANCHOR_SKILLS_ENV:-$HOME/.anchor/env}"
+        _ENV_ROOT="${MARU_SKILLS_ENV:-$HOME/.maru/env}"
         echo "[md2docx] 번들 node 미발견, system node fallback: $NODE_BIN" >&2
         ;;
 esac
@@ -84,8 +84,8 @@ Features: YAML frontmatter, H1–H6(+부제), **bold**/_italic_/\`code\`/〔확�
   링크, 표(정렬·라벨셀·zebra), 중첩 불릿/번호, 체크리스트, 인용, 코드블록, 구분선.
   폰트: 맑은 고딕(eastAsia) + Calibri/Cambria. 머리말=제목, 바닥글=PAGE.
 
-런타임: Anchor env 번들 Node + docx npm (NODE_PATH=~/.anchor/env/node_modules).
-경로 기준: ~/.anchor/skills/md2docx/md2docx
+런타임: Maru env 번들 Node + docx npm (NODE_PATH=~/.maru/env/node_modules).
+경로 기준: ~/.maru/skills/md2docx/md2docx
 USAGE
     exit 0
 fi

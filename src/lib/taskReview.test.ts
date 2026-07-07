@@ -11,7 +11,7 @@ import {
 } from "./taskReview";
 
 describe("task review parsing", () => {
-  it("parses fenced anchor_task_review_v1 artifacts", () => {
+  it("parses fenced maru_task_review_v1 artifacts", () => {
     const artifact = parseTaskReviewArtifact(`
 logs
 \`\`\`json
@@ -117,7 +117,7 @@ describe("task review apply readiness", () => {
       afterContent: "",
     };
     const proposal = {
-      schemaVersion: "anchor_skill_proposal_v1",
+      schemaVersion: "maru_skill_proposal_v1",
       summary: "delete old task",
       files: [{ path: deleteFile.path, operation: "delete", content: null }],
       commands: [],
@@ -147,7 +147,7 @@ describe("task run step derivation", () => {
 
     const reviewing = deriveTaskRunSteps({
       missionStatus: "done",
-      logLines: ["produced anchor_task_review_v1"],
+      logLines: ["produced maru_task_review_v1"],
       reviewLoaded: true,
       checksComplete: false,
     });

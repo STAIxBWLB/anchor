@@ -1,6 +1,6 @@
 // M4 Export Pipeline (Phase 4 W8-W10).
 //
-// Markdown/structured source = SSOT. Anchor plans a deterministic output
+// Markdown/structured source = SSOT. Maru plans a deterministic output
 // bundle (`source.md` + `output.{docx,hwpx,pdf}` + `manifest.yaml`) under
 // a sibling directory of the source document. W10 dispatch runs deterministic
 // local converter commands from that manifest; later Studio/skill integrations

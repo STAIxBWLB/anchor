@@ -16,7 +16,7 @@ import {
 // `from "./meetingReview"` import sites keep working unchanged.
 export { extractProviderOutput, extractSkillProposal, rebuildSkillProposal, selectedProposalFileCount };
 
-export const MEETING_REVIEW_SCHEMA_VERSION = "anchor_meeting_review_v1";
+export const MEETING_REVIEW_SCHEMA_VERSION = "maru_meeting_review_v1";
 
 export type MeetingReviewCheckKind = "term" | "person" | "properNoun" | "uncertainty";
 export type MeetingReviewCheckStatus = "pending" | "accepted" | "edited" | "rejected";
@@ -147,11 +147,11 @@ export function deriveMeetingRunSteps({
     hasPhase(logLines, "draft") ||
     hasPhase(logLines, "proposal") ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_skill_proposal_v1|proposal\.created/i.test(line));
+    logLines.some((line) => /maru_skill_proposal_v1|proposal\.created/i.test(line));
   const hasReviewSignal =
     reviewLoaded ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_meeting_review_v1/i.test(line));
+    logLines.some((line) => /maru_meeting_review_v1/i.test(line));
 
   const runStatus: MeetingRunStepStatus = failed ? "error" : running ? "active" : "complete";
   const draftStatus: MeetingRunStepStatus = failed

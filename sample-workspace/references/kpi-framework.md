@@ -1,14 +1,14 @@
 ---
 type: Reference
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - KPI
   - 성과지표
 created_at: 2026-04-21T10:20:00+09:00
 updated_at: 2026-04-21T10:20:00+09:00
 ---
-# Anchor KPI 체계
+# Maru KPI 체계
 
 ## 정량 지표
 | 코드 | 지표명 | 단위 | 연간 목표 |

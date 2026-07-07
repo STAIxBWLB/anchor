@@ -5,7 +5,7 @@
 //
 // Spec: ~/workspace/work/_sys/rules/bu-lifecycle.md + plan §M1
 //
-// Cache: <workspace>/.anchor/cache/catalog.json (gitignored)
+// Cache: <workspace>/.maru/cache/catalog.json (gitignored)
 
 pub mod index;
 pub mod scan;
@@ -20,7 +20,7 @@ pub use scan::{scan_catalog_impl, CatalogScanReport};
 /// Operations Catalog 캐시 경로 헬퍼.
 pub(crate) fn catalog_cache_path(workspace_root: &std::path::Path) -> PathBuf {
     workspace_root
-        .join(".anchor")
+        .join(".maru")
         .join("cache")
         .join("catalog.json")
 }

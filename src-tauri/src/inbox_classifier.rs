@@ -16,7 +16,7 @@
 use crate::inbox::InboxDropItem;
 use serde::{Deserialize, Serialize};
 
-/// Categories anchor's inbox classifier emits. Frontend uses this to
+/// Categories maru's inbox classifier emits. Frontend uses this to
 /// drive folder routing + colour chips. Closed enum — anything Claude
 /// returns outside this set is normalised to `noise`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,13 +57,13 @@ pub struct Classification {
     pub category: String,
     /// One short Korean sentence describing the item.
     pub summary: String,
-    /// Vault-relative folder anchor should propose. `None` for "ask user".
+    /// Vault-relative folder maru should propose. `None` for "ask user".
     pub suggested_folder: Option<String>,
     /// Best-effort due date / event date in RFC3339, or `None`.
     pub extracted_date: Option<String>,
 }
 
-/// Build the prompt anchor sends to Claude for a single inbox file. The
+/// Build the prompt maru sends to Claude for a single inbox file. The
 /// instructions are deliberately strict: single-line JSON, no markdown
 /// fences, closed category set. Robust parsing on the other side picks
 /// up the slack when Claude wraps the JSON in fences anyway.
@@ -71,7 +71,7 @@ pub struct Classification {
 pub fn build_inbox_classification_prompt(item: InboxDropItem) -> String {
     let received_at = item.received_at.as_deref().unwrap_or("unknown");
     format!(
-        "You are anchor's inbox classifier. Classify the file below and return \
+        "You are maru's inbox classifier. Classify the file below and return \
 ONLY a single-line JSON object — no prose, no markdown fences.\n\n\
 File: {rel_path}\nSource: {source}\nSize: {size} bytes\nFilename: {title}\nReceivedAt: {received}\n\n\
 Return JSON with these keys:\n\

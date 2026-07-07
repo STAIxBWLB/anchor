@@ -6,7 +6,7 @@ export type MeetingSourceKind = "transcript" | "external";
 /**
  * Shared meeting-notes run contract. Both the Meetings workbench and the
  * generic Apply-skill dialog inject this so a tracked run reliably emits the
- * `anchor_skill_proposal_v1` + `anchor_meeting_review_v1` blocks that the
+ * `maru_skill_proposal_v1` + `maru_meeting_review_v1` blocks that the
  * review panel parses.
  */
 export function meetingNotesRunContract(): string[] {
@@ -15,8 +15,8 @@ export function meetingNotesRunContract(): string[] {
     "- Do not directly write files.",
     "- Emit concise human-readable progress logs while working.",
     "- Prefix major progress logs with phase markers: [phase:source], [phase:normalize], [phase:draft], [phase:proposal], [phase:review].",
-    "- Final output must include exactly one JSON object with schemaVersion \"anchor_skill_proposal_v1\".",
-    "- Final output must include exactly one JSON object with schemaVersion \"anchor_meeting_review_v1\".",
+    "- Final output must include exactly one JSON object with schemaVersion \"maru_skill_proposal_v1\".",
+    "- Final output must include exactly one JSON object with schemaVersion \"maru_meeting_review_v1\".",
     "- The review JSON must include summary, terms, people, properNouns, uncertainties, and followups.",
     "- Followups may include only vault-extract, vault-connect, and task-management.",
   ];
@@ -84,7 +84,7 @@ export function buildMeetingNotesPrompt({
 }
 
 const MEETING_REVIEW_CONTRACT_PATTERN =
-  /(?:schemaVersion\s+"anchor_meeting_review_v1"|"schemaVersion"\s*:\s*"anchor_meeting_review_v1")/;
+  /(?:schemaVersion\s+"maru_meeting_review_v1"|"schemaVersion"\s*:\s*"maru_meeting_review_v1")/;
 
 function carriesMeetingReviewContract(prompt: string): boolean {
   return MEETING_REVIEW_CONTRACT_PATTERN.test(prompt);

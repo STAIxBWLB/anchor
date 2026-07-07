@@ -60,7 +60,7 @@ describe("document index", () => {
       entry("c.md", { frontmatter: { type: "project" } }),
       entry("d.md"),
       entry("_sys/generated.md", { frontmatter: { type: "meeting" } }),
-      entry(".anchor/settings.md"),
+      entry(".maru/settings.md"),
     ]);
 
     expect(index.contentCount).toBe(4);

@@ -1,7 +1,7 @@
 use crate::document::{read_document, DocumentPayload};
 use crate::kordoc_lite::KordocLiteCheck;
 use crate::vault::{lexical_normalize, resolve_inside_vault};
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -191,7 +191,7 @@ pub fn studio_state_save(work_path: String, mut state: StudioState) -> Result<St
     } else {
         WorkspaceWriteAction::Create
     };
-    assert_anchor_can_write(&work_path, write_action)?;
+    assert_maru_can_write(&work_path, write_action)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create Studio state directory: {err}"))?;
@@ -208,7 +208,7 @@ pub fn studio_state_delete(
     work_path: String,
     #[allow(non_snake_case)] doc_id: String,
 ) -> Result<bool, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Delete)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Delete)?;
     let dir = state_dir(&work_path, &doc_id)?;
     if !dir.exists() {
         return Ok(false);
@@ -223,7 +223,7 @@ pub fn studio_apply_body(
     document_path: String,
     body_markdown: String,
 ) -> Result<DocumentPayload, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let path = resolve_inside_vault(&work_path, &document_path)?;
     if !path.is_file() {
         return Err("Document file does not exist".to_string());
@@ -236,7 +236,7 @@ pub fn studio_apply_body(
 }
 
 fn studio_root(work_path: &str) -> Result<PathBuf, String> {
-    resolve_inside_vault(work_path, ".anchor/studio")
+    resolve_inside_vault(work_path, ".maru/studio")
 }
 
 fn state_dir(work_path: &str, doc_id: &str) -> Result<PathBuf, String> {
@@ -287,7 +287,7 @@ fn validate_doc_id(doc_id: &str) -> Result<(), String> {
 fn ensure_within(parent: &Path, child: &Path) -> Result<(), String> {
     let normalized = lexical_normalize(child);
     if !normalized.starts_with(parent) {
-        return Err("Studio state path escapes .anchor/studio".to_string());
+        return Err("Studio state path escapes .maru/studio".to_string());
     }
     Ok(())
 }
@@ -423,7 +423,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let root = dir.path().to_string_lossy().to_string();
         studio_state_save(root.clone(), sample_state("good")).unwrap();
-        let bad_dir = dir.path().join(".anchor").join("studio").join("bad");
+        let bad_dir = dir.path().join(".maru").join("studio").join("bad");
         fs::create_dir_all(&bad_dir).unwrap();
         fs::write(bad_dir.join("state.json"), "{not valid json").unwrap();
 

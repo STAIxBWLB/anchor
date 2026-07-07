@@ -56,7 +56,7 @@ HWPX는 한/글(Hancom Office)의 **XML 기반 공식 포맷**이며, 2021년부
 | 검증 | `./hwpx validate <file.hwpx>` |
 | PDF 변환 | `./hwpx to-pdf <file.hwpx>` (기본 hwp-cli 네이티브 **텍스트 선택가능** PDF; `--engine soffice` 폴백) |
 
-경로 기준: `~/.anchor/skills/hwpx/hwpx`
+경로 기준: `~/.maru/skills/hwpx/hwpx`
 
 ## 한국 공문서 작성 규정 (핵심 cheat sheet)
 
@@ -204,7 +204,7 @@ stdin으로도 가능: `... | ./hwpx styled --preset gongmun --stdin-json -o out
 | `templates/사업계획서_기본.hwpx` | 9-section skeleton (개요/배경/목표/세부내용/일정/예산/효과/지표/붙임) |
 | `templates/회의록.hwpx` | 참석자/안건/논의/결정사항/후속조치/차기회의 |
 
-### 공통 anchor 명
+### 공통 maru 명
 
 모든 템플릿이 공유하는 placeholder (없는 템플릿은 무시됨):
 
@@ -215,7 +215,7 @@ stdin으로도 가능: `... | ./hwpx styled --preset gongmun --stdin-json -o out
 {{주소}} {{홈페이지}} {{전화}} {{팩스}} {{이메일}} {{공개구분}}
 ```
 
-템플릿별 추가 anchor는 템플릿 자체를 `./hwpx read`로 확인.
+템플릿별 추가 maru는 템플릿 자체를 `./hwpx read`로 확인.
 
 ### 사용 예
 
@@ -417,7 +417,7 @@ hwp edit legacy.hwp -o out.hwp --replace "구=>신"    # .hwp 직접 편집(hwp-
 | 채운 문서가 레퍼런스보다 쪽수 증가 | 본문이 원본 레이아웃 초과 | `./hwpx guard`로 드리프트 확인 → 본문 압축/조정 후 재빌드 |
 | 한글이 깨짐 | 생성 시 인코딩 | 입력 JSON/텍스트 UTF-8 확인 |
 | to-pdf `--engine soffice` 실패 | LibreOffice에 H2Orestart 미설치 | 확장 설치 후 `soffice --headless` 1회 실행으로 캐시 빌드. 또는 기본 엔진(hwp-cli, LibreOffice 불필요) 사용 |
-| render-pdf 빈/깨진 페이지 | 함초롬(HCR) 등 CJK 폰트 미해결 | `HWP_FONT_DIR=<폰트 디렉토리>` 지정 (`~/.anchor/env/fonts` 또는 `~/Library/Fonts`) |
+| render-pdf 빈/깨진 페이지 | 함초롬(HCR) 등 CJK 폰트 미해결 | `HWP_FONT_DIR=<폰트 디렉토리>` 지정 (`~/.maru/env/fonts` 또는 `~/Library/Fonts`) |
 | 관인(직인)이 안 찍힘 | 스킬은 관인 삽입 안 함 | 정상 동작 — e-결재 시스템(온나라/K-Office)이 발송 시 자동 삽입 |
 | `.hwp` 파일 읽기 | 바이너리 HWP | `./hwpx read`가 hwp-cli(`hwp cat`)에 자동 위임 (미발견 시 `cargo install --path crates/hwp-cli` 또는 `HWP_CLI` 지정). HWPX 작성·편집은 이 스킬 전용 |
 

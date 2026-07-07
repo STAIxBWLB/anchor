@@ -8,9 +8,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    if (window.sessionStorage.getItem("anchor:graph-e2e:storage-cleared") === "true") return;
+    if (window.sessionStorage.getItem("maru:graph-e2e:storage-cleared") === "true") return;
     window.localStorage.clear();
-    window.sessionStorage.setItem("anchor:graph-e2e:storage-cleared", "true");
+    window.sessionStorage.setItem("maru:graph-e2e:storage-cleared", "true");
   });
 });
 
@@ -41,7 +41,7 @@ test("enters graph mode, shows degraded hint, and renders the live graph", async
   await expect(page.getByTestId("graph-degraded-hint")).toBeVisible();
   await expect(page.getByTestId("graph-filter-panel")).toBeVisible();
 
-  // 2 resolved mock notes render as circles; the unresolved "[[Anchor
+  // 2 resolved mock notes render as circles; the unresolved "[[Maru
   // Project]]" ghost is hidden by default.
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.locator(".graph-node circle")).toHaveCount(2);
@@ -73,9 +73,9 @@ test("type filter narrows nodes and node click opens the note in pkm", async ({ 
   await expect(page.locator(".graph-node.focus circle")).toHaveCount(1);
 
   // Node click → pkm opens the note.
-  await page.locator('.graph-node circle[data-node-id="anchor-glossary"]').click();
+  await page.locator('.graph-node circle[data-node-id="maru-glossary"]').click();
   await expect(page.getByTestId("graph-mode")).toHaveCount(0);
-  await expect(page.getByText("Anchor 용어집").first()).toBeVisible();
+  await expect(page.getByText("Maru 용어집").first()).toBeVisible();
 
   expect(forbidden).toEqual([]);
 });
@@ -98,10 +98,10 @@ test("ghost node click seeds the note-creation dialog (F3b) and chain view toggl
   await page.getByLabel("미해소 링크 표시").check();
   await expect(page.locator(".graph-node.ghost circle")).toHaveCount(1);
   await page.locator(".graph-node.ghost circle").click();
-  const dialog = page.locator(".dialog-content", { hasText: "새 Anchor 문서" });
+  const dialog = page.locator(".dialog-content", { hasText: "새 Maru 문서" });
   await expect(dialog).toBeVisible();
   // Seeded with the unresolved wikilink target as the title prefill.
-  await expect(dialog.getByRole("textbox").first()).toHaveValue(/Anchor Project/i);
+  await expect(dialog.getByRole("textbox").first()).toHaveValue(/Maru Project/i);
 
   expect(forbidden).toEqual([]);
 });

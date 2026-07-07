@@ -74,7 +74,7 @@ When promoting a source summary into a vault note, copy source-derived fields in
 
 If required fields are missing, fail before writing. Do not synthesize blank or guessed values.
 
-**MOC enforcement on `topics`**: `topics` carries hub navigation only. Concept/keyword tags (e.g., `credit-recognition`, `partnership-mapping`, `duty-model`) belong in body text, not in `topics`. Skills must verify that each `[[target]]` in `topics` resolves to an existing note before promoting a summary to a vault note. If a needed MOC does not exist, create it first as a thin hub (`type: moc` + `description` + anchor wiki-link), or replace the offending entry with an existing MOC. Never silently copy unknown wiki-links from summary.md into vault notes.
+**MOC enforcement on `topics`**: `topics` carries hub navigation only. Concept/keyword tags (e.g., `credit-recognition`, `partnership-mapping`, `duty-model`) belong in body text, not in `topics`. Skills must verify that each `[[target]]` in `topics` resolves to an existing note before promoting a summary to a vault note. If a needed MOC does not exist, create it first as a thin hub (`type: moc` + `description` + maru wiki-link), or replace the offending entry with an existing MOC. Never silently copy unknown wiki-links from summary.md into vault notes.
 
 ## Project Registry Pattern
 

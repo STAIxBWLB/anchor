@@ -1,7 +1,7 @@
 ---
 type: Reference
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - 보고서
   - 개조식

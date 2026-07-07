@@ -114,7 +114,7 @@ export function deriveSkillRunPhase(
   if (options.reviewLoaded) return "review";
   if (
     formattedLines.some((line) =>
-      /anchor_skill_proposal_v1|proposal\.created|proposal ready|proposal/i.test(line.text),
+      /maru_skill_proposal_v1|proposal\.created|proposal ready|proposal/i.test(line.text),
     )
   ) {
     return "proposal";

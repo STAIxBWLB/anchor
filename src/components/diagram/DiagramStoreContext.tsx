@@ -35,7 +35,7 @@ interface WorkspaceDiagramContext {
   session: DiagramSession;
 }
 
-const DEFAULT_STORE_KEY = "__anchor-diagram-default__";
+const DEFAULT_STORE_KEY = "__maru-diagram-default__";
 const contexts = new Map<string, WorkspaceDiagramContext>();
 
 function normalizeStoreKey(key?: string | null): string {

@@ -1,20 +1,20 @@
-# Anchor / dotfiles-v2 Boundary
+# Maru / dotfiles-v2 Boundary
 
-Anchor owns skills and runtime federation. `dotfiles-v2` owns environment and
+Maru owns skills and runtime federation. `dotfiles-v2` owns environment and
 tool settings. This file mirrors the workspace policy in
 `~/workspace/work/_sys/rules/skills-ssot.md`.
 
-## Anchor Owns
+## Maru Owns
 
-- `~/.anchor/**`
-- `~/.anchor/skills/registry.json`
-- `~/.anchor/skills/_builtin`, `_sources`, `_managed`
-- `~/.anchor/env`
-- `~/.anchor/skills/<name>` runtime symlinks
+- `~/.maru/**`
+- `~/.maru/skills/registry.json`
+- `~/.maru/skills/_builtin`, `_sources`, `_managed`
+- `~/.maru/env`
+- `~/.maru/skills/<name>` runtime symlinks
 - `~/.claude/skills/<name>` and `~/.codex/skills/<name>` skill symlinks created
-  through Anchor install actions
+  through Maru install actions
 
-Anchor must not write:
+Maru must not write:
 
 - `~/.claude/CLAUDE.md`
 - `~/.claude/settings.json`
@@ -30,7 +30,7 @@ Anchor must not write:
 - read-only skill inventory reports
 
 `dotfiles-v2` must not write `~/.claude/skills/**`; that directory is the
-Anchor skill federation surface.
+Maru skill federation surface.
 
 ## Conflict Rule
 

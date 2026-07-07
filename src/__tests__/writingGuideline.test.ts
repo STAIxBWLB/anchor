@@ -22,18 +22,18 @@ describe("extractGuidelineIds", () => {
   });
 
   it("reads the provenance comment from the body", () => {
-    const body = "# Title\n\nsome content\n\n<!-- anchor:guidelines gdl_x, gdl_y -->\n";
+    const body = "# Title\n\nsome content\n\n<!-- maru:guidelines gdl_x, gdl_y -->\n";
     expect(extractGuidelineIds(body, null)).toEqual(["gdl_x", "gdl_y"]);
   });
 
   it("merges frontmatter and comment ids without duplicates", () => {
-    const body = "<!-- anchor:guidelines gdl_a, gdl_c -->";
+    const body = "<!-- maru:guidelines gdl_a, gdl_c -->";
     const ids = extractGuidelineIds(body, { guideline_ids: ["gdl_a", "gdl_b"] });
     expect(ids).toEqual(["gdl_a", "gdl_b", "gdl_c"]);
   });
 
   it("ignores empty pieces and trims whitespace", () => {
-    const body = "<!--   anchor:guidelines  gdl_a ,   ,gdl_b  -->";
+    const body = "<!--   maru:guidelines  gdl_a ,   ,gdl_b  -->";
     expect(extractGuidelineIds(body, null)).toEqual(["gdl_a", "gdl_b"]);
   });
 
@@ -49,7 +49,7 @@ describe("extractGuidelineIds", () => {
     // trailer (from W5) only contributes ids that aren't already in the
     // frontmatter list, so the frontmatter ordering wins.
     const body =
-      "# Doc\n\n<!-- anchor:guidelines gdl_a, gdl_b, gdl_c -->\n";
+      "# Doc\n\n<!-- maru:guidelines gdl_a, gdl_b, gdl_c -->\n";
     const ids = extractGuidelineIds(body, {
       guideline_ids: ["gdl_b", "gdl_d"],
     });

@@ -44,14 +44,14 @@ import {
 } from "../lib/api";
 import { clipboardReadText, clipboardWriteText } from "../lib/clipboard";
 import { useTranslation } from "../lib/i18n";
-import type { AnchorSettings, TerminalDock } from "../lib/settings";
+import type { MaruSettings, TerminalDock } from "../lib/settings";
 import { terminalShortcutActionForEvent } from "../lib/terminalShortcuts";
 import { NativeTerminalView, type NativeTerminalViewHandle } from "./NativeTerminalView";
 import {
   activeItemMention,
   buildAgentContextArgs,
   buildAgentResumeArgs,
-  buildAnchorContextEnv,
+  buildMaruContextEnv,
   createTerminalTab,
   createTerminalTask,
   describeActiveContextChip,
@@ -81,7 +81,7 @@ import {
 interface TerminalPanelProps {
   cwd: string | null;
   activeContext: ActiveTerminalContext;
-  settings: AnchorSettings;
+  settings: MaruSettings;
   launchRequest?: TerminalLaunchRequest | null;
   open: boolean;
   height: number;
@@ -462,7 +462,7 @@ export const TerminalPanel = memo(
         setError(null);
 
         try {
-          const contextEnv = buildAnchorContextEnv(activeContext, sessionId, injectContext);
+          const contextEnv = buildMaruContextEnv(activeContext, sessionId, injectContext);
           const contextArgs = buildAgentContextArgs(kind, activeContext, injectContext);
           await terminalSpawn(sessionId, kind, resolvedCwd, {
             command: request?.command ?? launcher.command ?? null,

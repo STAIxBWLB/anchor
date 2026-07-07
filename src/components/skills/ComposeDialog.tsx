@@ -611,14 +611,14 @@ function runtimeStatusState(
 
 function readLastSkillRuntime(): SkillDispatchRuntime | null {
   if (typeof window === "undefined") return null;
-  const value = window.localStorage.getItem("anchor:last-skill-runtime");
+  const value = window.localStorage.getItem("maru:last-skill-runtime");
   return value === "claude" || value === "codex" ? value : null;
 }
 
 function writeLastSkillRuntime(runtime: SkillDispatchRuntime) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem("anchor:last-skill-runtime", runtime);
+    window.localStorage.setItem("maru:last-skill-runtime", runtime);
   } catch {
     // Best-effort preference only.
   }

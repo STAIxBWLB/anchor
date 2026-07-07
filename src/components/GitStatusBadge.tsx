@@ -55,7 +55,7 @@ export function GitStatusBadge({ vaultPath, enabled, refreshTrigger, onCommitCli
     }
     poll();
     // Catch external state changes — user committing in a terminal,
-    // editing a file outside anchor, etc. Refresh whenever the window
+    // editing a file outside maru, etc. Refresh whenever the window
     // regains focus or visibility.
     function onVisible() {
       if (document.visibilityState === "visible") poll();

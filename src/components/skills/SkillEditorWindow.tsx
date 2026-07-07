@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Save, X } from "lucide-react";
 import {
-  listenAnchorSettingsUpdated,
-  readAnchorSettings,
-} from "../../lib/anchorDir";
+  listenMaruSettingsUpdated,
+  readMaruSettings,
+} from "../../lib/maruDir";
 import { LocaleContext, useLocaleState, useTranslation } from "../../lib/i18n";
 import {
-  DEFAULT_ANCHOR_SETTINGS,
-  normalizeAnchorSettings,
-  type AnchorSettings,
+  DEFAULT_MARU_SETTINGS,
+  normalizeMaruSettings,
+  type MaruSettings,
 } from "../../lib/settings";
 import {
   SKILL_EDITOR_OPEN_EVENT,
@@ -35,8 +35,8 @@ interface SkillEditorWindowRootProps {
 export function SkillEditorWindowRoot({ workPath, skillId }: SkillEditorWindowRootProps) {
   const localeValue = useLocaleState();
   const { t } = localeValue;
-  const [settings, setSettings] = useState<AnchorSettings>(() =>
-    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
+  const [settings, setSettings] = useState<MaruSettings>(() =>
+    normalizeMaruSettings(DEFAULT_MARU_SETTINGS),
   );
   const [error, setError] = useState<string | null>(null);
   const themeVars = useMemo(() => buildThemeVars(settings), [settings]);
@@ -49,10 +49,10 @@ export function SkillEditorWindowRoot({ workPath, skillId }: SkillEditorWindowRo
   useEffect(() => {
     let cancelled = false;
     if (!workPath) {
-      setSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+      setSettings(normalizeMaruSettings(DEFAULT_MARU_SETTINGS));
       return;
     }
-    void readAnchorSettings(workPath)
+    void readMaruSettings(workPath)
       .then((next) => {
         if (!cancelled) setSettings(next);
       })
@@ -66,11 +66,11 @@ export function SkillEditorWindowRoot({ workPath, skillId }: SkillEditorWindowRo
 
   useEffect(() => {
     let dispose: (() => void) | null = null;
-    void listenAnchorSettingsUpdated((payload) => {
+    void listenMaruSettingsUpdated((payload) => {
       if (payload.workPath === workPath) {
-        setSettings(normalizeAnchorSettings(payload.settings));
+        setSettings(normalizeMaruSettings(payload.settings));
       } else if (payload.globalChanged && workPath) {
-        void readAnchorSettings(workPath)
+        void readMaruSettings(workPath)
           .then((next) => setSettings(next))
           .catch((err) => setError(err instanceof Error ? err.message : String(err)));
       }

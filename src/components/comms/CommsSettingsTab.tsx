@@ -12,7 +12,7 @@ import {
   TELEGRAM_POLL_INTERVAL_MIN_SECONDS,
   type CommsSettings,
 } from "../../lib/settings";
-import { isTelegramMonitorConfigOutsideAnchor } from "../../lib/telegram";
+import { isTelegramMonitorConfigOutsideMaru } from "../../lib/telegram";
 import type { TelegramPollingStatus } from "../../lib/types";
 import { useTranslation } from "../../lib/i18n";
 import { AuthStatusBadge } from "./AuthStatusBadge";
@@ -78,7 +78,7 @@ export function CommsSettingsTab({
   const effectiveM365Path = effectiveSettings?.outlook.m365Path ?? null;
   const effectiveTelegramMonitorConfigPath =
     effectiveSettings?.telegram.monitorConfigPath ?? settings.telegram.monitorConfigPath ?? null;
-  const showTelegramMonitorConfigWarning = isTelegramMonitorConfigOutsideAnchor(
+  const showTelegramMonitorConfigWarning = isTelegramMonitorConfigOutsideMaru(
     effectiveTelegramMonitorConfigPath,
   );
 
@@ -296,8 +296,8 @@ export function CommsSettingsTab({
             className="path-input"
             value={settings.telegram.sessionFile ?? ""}
             onChange={(event) => updateTelegram({ sessionFile: event.target.value || null })}
-            placeholder="~/.anchor/telegram/monitor.session"
-            title={settings.telegram.sessionFile ?? "~/.anchor/telegram/monitor.session"}
+            placeholder="~/.maru/telegram/monitor.session"
+            title={settings.telegram.sessionFile ?? "~/.maru/telegram/monitor.session"}
             spellCheck={false}
           />
         </label>
@@ -309,12 +309,12 @@ export function CommsSettingsTab({
             onChange={(event) => updateTelegram({ monitorConfigPath: event.target.value || null })}
             placeholder={
               effectiveSettings?.telegram.monitorConfigPath ??
-              "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"
+              "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml"
             }
             title={
               settings.telegram.monitorConfigPath ??
               effectiveSettings?.telegram.monitorConfigPath ??
-              "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"
+              "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml"
             }
             spellCheck={false}
           />
@@ -326,9 +326,9 @@ export function CommsSettingsTab({
           <div className="comms-setup-banner warn">
             <AlertTriangle size={14} />
             <div>
-              <strong>{t("comms.telegram.monitorConfigOutsideAnchor")}</strong>
+              <strong>{t("comms.telegram.monitorConfigOutsideMaru")}</strong>
               <p>
-                {t("comms.telegram.monitorConfigOutsideAnchorDetail", {
+                {t("comms.telegram.monitorConfigOutsideMaruDetail", {
                   path: effectiveTelegramMonitorConfigPath ?? "",
                 })}
               </p>
@@ -356,8 +356,8 @@ export function CommsSettingsTab({
             className="path-input"
             value={settings.telegram.pythonPath ?? ""}
             onChange={(event) => updateTelegram({ pythonPath: event.target.value || null })}
-            placeholder="~/.anchor/env/.venv/bin/python"
-            title={settings.telegram.pythonPath ?? "~/.anchor/env/.venv/bin/python"}
+            placeholder="~/.maru/env/.venv/bin/python"
+            title={settings.telegram.pythonPath ?? "~/.maru/env/.venv/bin/python"}
             spellCheck={false}
           />
         </label>
@@ -367,10 +367,10 @@ export function CommsSettingsTab({
             className="path-input"
             value={settings.telegram.scriptPath ?? ""}
             onChange={(event) => updateTelegram({ scriptPath: event.target.value || null })}
-            placeholder="~/.anchor/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py"
+            placeholder="~/.maru/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py"
             title={
               settings.telegram.scriptPath ??
-              "~/.anchor/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py"
+              "~/.maru/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py"
             }
             spellCheck={false}
           />

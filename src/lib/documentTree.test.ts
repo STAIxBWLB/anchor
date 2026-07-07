@@ -79,10 +79,10 @@ describe("collectDocumentTreeFolderPaths", () => {
       collectDocumentTreeFolderPaths([
         entry("projects/rise/plan.md"),
         entry("admin/a.md"),
-        entry("projects/anchor/readme.md"),
+        entry("projects/maru/readme.md"),
         entry("root.md"),
       ]),
-    ).toEqual(["admin", "projects", "projects/anchor", "projects/rise"]);
+    ).toEqual(["admin", "projects", "projects/maru", "projects/rise"]);
   });
 });
 

@@ -40,7 +40,7 @@ skill is provider-neutral and does not require inbox staging.
    hook, fall back to normalizing against the local guides only.
 4. Draft the note using `templates/meeting-note.md`. Fill the frontmatter
    `title` with a human-readable meeting title so the display name does not
-   depend on the filename alone — Anchor resolves the shown label as
+   depend on the filename alone — Maru resolves the shown label as
    `title -> name -> filename` and also reads `date`, `type`, `topic`, `tags`,
    and `attendees` from frontmatter. Keep the configured filename policy. When
    enrichment resolved them, also set the additive cross-link fields per the
@@ -50,7 +50,7 @@ skill is provider-neutral and does not require inbox staging.
    a guessed link). Structure action items as `{assignee, task, due}` rather
    than bare checkboxes so they can seed pre-filled task candidates.
 5. Propose filing it under the configured meeting root, usually
-   `YYYY/YYYY-MM/`; Anchor applies the write only after user approval. The
+   `YYYY/YYYY-MM/`; Maru applies the write only after user approval. The
    meeting root holds the **canonical** note. When a partner/project also needs a
    copy or reference, place it in that project's meeting subfolder per
    `_sys/rules/folder-placement.md` (e.g. the partner's `*-meetings/` or
@@ -62,32 +62,32 @@ skill is provider-neutral and does not require inbox staging.
    to its origin (context-enrichment §4). Do not write vault notes directly;
    follow-ups are proposals only.
 
-## Anchor Run Contract
+## Maru Run Contract
 
-When Anchor runs this skill in background/review mode:
+When Maru runs this skill in background/review mode:
 
 1. Emit concise human-readable progress logs while working. Prefix major
-   progress logs with stable phase markers so Anchor can render stepwise
+   progress logs with stable phase markers so Maru can render stepwise
    status:
    - `[phase:source]` after source text/files are identified.
    - `[phase:normalize]` while applying guides, glossary, people, and naming
      conventions.
    - `[phase:draft]` while drafting the meeting note.
-   - `[phase:proposal]` when preparing the `anchor_skill_proposal_v1` block.
-   - `[phase:review]` when preparing the `anchor_meeting_review_v1` block.
+   - `[phase:proposal]` when preparing the `maru_skill_proposal_v1` block.
+   - `[phase:review]` when preparing the `maru_meeting_review_v1` block.
    - Always include exactly one phase marker per line and keep that marker
      at the start of the line (after the timestamp) so the run-card parser
      and Activity panel can colour-code each phase reliably.
    - For errors, prepend `ERROR:` to the message or use `[phase:error]` so
      the UI can surface them in red.
 2. Do not directly write files, update the vault, or run follow-up skills.
-3. Return one `anchor_skill_proposal_v1` JSON object with the meeting note file
+3. Return one `maru_skill_proposal_v1` JSON object with the meeting note file
    write proposal.
-4. Return one `anchor_meeting_review_v1` JSON object for user confirmation:
+4. Return one `maru_meeting_review_v1` JSON object for user confirmation:
 
 ```json
 {
-  "schemaVersion": "anchor_meeting_review_v1",
+  "schemaVersion": "maru_meeting_review_v1",
   "summary": "short review summary",
   "terms": [
     { "label": "source term", "normalized": "workspace term", "note": "why", "required": true }
@@ -130,7 +130,7 @@ Allowed follow-up skills are `vault-extract`, `vault-connect`, and
 `enrichment` object and the `assignee`/`due`/`meetingSourcePath` follow-up
 fields are additive and optional — populate them only from resolved enrichment
 (context-enrichment §3/§4) and omit or null them otherwise. Parsers ignore
-unknown fields, so existing `anchor_meeting_review_v1` consumers are unaffected.
+unknown fields, so existing `maru_meeting_review_v1` consumers are unaffected.
 
 ## Rules
 

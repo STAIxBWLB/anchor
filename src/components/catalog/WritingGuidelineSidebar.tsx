@@ -4,7 +4,7 @@
 //   1. Frontmatter `guideline_ids: [...]` (snake_case, accepts camelCase
 //      fallback) — this is the canonical source after Phase 4 W7's
 //      create_document frontmatter prefill.
-//   2. Legacy `<!-- anchor:guidelines gdl_... -->` provenance comment for
+//   2. Legacy `<!-- maru:guidelines gdl_... -->` provenance comment for
 //      documents created by the Phase 3 W5 implementation, before W7
 //      promoted the metadata to frontmatter.
 // Frontmatter IDs always come first; comment IDs are appended only if
@@ -26,7 +26,7 @@ interface LoadState {
   guidelines: Guideline[];
 }
 
-const PROVENANCE_RE = /<!--\s*anchor:guidelines\s+([^>]+?)\s*-->/i;
+const PROVENANCE_RE = /<!--\s*maru:guidelines\s+([^>]+?)\s*-->/i;
 
 export function extractGuidelineIds(
   documentBody: string,

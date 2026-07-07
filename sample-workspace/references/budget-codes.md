@@ -1,14 +1,14 @@
 ---
 type: Reference
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - 예산
   - 집행률
 created_at: 2026-04-21T10:30:00+09:00
 updated_at: 2026-04-21T10:30:00+09:00
 ---
-# Anchor 예산 과목 코드
+# Maru 예산 과목 코드
 
 ## 연구활동비
 | 코드 | 과목명 | 점검 포인트 |

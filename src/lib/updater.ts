@@ -1,7 +1,7 @@
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 
-export const CHECK_FOR_UPDATES_MENU_EVENT = "anchor://check-for-updates";
+export const CHECK_FOR_UPDATES_MENU_EVENT = "maru://check-for-updates";
 
 declare global {
   interface Window {

@@ -23,7 +23,7 @@ export function SpecialCharsPicker({ open, onInsert, onClose }: SpecialCharsPick
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-specialchars-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-specialchars-dialog">
           <div className="dialog-header">
             <Dialog.Title>{t("diagram.specialChars.heading")}</Dialog.Title>
             <Dialog.Close asChild>
@@ -37,11 +37,11 @@ export function SpecialCharsPicker({ open, onInsert, onClose }: SpecialCharsPick
               </button>
             </Dialog.Close>
           </div>
-          <p className="anchor-diagram-specialchars-hint">{t("diagram.specialChars.hint")}</p>
-          <div className="anchor-diagram-specialchars-groups">
+          <p className="maru-diagram-specialchars-hint">{t("diagram.specialChars.hint")}</p>
+          <div className="maru-diagram-specialchars-groups">
             {GROUPS.map((group) => (
-              <div key={group.key} className="anchor-diagram-specialchars-group">
-                <div className="anchor-diagram-specialchars-grid">
+              <div key={group.key} className="maru-diagram-specialchars-group">
+                <div className="maru-diagram-specialchars-grid">
                   {group.chars.map((ch, i) => (
                     <button
                       key={`${group.key}-${i}`}

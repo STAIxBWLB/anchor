@@ -5,7 +5,7 @@
 //! the safety rules in `studio/mod.rs` and the workspace write-allow guard.
 //!
 use crate::vault::{lexical_normalize, resolve_inside_vault};
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,7 +114,7 @@ pub fn diagram_save_document(workspace: String, name: String, body: String) -> R
     } else {
         WorkspaceWriteAction::Create
     };
-    assert_anchor_can_write(&workspace, action)?;
+    assert_maru_can_write(&workspace, action)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create diagrams folder: {err}"))?;
@@ -180,7 +180,7 @@ pub fn diagram_delete_document(workspace: String, name: String) -> Result<bool, 
     if !path.is_file() {
         return Ok(false);
     }
-    assert_anchor_can_write(&workspace, WorkspaceWriteAction::Delete)?;
+    assert_maru_can_write(&workspace, WorkspaceWriteAction::Delete)?;
     fs::remove_file(&path).map_err(|err| format!("Cannot delete diagram: {err}"))?;
     Ok(true)
 }
@@ -248,7 +248,7 @@ pub fn diagram_export_blob(
     } else {
         WorkspaceWriteAction::Create
     };
-    assert_anchor_can_write(&workspace, action)?;
+    assert_maru_can_write(&workspace, action)?;
     if let Some(parent) = candidate.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create diagrams folder: {err}"))?;
@@ -278,7 +278,7 @@ pub fn diagram_export_blob_to_path(
 // Version-history snapshots
 // ---------------------------------------------------------------------------
 
-const SNAPSHOT_DIR: &str = ".anchor/diagrams/history";
+const SNAPSHOT_DIR: &str = ".maru/diagrams/history";
 const SNAPSHOT_CAP: usize = 20;
 
 fn validate_doc_id(doc_id: &str) -> Result<&str, String> {
@@ -320,7 +320,7 @@ pub fn diagram_save_snapshot(
 ) -> Result<SnapshotMeta, String> {
     let dir = snapshot_dir(&workspace, &doc_id)?;
     let path = snapshot_file(&workspace, &doc_id, &snapshot_ts)?;
-    assert_anchor_can_write(
+    assert_maru_can_write(
         &workspace,
         if path.is_file() {
             WorkspaceWriteAction::Modify
@@ -437,8 +437,8 @@ mod tests {
     fn setup_workspace() -> (TempDir, String) {
         let tmp = TempDir::new().expect("tempdir");
         let work = tmp.path().to_string_lossy().to_string();
-        // create .anchor folder so resolve_inside_vault treats it as a workspace
-        fs::create_dir_all(tmp.path().join(".anchor")).expect("anchor dir");
+        // create .maru folder so resolve_inside_vault treats it as a workspace
+        fs::create_dir_all(tmp.path().join(".maru")).expect("maru dir");
         (tmp, work)
     }
 

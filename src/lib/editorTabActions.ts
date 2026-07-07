@@ -63,15 +63,15 @@ export function orderTabsById<T extends EditorTabLike>(tabs: T[], order: string[
 export function nextFallbackTabIdAfterClose<T extends EditorTabLike>(
   tabs: T[],
   closingIds: Set<string> | string[],
-  anchorId: string,
+  maruId: string,
 ): string | null {
   const closeSet = Array.isArray(closingIds) ? new Set(closingIds) : closingIds;
-  const anchorIndex = tabs.findIndex((tab) => tab.id === anchorId);
+  const maruIndex = tabs.findIndex((tab) => tab.id === maruId);
   const remaining = tabs.filter((tab) => !closeSet.has(tab.id));
   if (remaining.length === 0) return null;
-  if (anchorIndex < 0) return remaining[remaining.length - 1]?.id ?? null;
+  if (maruIndex < 0) return remaining[remaining.length - 1]?.id ?? null;
   const leftRemainingCount = tabs
-    .slice(0, anchorIndex)
+    .slice(0, maruIndex)
     .filter((tab) => !closeSet.has(tab.id)).length;
   return remaining[Math.min(leftRemainingCount, remaining.length - 1)]?.id ?? null;
 }

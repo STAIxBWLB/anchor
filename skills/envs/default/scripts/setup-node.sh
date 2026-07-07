@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup-node.sh — install a bundled Node.js LTS runtime for Anchor skills.
+# setup-node.sh — install a bundled Node.js LTS runtime for Maru skills.
 #
 # Used by the md2docx skill (docx-js) and any skill needing a known-good Node
 # runtime independent of the host's fnm/nvm/system node. The bundled `docx`
@@ -9,7 +9,7 @@
 #   2. Else download the latest Node ${NODE_MAJOR}.x LTS from nodejs.org for the
 #      current OS/arch (filename resolved from the official SHASUMS manifest).
 #
-# Output: ~/.anchor/env/node/bin/node when called by setup.sh --target ~/.anchor/env.
+# Output: ~/.maru/env/node/bin/node when called by setup.sh --target ~/.maru/env.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

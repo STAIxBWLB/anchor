@@ -22,13 +22,13 @@ use crate::win_process::NoWindow;
 
 const REGISTRY_VERSION: u32 = 2;
 const REGISTRY_FILE: &str = "registry.json";
-const BUILTIN_SOURCE_ID: &str = "anchor-builtin";
+const BUILTIN_SOURCE_ID: &str = "maru-builtin";
 const BUILTIN_DIR_NAME: &str = "_builtin";
-const BUILTIN_HASHES_FILE: &str = ".anchor-builtin-hashes.json";
-const MANAGED_SOURCE_ID: &str = "anchor-managed";
-const IMPORTED_SOURCE_ID: &str = "anchor-imported";
+const BUILTIN_HASHES_FILE: &str = ".maru-builtin-hashes.json";
+const MANAGED_SOURCE_ID: &str = "maru-managed";
+const IMPORTED_SOURCE_ID: &str = "maru-imported";
 const STAI_PUBLIC_SOURCE_ID: &str = "stai-public";
-const INSTALL_MARKER_FILE: &str = ".anchor-install.json";
+const INSTALL_MARKER_FILE: &str = ".maru-install.json";
 
 static BUILTIN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills");
 
@@ -123,7 +123,7 @@ pub struct SkillDocument {
 #[serde(rename_all = "camelCase")]
 pub struct InstallOutcome {
     pub install: SkillInstall,
-    pub anchor_entrypoint: String,
+    pub maru_entrypoint: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,11 +157,11 @@ pub struct SyncAllOutcome {
 }
 
 /// Provenance marker written into a copy-mode install directory
-/// (`<tool>/skills/<name>/.anchor-install.json`).
+/// (`<tool>/skills/<name>/.maru-install.json`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InstallMarker {
-    anchor_managed: bool,
+    maru_managed: bool,
     skill_id: String,
     installed_as: String,
     mode: String,
@@ -226,7 +226,7 @@ pub struct ImportOutcome {
     pub skill: SkillRecord,
     pub mode: String,
     pub imported_path: String,
-    pub anchor_entrypoint: String,
+    pub maru_entrypoint: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -837,21 +837,21 @@ pub fn skills_install_skill(
     let skill_path = PathBuf::from(&skill.abs_path);
     let tool_target = install_target_path(&target, &installed_as)?;
 
-    // entrypoint_path: for symlink installs it is the anchor entry that the tool
-    // target points at; for copy installs there is no anchor entry, so it records
-    // the source skill dir (origin, for drift comparison). anchor_entrypoint is the
+    // entrypoint_path: for symlink installs it is the maru entry that the tool
+    // target points at; for copy installs there is no maru entry, so it records
+    // the source skill dir (origin, for drift comparison). maru_entrypoint is the
     // path surfaced to the UI.
-    let (entrypoint_path, anchor_entrypoint) = if mode == "copy" {
+    let (entrypoint_path, maru_entrypoint) = if mode == "copy" {
         install_copy(&tool_target, &skill_path, &skill_id, &installed_as)?;
         (
             host_fs::display_path(&skill_path),
             host_fs::display_path(&tool_target),
         )
     } else {
-        let anchor_entry = host_fs::skills_root()?.join(&installed_as);
-        create_anchor_entry_symlink(&anchor_entry, &skill_path, &installed_as)?;
-        create_install_target_symlink(&tool_target, &anchor_entry, &skill_path, &installed_as)?;
-        let display = host_fs::display_path(&anchor_entry);
+        let maru_entry = host_fs::skills_root()?.join(&installed_as);
+        create_maru_entry_symlink(&maru_entry, &skill_path, &installed_as)?;
+        create_install_target_symlink(&tool_target, &maru_entry, &skill_path, &installed_as)?;
+        let display = host_fs::display_path(&maru_entry);
         (display.clone(), display)
     };
 
@@ -859,7 +859,7 @@ pub fn skills_install_skill(
         skill_id,
         target: target.clone(),
         installed_as,
-        managed_by: "anchor".to_string(),
+        managed_by: "maru".to_string(),
         entrypoint_path,
         target_path: host_fs::display_path(&tool_target),
         mode: mode.clone(),
@@ -872,7 +872,7 @@ pub fn skills_install_skill(
     save_registry_unlocked(&registry)?;
     Ok(InstallOutcome {
         install,
-        anchor_entrypoint,
+        maru_entrypoint,
     })
 }
 
@@ -888,14 +888,14 @@ pub fn skills_uninstall_skill(target: String, installed_as: String) -> Result<()
         .find(|install| install.target == target && install.installed_as == installed_as)
         .cloned()
         .ok_or_else(|| "install_not_registered".to_string())?;
-    if install.managed_by != "anchor" {
+    if install.managed_by != "maru" {
         return Err("external_install_not_removed".to_string());
     }
     if install.mode == "copy" {
         let tool_target = PathBuf::from(&install.target_path);
         // Refuse to delete anything that is not unambiguously our own copy.
-        if !copy_install_is_anchor_managed(&tool_target, &installed_as) {
-            return Err("install_not_anchor_managed".to_string());
+        if !copy_install_is_maru_managed(&tool_target, &installed_as) {
+            return Err("install_not_maru_managed".to_string());
         }
         fs::remove_dir_all(&tool_target).map_err(|err| {
             format!(
@@ -905,8 +905,8 @@ pub fn skills_uninstall_skill(target: String, installed_as: String) -> Result<()
         })?;
     } else {
         let tool_target = PathBuf::from(&install.target_path);
-        let anchor_entry = PathBuf::from(&install.entrypoint_path);
-        let removed_target = host_fs::remove_if_matching_symlink(&tool_target, &anchor_entry)?;
+        let maru_entry = PathBuf::from(&install.entrypoint_path);
+        let removed_target = host_fs::remove_if_matching_symlink(&tool_target, &maru_entry)?;
         if !removed_target {
             return Err(format!(
                 "install_target_changed: {} no longer points to {}",
@@ -924,7 +924,7 @@ pub fn skills_uninstall_skill(target: String, installed_as: String) -> Result<()
                 .find(|skill| skill.id == install.skill_id)
                 .map(|skill| PathBuf::from(&skill.abs_path));
             if let Some(skill_target) = skill_target {
-                let _ = host_fs::remove_if_matching_symlink(&anchor_entry, &skill_target);
+                let _ = host_fs::remove_if_matching_symlink(&maru_entry, &skill_target);
             }
         }
     }
@@ -974,10 +974,10 @@ fn skills_adopt_external_links_impl(
             let raw_target = match host_fs::read_link_target(&link_path) {
                 Some(raw_target) => raw_target,
                 None => {
-                    // Not a symlink. If it is an Anchor-managed copy install that
+                    // Not a symlink. If it is an Maru-managed copy install that
                     // fell out of the registry, re-register it; otherwise leave the
                     // user's directory untouched.
-                    if copy_install_is_anchor_managed(&link_path, &installed_as) {
+                    if copy_install_is_maru_managed(&link_path, &installed_as) {
                         if registry.installs.iter().any(|install| {
                             install.target == target && install.installed_as == installed_as
                         }) {
@@ -995,7 +995,7 @@ fn skills_adopt_external_links_impl(
                                 .unwrap_or_default(),
                             target: target.to_string(),
                             installed_as: installed_as.clone(),
-                            managed_by: "anchor".to_string(),
+                            managed_by: "maru".to_string(),
                             entrypoint_path: marker
                                 .as_ref()
                                 .and_then(|m| m.source_abs_path.clone())
@@ -1425,14 +1425,14 @@ pub fn skills_import_external(
         .into_iter()
         .find(|skill| skill.name == name)
         .ok_or_else(|| "imported_skill_scan_failed".to_string())?;
-    let anchor_entry = host_fs::skills_root()?.join(&name);
-    create_anchor_entry_symlink(&anchor_entry, Path::new(&skill.abs_path), &name)?;
+    let maru_entry = host_fs::skills_root()?.join(&name);
+    create_maru_entry_symlink(&maru_entry, Path::new(&skill.abs_path), &name)?;
     save_registry_unlocked(&registry)?;
     Ok(ImportOutcome {
         skill,
         mode,
         imported_path: host_fs::display_path(&imported_skill),
-        anchor_entrypoint: host_fs::display_path(&anchor_entry),
+        maru_entrypoint: host_fs::display_path(&maru_entry),
     })
 }
 
@@ -1453,9 +1453,9 @@ pub fn skills_import_unmanage(
         .find(|skill| skill.source_id == IMPORTED_SOURCE_ID && skill.name == name)
         .cloned()
         .ok_or_else(|| format!("unknown_imported_skill: {name}"))?;
-    let anchor_entry = host_fs::skills_root()?.join(&name);
+    let maru_entry = host_fs::skills_root()?.join(&name);
     let removed_entrypoint =
-        host_fs::remove_if_matching_symlink(&anchor_entry, Path::new(&skill.abs_path))?;
+        host_fs::remove_if_matching_symlink(&maru_entry, Path::new(&skill.abs_path))?;
     let mut removed_installs = 0;
     let installs = std::mem::take(&mut registry.installs);
     registry.installs = installs
@@ -1465,19 +1465,19 @@ pub fn skills_import_unmanage(
                 return true;
             }
             removed_installs += 1;
-            if install.managed_by == "anchor" {
+            if install.managed_by == "maru" {
                 if install.mode == "copy" {
                     // Copy installs are real directories, not symlinks; remove the
-                    // directory (gated on our marker so we never delete a dir Anchor
+                    // directory (gated on our marker so we never delete a dir Maru
                     // did not create), matching skills_uninstall_skill.
                     let tool_target = Path::new(&install.target_path);
-                    if copy_install_is_anchor_managed(tool_target, &install.installed_as) {
+                    if copy_install_is_maru_managed(tool_target, &install.installed_as) {
                         let _ = fs::remove_dir_all(tool_target);
                     }
                 } else {
                     let _ = host_fs::remove_if_matching_symlink(
                         Path::new(&install.target_path),
-                        &anchor_entry,
+                        &maru_entry,
                     );
                 }
             }
@@ -1645,7 +1645,7 @@ fn mark_skill_saved(registry: &mut SkillsRegistry, skill_id: &str) -> Result<(),
 }
 
 fn default_reconcile_message(name: &str) -> String {
-    format!("anchor: reconcile {name}")
+    format!("maru: reconcile {name}")
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1808,7 +1808,7 @@ fn install_links_are_intact(install: &SkillInstall) -> bool {
 /// real (non-symlink) directory carrying our provenance marker.
 fn install_present(install: &SkillInstall) -> bool {
     if install.mode == "copy" {
-        copy_install_is_anchor_managed(Path::new(&install.target_path), &install.installed_as)
+        copy_install_is_maru_managed(Path::new(&install.target_path), &install.installed_as)
     } else {
         install_links_are_intact(install)
     }
@@ -1829,8 +1829,8 @@ fn read_install_marker(dir: &Path) -> Option<InstallMarker> {
     serde_json::from_slice::<InstallMarker>(&data).ok()
 }
 
-/// Write the `.anchor-install.json` provenance marker into a copied skill dir.
-/// The marker is the only reliable signal that Anchor created a real directory
+/// Write the `.maru-install.json` provenance marker into a copied skill dir.
+/// The marker is the only reliable signal that Maru created a real directory
 /// under a tool's skills root — it gates every destructive copy-mode operation.
 fn write_install_marker(
     dir: &Path,
@@ -1839,7 +1839,7 @@ fn write_install_marker(
     source: &Path,
 ) -> Result<(), String> {
     let marker = InstallMarker {
-        anchor_managed: true,
+        maru_managed: true,
         skill_id: skill_id.to_string(),
         installed_as: installed_as.to_string(),
         mode: "copy".to_string(),
@@ -1851,23 +1851,23 @@ fn write_install_marker(
 }
 
 /// True only when `dir` is a real directory (NOT a symlink) bearing our
-/// `.anchor-install.json` marker for this `installed_as`. Any uncertainty
+/// `.maru-install.json` marker for this `installed_as`. Any uncertainty
 /// (missing dir, symlink, absent/foreign marker) returns false so callers
-/// never delete a directory Anchor did not create.
-fn copy_install_is_anchor_managed(dir: &Path, installed_as: &str) -> bool {
+/// never delete a directory Maru did not create.
+fn copy_install_is_maru_managed(dir: &Path, installed_as: &str) -> bool {
     if is_symlink_path(dir) || !dir.is_dir() {
         return false;
     }
     read_install_marker(dir)
         .map(|marker| {
-            marker.anchor_managed && marker.mode == "copy" && marker.installed_as == installed_as
+            marker.maru_managed && marker.mode == "copy" && marker.installed_as == installed_as
         })
         .unwrap_or(false)
 }
 
 /// Copy a skill directory directly into a tool target as a self-contained,
-/// real directory (no symlink, no anchor entry) and drop the provenance
-/// marker. Refuses to overwrite anything Anchor did not create.
+/// real directory (no symlink, no maru entry) and drop the provenance
+/// marker. Refuses to overwrite anything Maru did not create.
 fn install_copy(
     tool_target: &Path,
     skill_path: &Path,
@@ -1881,7 +1881,7 @@ fn install_copy(
         ));
     }
     if tool_target.exists() {
-        if copy_install_is_anchor_managed(tool_target, installed_as) {
+        if copy_install_is_maru_managed(tool_target, installed_as) {
             fs::remove_dir_all(tool_target).map_err(|err| {
                 format!(
                     "Cannot replace existing install {}: {err}",
@@ -1890,7 +1890,7 @@ fn install_copy(
             })?;
         } else {
             return Err(format!(
-                "install_target_exists: {} already exists and is not Anchor-managed",
+                "install_target_exists: {} already exists and is not Maru-managed",
                 host_fs::display_path(tool_target)
             ));
         }
@@ -1899,45 +1899,45 @@ fn install_copy(
     write_install_marker(tool_target, skill_id, installed_as, skill_path)
 }
 
-fn create_anchor_entry_symlink(
-    anchor_entry: &Path,
+fn create_maru_entry_symlink(
+    maru_entry: &Path,
     skill_path: &Path,
     installed_as: &str,
 ) -> Result<(), String> {
-    if !anchor_entry.exists() && fs::symlink_metadata(anchor_entry).is_err() {
-        return host_fs::create_symlink_no_clobber(anchor_entry, skill_path);
+    if !maru_entry.exists() && fs::symlink_metadata(maru_entry).is_err() {
+        return host_fs::create_symlink_no_clobber(maru_entry, skill_path);
     }
-    if symlink_target_path_equals(anchor_entry, skill_path)
-        || symlink_target_resolves_to(anchor_entry, skill_path)
+    if symlink_target_path_equals(maru_entry, skill_path)
+        || symlink_target_resolves_to(maru_entry, skill_path)
     {
         return Ok(());
     }
-    if symlink_target_is_skill_named(anchor_entry, installed_as) {
-        fs::remove_file(anchor_entry).map_err(|err| {
+    if symlink_target_is_skill_named(maru_entry, installed_as) {
+        fs::remove_file(maru_entry).map_err(|err| {
             format!(
-                "Cannot replace existing Anchor skill link {}: {err}",
-                host_fs::display_path(anchor_entry)
+                "Cannot replace existing Maru skill link {}: {err}",
+                host_fs::display_path(maru_entry)
             )
         })?;
-        return host_fs::create_symlink_no_clobber(anchor_entry, skill_path);
+        return host_fs::create_symlink_no_clobber(maru_entry, skill_path);
     }
     Err(format!(
         "install_target_exists: {} already exists and does not point to {}",
-        host_fs::display_path(anchor_entry),
+        host_fs::display_path(maru_entry),
         host_fs::display_path(skill_path)
     ))
 }
 
 fn create_install_target_symlink(
     tool_target: &Path,
-    anchor_entry: &Path,
+    maru_entry: &Path,
     skill_path: &Path,
     installed_as: &str,
 ) -> Result<(), String> {
     if !tool_target.exists() && fs::symlink_metadata(tool_target).is_err() {
-        return host_fs::create_symlink_no_clobber(tool_target, anchor_entry);
+        return host_fs::create_symlink_no_clobber(tool_target, maru_entry);
     }
-    if symlink_target_path_equals(tool_target, anchor_entry) {
+    if symlink_target_path_equals(tool_target, maru_entry) {
         return Ok(());
     }
     if symlink_target_resolves_to(tool_target, skill_path) {
@@ -1947,7 +1947,7 @@ fn create_install_target_symlink(
                 host_fs::display_path(tool_target)
             )
         })?;
-        return host_fs::create_symlink_no_clobber(tool_target, anchor_entry);
+        return host_fs::create_symlink_no_clobber(tool_target, maru_entry);
     }
     if symlink_target_is_skill_named(tool_target, installed_as) {
         fs::remove_file(tool_target).map_err(|err| {
@@ -1956,12 +1956,12 @@ fn create_install_target_symlink(
                 host_fs::display_path(tool_target)
             )
         })?;
-        return host_fs::create_symlink_no_clobber(tool_target, anchor_entry);
+        return host_fs::create_symlink_no_clobber(tool_target, maru_entry);
     }
     Err(format!(
         "install_target_exists: {} already exists and does not point to {}",
         host_fs::display_path(tool_target),
-        host_fs::display_path(anchor_entry)
+        host_fs::display_path(maru_entry)
     ))
 }
 
@@ -2007,7 +2007,7 @@ fn registry_guard() -> Result<MutexGuard<'static, ()>, String> {
 }
 
 fn startup_profile_enabled() -> bool {
-    std::env::var("ANCHOR_STARTUP_PROFILE")
+    std::env::var("MARU_STARTUP_PROFILE")
         .map(|value| {
             let value = value.trim();
             value == "1" || value.eq_ignore_ascii_case("true")
@@ -2026,7 +2026,7 @@ fn profile_timing_result<T, E>(
     let started = Instant::now();
     let result = work();
     eprintln!(
-        "[anchor-startup] {name}: {:.2}ms",
+        "[maru-startup] {name}: {:.2}ms",
         started.elapsed().as_secs_f64() * 1000.0
     );
     result
@@ -2103,7 +2103,7 @@ pub fn env_vars_for_runs() -> Result<BTreeMap<String, String>, String> {
     let node_modules = env_root.join("node_modules");
     let mut vars = BTreeMap::new();
     vars.insert(
-        "ANCHOR_SKILLS_ENV".to_string(),
+        "MARU_SKILLS_ENV".to_string(),
         host_fs::display_path(&env_root),
     );
     vars.insert(
@@ -2412,7 +2412,7 @@ fn migrate_stai_public_source(registry: &mut SkillsRegistry) -> Result<(), Strin
         };
         let builtin_skill = builtin_root.join("skills").join(&name);
         if builtin_skill.join("SKILL.md").is_file() {
-            repoint_anchor_entry_if_matching_old_target(install, &old_skill_paths, &builtin_skill)?;
+            repoint_maru_entry_if_matching_old_target(install, &old_skill_paths, &builtin_skill)?;
             install.skill_id = format!("{BUILTIN_SOURCE_ID}::{name}");
             continue;
         }
@@ -2430,7 +2430,7 @@ fn migrate_stai_public_source(registry: &mut SkillsRegistry) -> Result<(), Strin
         let managed_name = unique_managed_skill_name(&name)?;
         let managed_root = host_fs::skills_root()?.join("_managed").join(&managed_name);
         copy_dir_all(&old_path, &managed_root)?;
-        repoint_anchor_entry(install, &old_path, &managed_root)?;
+        repoint_maru_entry(install, &old_path, &managed_root)?;
         install.skill_id = format!("{MANAGED_SOURCE_ID}::{managed_name}");
         needs_managed_rescan = true;
     }
@@ -2460,7 +2460,7 @@ fn resolve_install_entrypoint_target(install: &SkillInstall) -> Option<PathBuf> 
     host_fs::read_link_target(&entry).map(|target| resolve_link_target(&entry, target))
 }
 
-fn repoint_anchor_entry_if_matching_old_target(
+fn repoint_maru_entry_if_matching_old_target(
     install: &SkillInstall,
     old_skill_paths: &BTreeMap<String, PathBuf>,
     new_target: &Path,
@@ -2475,10 +2475,10 @@ fn repoint_anchor_entry_if_matching_old_target(
     else {
         return Ok(());
     };
-    repoint_anchor_entry(install, &old_target, new_target)
+    repoint_maru_entry(install, &old_target, new_target)
 }
 
-fn repoint_anchor_entry(
+fn repoint_maru_entry(
     install: &SkillInstall,
     old_target: &Path,
     new_target: &Path,
@@ -2898,7 +2898,7 @@ fn build_doctor_report(registry: &SkillsRegistry) -> SkillDoctorReport {
         if !install_present(install) {
             let message = if install.mode == "copy" {
                 format!(
-                    "{} copy install is missing or not Anchor-managed",
+                    "{} copy install is missing or not Maru-managed",
                     install.target_path
                 )
             } else {
@@ -3087,7 +3087,7 @@ fn validate_skill_frontmatter(content: &str, meta: &BTreeMap<String, YamlValue>)
         match schema {
             YamlValue::Number(number) if number.as_i64() == Some(1) => {}
             YamlValue::String(value)
-                if value == "anchor_skill_frontmatter_v1"
+                if value == "maru_skill_frontmatter_v1"
                     || value == "agent_os_skill_frontmatter_v1" => {}
             _ => errors.push("schema_version_unsupported".to_string()),
         }
@@ -3536,7 +3536,7 @@ mod tests {
     // Field order is load-bearing: Rust drops fields in declaration order, so
     // `_guard` MUST be last. That keeps the home lock held until AFTER the env
     // var is restored and the TempDir is removed, so the next test never starts
-    // (and never observes/mutates the process-global ANCHOR_TEST_HOME) while
+    // (and never observes/mutates the process-global MARU_TEST_HOME) while
     // this one is still cleaning up. (Matches e2e_flow::tests::TestHome.)
     struct TestHome {
         _dir: TempDir,
@@ -3547,18 +3547,18 @@ mod tests {
     impl Drop for TestHome {
         fn drop(&mut self) {
             if let Some(previous) = self.previous.as_ref() {
-                std::env::set_var("ANCHOR_TEST_HOME", previous);
+                std::env::set_var("MARU_TEST_HOME", previous);
             } else {
-                std::env::remove_var("ANCHOR_TEST_HOME");
+                std::env::remove_var("MARU_TEST_HOME");
             }
         }
     }
 
     fn test_home() -> TestHome {
-        let guard = host_fs::test_anchor_home_lock();
+        let guard = host_fs::test_maru_home_lock();
         let dir = TempDir::new().unwrap();
-        let previous = std::env::var_os("ANCHOR_TEST_HOME");
-        std::env::set_var("ANCHOR_TEST_HOME", dir.path());
+        let previous = std::env::var_os("MARU_TEST_HOME");
+        std::env::set_var("MARU_TEST_HOME", dir.path());
         TestHome {
             _dir: dir,
             previous,
@@ -3573,12 +3573,12 @@ mod tests {
     #[test]
     fn env_vars_for_runs_exposes_python_and_node_runtime_paths() {
         let home = test_home();
-        let env_root = home._dir.path().join(".anchor").join("env");
+        let env_root = home._dir.path().join(".maru").join("env");
 
         let vars = env_vars_for_runs().unwrap();
 
         assert_eq!(
-            vars.get("ANCHOR_SKILLS_ENV").unwrap(),
+            vars.get("MARU_SKILLS_ENV").unwrap(),
             &path_string(&env_root)
         );
         assert_eq!(
@@ -3823,7 +3823,7 @@ mod tests {
         let private_root = home
             ._dir
             .path()
-            .join(".anchor")
+            .join(".maru")
             .join("skills")
             .join("_sources")
             .join("skills-private");
@@ -3944,14 +3944,14 @@ mod tests {
         let repo = home
             ._dir
             .path()
-            .join(".anchor")
+            .join(".maru")
             .join("skills")
             .join("_sources")
             .join("skills-public");
         let skill = write_skill(&repo, "git-skill");
         run_git(&repo, &["init"]).unwrap();
-        run_git(&repo, &["config", "user.email", "anchor@example.invalid"]).unwrap();
-        run_git(&repo, &["config", "user.name", "Anchor Test"]).unwrap();
+        run_git(&repo, &["config", "user.email", "maru@example.invalid"]).unwrap();
+        run_git(&repo, &["config", "user.name", "Maru Test"]).unwrap();
         run_git(&repo, &["add", "."]).unwrap();
         run_git(&repo, &["commit", "-m", "initial"]).unwrap();
         skills_add_source(
@@ -4056,7 +4056,7 @@ mod tests {
         .unwrap();
         let tool_target = install_target_path("claude", "imp-copy").unwrap();
         assert!(tool_target.is_dir());
-        assert!(read_install_marker(&tool_target).unwrap().anchor_managed);
+        assert!(read_install_marker(&tool_target).unwrap().maru_managed);
 
         let removed = skills_import_unmanage(None, "imp-copy".to_string(), Some(true)).unwrap();
         assert_eq!(removed.removed_installs, 1);
@@ -4120,20 +4120,20 @@ mod tests {
         write_workspace_config(work.path(), public_root.path(), private_root.path());
         let work_path = path_string(work.path());
         let skill_target = links.path().join("skill-alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         let tool_target = links.path().join("tool-alpha");
         fs::create_dir_all(&skill_target).unwrap();
         fs::write(skill_target.join("SKILL.md"), "# alpha\n").unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &skill_target).unwrap();
-        host_fs::create_symlink_no_clobber(&tool_target, &anchor_entry).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &skill_target).unwrap();
+        host_fs::create_symlink_no_clobber(&tool_target, &maru_entry).unwrap();
 
         let mut registry = SkillsRegistry::default();
         registry.installs.push(SkillInstall {
             skill_id: "stai-public:alpha".to_string(),
             target: "claude".to_string(),
             installed_as: "alpha".to_string(),
-            managed_by: "anchor".to_string(),
-            entrypoint_path: path_string(&anchor_entry),
+            managed_by: "maru".to_string(),
+            entrypoint_path: path_string(&maru_entry),
             target_path: path_string(&tool_target),
             mode: "symlink".to_string(),
             created_at: None,
@@ -4142,8 +4142,8 @@ mod tests {
             skill_id: "stai-public:stale".to_string(),
             target: "codex".to_string(),
             installed_as: "stale".to_string(),
-            managed_by: "anchor".to_string(),
-            entrypoint_path: path_string(&links.path().join("missing-anchor")),
+            managed_by: "maru".to_string(),
+            entrypoint_path: path_string(&links.path().join("missing-maru")),
             target_path: path_string(&links.path().join("missing-tool")),
             mode: "symlink".to_string(),
             created_at: None,
@@ -4155,7 +4155,7 @@ mod tests {
         let registry = load_registry().unwrap();
         assert_eq!(registry.installs.len(), 1);
         assert_eq!(registry.installs[0].installed_as, "alpha");
-        assert_eq!(registry.installs[0].managed_by, "anchor");
+        assert_eq!(registry.installs[0].managed_by, "maru");
         assert!(registry.installs[0].skill_id.starts_with(MANAGED_SOURCE_ID));
     }
 
@@ -4163,18 +4163,18 @@ mod tests {
     fn install_target_symlink_repoints_existing_direct_skill_link() {
         let links = TempDir::new().unwrap();
         let skill_target = links.path().join("skill-alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         let tool_target = links.path().join("tool-alpha");
         fs::create_dir_all(&skill_target).unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &skill_target).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &skill_target).unwrap();
         host_fs::create_symlink_no_clobber(&tool_target, &skill_target).unwrap();
 
-        create_install_target_symlink(&tool_target, &anchor_entry, &skill_target, "skill-alpha")
+        create_install_target_symlink(&tool_target, &maru_entry, &skill_target, "skill-alpha")
             .unwrap();
 
         assert_eq!(
             host_fs::read_link_target(&tool_target).as_deref(),
-            Some(anchor_entry.as_path())
+            Some(maru_entry.as_path())
         );
     }
 
@@ -4182,17 +4182,17 @@ mod tests {
     fn install_target_symlink_rejects_unrelated_existing_link() {
         let links = TempDir::new().unwrap();
         let skill_target = links.path().join("skill-alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         let tool_target = links.path().join("tool-alpha");
         let unrelated = links.path().join("unrelated");
         fs::create_dir_all(&skill_target).unwrap();
         fs::create_dir_all(&unrelated).unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &skill_target).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &skill_target).unwrap();
         host_fs::create_symlink_no_clobber(&tool_target, &unrelated).unwrap();
 
         let error = create_install_target_symlink(
             &tool_target,
-            &anchor_entry,
+            &maru_entry,
             &skill_target,
             "skill-alpha",
         )
@@ -4210,60 +4210,60 @@ mod tests {
         let links = TempDir::new().unwrap();
         let old_skill = links.path().join("old").join("alpha");
         let new_skill = links.path().join("new").join("alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         let tool_target = links.path().join("tool-alpha");
         fs::create_dir_all(&old_skill).unwrap();
         fs::create_dir_all(&new_skill).unwrap();
         fs::write(old_skill.join("SKILL.md"), "# old\n").unwrap();
         fs::write(new_skill.join("SKILL.md"), "# new\n").unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &new_skill).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &new_skill).unwrap();
         host_fs::create_symlink_no_clobber(&tool_target, &old_skill).unwrap();
 
-        create_install_target_symlink(&tool_target, &anchor_entry, &new_skill, "alpha").unwrap();
+        create_install_target_symlink(&tool_target, &maru_entry, &new_skill, "alpha").unwrap();
 
         assert_eq!(
             host_fs::read_link_target(&tool_target).as_deref(),
-            Some(anchor_entry.as_path())
+            Some(maru_entry.as_path())
         );
     }
 
     #[test]
-    fn anchor_entry_symlink_repoints_existing_same_named_skill_link() {
+    fn maru_entry_symlink_repoints_existing_same_named_skill_link() {
         let links = TempDir::new().unwrap();
         let old_skill = links.path().join("alpha");
         let new_skill = links.path().join("new").join("alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         fs::create_dir_all(&old_skill).unwrap();
         fs::create_dir_all(&new_skill).unwrap();
         fs::write(old_skill.join("SKILL.md"), "# old\n").unwrap();
         fs::write(new_skill.join("SKILL.md"), "# new\n").unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &old_skill).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &old_skill).unwrap();
 
-        create_anchor_entry_symlink(&anchor_entry, &new_skill, "alpha").unwrap();
+        create_maru_entry_symlink(&maru_entry, &new_skill, "alpha").unwrap();
 
         assert_eq!(
-            host_fs::read_link_target(&anchor_entry).as_deref(),
+            host_fs::read_link_target(&maru_entry).as_deref(),
             Some(new_skill.as_path())
         );
     }
 
     #[test]
-    fn anchor_entry_symlink_rejects_different_named_skill_link() {
+    fn maru_entry_symlink_rejects_different_named_skill_link() {
         let links = TempDir::new().unwrap();
         let old_skill = links.path().join("other");
         let new_skill = links.path().join("alpha");
-        let anchor_entry = links.path().join("anchor-alpha");
+        let maru_entry = links.path().join("maru-alpha");
         fs::create_dir_all(&old_skill).unwrap();
         fs::create_dir_all(&new_skill).unwrap();
         fs::write(old_skill.join("SKILL.md"), "# old\n").unwrap();
         fs::write(new_skill.join("SKILL.md"), "# new\n").unwrap();
-        host_fs::create_symlink_no_clobber(&anchor_entry, &old_skill).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &old_skill).unwrap();
 
-        let error = create_anchor_entry_symlink(&anchor_entry, &new_skill, "alpha").unwrap_err();
+        let error = create_maru_entry_symlink(&maru_entry, &new_skill, "alpha").unwrap_err();
 
         assert!(error.contains("install_target_exists"));
         assert_eq!(
-            host_fs::read_link_target(&anchor_entry).as_deref(),
+            host_fs::read_link_target(&maru_entry).as_deref(),
             Some(old_skill.as_path())
         );
     }
@@ -4417,10 +4417,10 @@ mod tests {
         let public_root = TempDir::new().unwrap();
         let old_skill = write_skill(public_root.path(), "gaejosik");
         let links = TempDir::new().unwrap();
-        let anchor_entry = host_fs::skills_root().unwrap().join("gaejosik");
+        let maru_entry = host_fs::skills_root().unwrap().join("gaejosik");
         let tool_target = links.path().join("gaejosik");
-        host_fs::create_symlink_no_clobber(&anchor_entry, &old_skill).unwrap();
-        host_fs::create_symlink_no_clobber(&tool_target, &anchor_entry).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &old_skill).unwrap();
+        host_fs::create_symlink_no_clobber(&tool_target, &maru_entry).unwrap();
 
         let mut registry = SkillsRegistry::default();
         registry.sources.push(SkillSource {
@@ -4454,8 +4454,8 @@ mod tests {
             skill_id: "stai-public::gaejosik".to_string(),
             target: "claude".to_string(),
             installed_as: "gaejosik".to_string(),
-            managed_by: "anchor".to_string(),
-            entrypoint_path: path_string(&anchor_entry),
+            managed_by: "maru".to_string(),
+            entrypoint_path: path_string(&maru_entry),
             target_path: path_string(&tool_target),
             mode: "symlink".to_string(),
             created_at: None,
@@ -4469,8 +4469,8 @@ mod tests {
         assert!(registry
             .removed_source_ids
             .contains(&STAI_PUBLIC_SOURCE_ID.to_string()));
-        assert_eq!(registry.installs[0].skill_id, "anchor-builtin::gaejosik");
-        assert!(host_fs::read_link_target(&anchor_entry)
+        assert_eq!(registry.installs[0].skill_id, "maru-builtin::gaejosik");
+        assert!(host_fs::read_link_target(&maru_entry)
             .unwrap()
             .ends_with(Path::new("_builtin/skills/gaejosik")));
     }
@@ -4481,10 +4481,10 @@ mod tests {
         let public_root = TempDir::new().unwrap();
         let old_skill = write_skill(public_root.path(), "design-a11y");
         let links = TempDir::new().unwrap();
-        let anchor_entry = host_fs::skills_root().unwrap().join("design-a11y");
+        let maru_entry = host_fs::skills_root().unwrap().join("design-a11y");
         let tool_target = links.path().join("design-a11y");
-        host_fs::create_symlink_no_clobber(&anchor_entry, &old_skill).unwrap();
-        host_fs::create_symlink_no_clobber(&tool_target, &anchor_entry).unwrap();
+        host_fs::create_symlink_no_clobber(&maru_entry, &old_skill).unwrap();
+        host_fs::create_symlink_no_clobber(&tool_target, &maru_entry).unwrap();
 
         let mut registry = SkillsRegistry::default();
         registry.sources.push(SkillSource {
@@ -4518,8 +4518,8 @@ mod tests {
             skill_id: "stai-public::design-a11y".to_string(),
             target: "claude".to_string(),
             installed_as: "design-a11y".to_string(),
-            managed_by: "anchor".to_string(),
-            entrypoint_path: path_string(&anchor_entry),
+            managed_by: "maru".to_string(),
+            entrypoint_path: path_string(&maru_entry),
             target_path: path_string(&tool_target),
             mode: "symlink".to_string(),
             created_at: None,
@@ -4529,12 +4529,12 @@ mod tests {
         skills_list_sources(None).unwrap();
 
         let registry = load_registry().unwrap();
-        assert_eq!(registry.installs[0].skill_id, "anchor-managed::design-a11y");
+        assert_eq!(registry.installs[0].skill_id, "maru-managed::design-a11y");
         assert!(registry
             .skills
             .iter()
-            .any(|skill| skill.id == "anchor-managed::design-a11y"));
-        assert!(host_fs::read_link_target(&anchor_entry)
+            .any(|skill| skill.id == "maru-managed::design-a11y"));
+        assert!(host_fs::read_link_target(&maru_entry)
             .unwrap()
             .ends_with(Path::new("_managed/design-a11y")));
     }
@@ -4545,7 +4545,7 @@ mod tests {
         let skills = skills_list_skills(None, Some(true)).unwrap();
         let skill = skills
             .into_iter()
-            .find(|skill| skill.id == "anchor-builtin::gaejosik")
+            .find(|skill| skill.id == "maru-builtin::gaejosik")
             .unwrap();
 
         let content = fs::read_to_string(Path::new(&skill.abs_path).join("SKILL.md")).unwrap();
@@ -4554,7 +4554,7 @@ mod tests {
             skills_save_skill_file(skill.id, "SKILL.md".to_string(), updated.clone()).unwrap();
 
         assert!(saved.dirty);
-        let doc = skills_read_skill("anchor-builtin::gaejosik".to_string()).unwrap();
+        let doc = skills_read_skill("maru-builtin::gaejosik".to_string()).unwrap();
         assert_eq!(doc.content, updated);
     }
 
@@ -4564,13 +4564,13 @@ mod tests {
         skills_list_skills(None, Some(true)).unwrap();
 
         let created = skills_save_skill_as(
-            "anchor-builtin::gaejosik".to_string(),
+            "maru-builtin::gaejosik".to_string(),
             "gaejosik-copy".to_string(),
             "# copied\n".to_string(),
         )
         .unwrap();
 
-        assert_eq!(created.id, "anchor-managed::gaejosik-copy");
+        assert_eq!(created.id, "maru-managed::gaejosik-copy");
         assert!(!created.dirty);
         let doc = skills_read_skill(created.id).unwrap();
         assert_eq!(doc.content, "# copied\n");
@@ -4590,10 +4590,10 @@ mod tests {
     fn serde_default_install_mode_is_symlink() {
         // Registry entries written before the `mode` field existed must load as symlink.
         let json = r#"{
-            "skillId": "anchor-managed::x",
+            "skillId": "maru-managed::x",
             "target": "claude",
             "installedAs": "x",
-            "managedBy": "anchor",
+            "managedBy": "maru",
             "entrypointPath": "/tmp/a",
             "targetPath": "/tmp/b"
         }"#;
@@ -4613,7 +4613,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(outcome.install.mode, "copy");
-        assert_eq!(outcome.install.managed_by, "anchor");
+        assert_eq!(outcome.install.managed_by, "maru");
 
         let tool_target = install_target_path("claude", "copytest").unwrap();
         let meta = fs::symlink_metadata(&tool_target).unwrap();
@@ -4622,13 +4622,13 @@ mod tests {
         assert!(tool_target.join("SKILL.md").is_file());
 
         let marker = read_install_marker(&tool_target).unwrap();
-        assert!(marker.anchor_managed);
+        assert!(marker.maru_managed);
         assert_eq!(marker.mode, "copy");
         assert_eq!(marker.installed_as, "copytest");
 
-        // copy installs create no anchor entry symlink
-        let anchor_entry = host_fs::skills_root().unwrap().join("copytest");
-        assert!(host_fs::read_link_target(&anchor_entry).is_none());
+        // copy installs create no maru entry symlink
+        let maru_entry = host_fs::skills_root().unwrap().join("copytest");
+        assert!(host_fs::read_link_target(&maru_entry).is_none());
 
         let registry = load_registry().unwrap();
         assert!(registry
@@ -4645,12 +4645,12 @@ mod tests {
         assert_eq!(outcome.install.mode, "symlink");
 
         let tool_target = install_target_path("claude", "linktest").unwrap();
-        let anchor_entry = host_fs::skills_root().unwrap().join("linktest");
+        let maru_entry = host_fs::skills_root().unwrap().join("linktest");
         assert_eq!(
             host_fs::read_link_target(&tool_target).as_deref(),
-            Some(anchor_entry.as_path())
+            Some(maru_entry.as_path())
         );
-        assert!(host_fs::read_link_target(&anchor_entry).is_some());
+        assert!(host_fs::read_link_target(&maru_entry).is_some());
     }
 
     #[test]
@@ -4679,16 +4679,16 @@ mod tests {
     #[test]
     fn uninstall_copy_refuses_unmarked_dir() {
         let _home = test_home();
-        // A user-authored directory (no Anchor marker) sitting at the tool target.
+        // A user-authored directory (no Maru marker) sitting at the tool target.
         let tool_target = install_target_path("claude", "userdir").unwrap();
         host_fs::ensure_dir(&tool_target).unwrap();
         fs::write(tool_target.join("SKILL.md"), "# user\n").unwrap();
         let mut registry = SkillsRegistry::default();
         registry.installs.push(SkillInstall {
-            skill_id: "anchor-managed::userdir".to_string(),
+            skill_id: "maru-managed::userdir".to_string(),
             target: "claude".to_string(),
             installed_as: "userdir".to_string(),
-            managed_by: "anchor".to_string(),
+            managed_by: "maru".to_string(),
             entrypoint_path: path_string(&tool_target),
             target_path: path_string(&tool_target),
             mode: "copy".to_string(),
@@ -4697,7 +4697,7 @@ mod tests {
         save_registry_unlocked(&registry).unwrap();
 
         let err = skills_uninstall_skill("claude".to_string(), "userdir".to_string()).unwrap_err();
-        assert_eq!(err, "install_not_anchor_managed");
+        assert_eq!(err, "install_not_maru_managed");
         // The user's directory must survive.
         assert!(tool_target.join("SKILL.md").is_file());
     }
@@ -4724,7 +4724,7 @@ mod tests {
         assert_eq!(outcome.install.mode, "copy");
         let tool_target = install_target_path("claude", "reinstall").unwrap();
         assert!(tool_target.join("SKILL.md").is_file());
-        assert!(read_install_marker(&tool_target).unwrap().anchor_managed);
+        assert!(read_install_marker(&tool_target).unwrap().maru_managed);
     }
 
     #[test]

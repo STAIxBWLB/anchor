@@ -43,7 +43,7 @@ Global Design Settings
 - Layout principles
   - Asymmetry over symmetry. One element commands the slide; everything else recedes.
   - Strong baseline grid; deliberate white space; never centered just for safety.
-  - Use thin horizontal/vertical rules in blood orange to anchor sections.
+  - Use thin horizontal/vertical rules in blood orange to maru sections.
   - Mix scale aggressively: 8pt label next to 200pt headline.
 
 Slide Patterns (use a mix across the deck)

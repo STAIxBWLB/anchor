@@ -1,6 +1,6 @@
-# Anchor Integration Contract
+# Maru Integration Contract
 
-Anchor can treat the configured task root as a local-first data source.
+Maru can treat the configured task root as a local-first data source.
 
 ## Directories
 
@@ -27,9 +27,9 @@ tasks/
 
 ## App Fields
 
-Anchor should display these when present:
+Maru should display these when present:
 
-- `title` — display name. Anchor resolves the shown label as
+- `title` — display name. Maru resolves the shown label as
   `title -> name -> filename`, so notes without a `title` fall back to their
   raw filename. A workspace-wide label mode (`title` / `filename` / both)
   controls whether the UI shows the title, the filename, or both together.
@@ -43,6 +43,6 @@ Anchor should display these when present:
 
 ## Write Behavior
 
-Anchor should update the markdown file first, then let an agent or explicit
+Maru should update the markdown file first, then let an agent or explicit
 integration action update Google services. The file remains the local source of
 truth.

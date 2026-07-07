@@ -22,7 +22,7 @@ import { RichMarkdownEditor } from "../RichMarkdownEditor";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import { useTranslation } from "../../lib/i18n";
 import {
-  defaultAnchorDocType,
+  defaultMaruDocType,
   fetchGuidelines,
   fetchTemplate,
   fetchTemplates,
@@ -404,7 +404,7 @@ export function StudioMode({
         },
         source: {
           ...prev.source,
-          docType: defaultAnchorDocType(template),
+          docType: defaultMaruDocType(template),
         },
         bodyDraft: renderTemplateBody(full, t("studio.template.slotHint")),
       }));

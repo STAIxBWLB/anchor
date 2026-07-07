@@ -31,7 +31,7 @@ Key Visuals
 Color Palette
 - Base: white (#FFFFFF) or light-gray dot-pattern background
 - Main pop colors: vivid pink (#FF3DA0), cyan (#3DD9FF), purple (#9D4DFF) — neon-sign inspired
-- Accent: black, used for text, outlines, and to anchor the pop colors
+- Accent: black, used for text, outlines, and to maru the pop colors
 - Chart colors: gradient-filled bars (e.g., green → yellow, cyan → purple)
 
 Typography

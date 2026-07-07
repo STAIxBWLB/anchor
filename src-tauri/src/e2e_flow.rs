@@ -6,13 +6,13 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::agent_host::event_store::append_run_event_payload;
-use crate::anchor_dir::{ensure_anchor_dir, read_anchor_template, save_anchor_template};
+use crate::maru_dir::{ensure_maru_dir, read_maru_template, save_maru_template};
 use crate::skill_host::{skills_create_skill, skills_list_skills, skills_save_skill_file};
 use crate::vault::normalize_existing_dir;
 
-const SCHEMA_VERSION: &str = "anchor_e2e_development_plan_v1";
-const SAMPLE_SKILL_NAME: &str = "anchor-e2e-sample";
-const TEMPLATE_NAME: &str = "anchor-e2e-report-template";
+const SCHEMA_VERSION: &str = "maru_e2e_development_plan_v1";
+const SAMPLE_SKILL_NAME: &str = "maru-e2e-sample";
+const TEMPLATE_NAME: &str = "maru-e2e-report-template";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,13 +164,13 @@ pub struct E2EFlowTimingGate {
 }
 
 #[tauri::command]
-pub fn anchor_e2e_run(
+pub fn maru_e2e_run(
     work_path: String,
     baseline_average_ms: Option<f64>,
 ) -> Result<E2EFlowRun, String> {
     let total_start = Instant::now();
     let work = normalize_existing_dir(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let baseline_average_ms = baseline_average_ms.unwrap_or(4019.88);
 
     let sample_start = Instant::now();
@@ -178,21 +178,21 @@ pub fn anchor_e2e_run(
     let sample_load_ms = elapsed_ms(sample_start);
 
     let skill_start = Instant::now();
-    let run_id = format!("anchor-e2e-{}", Utc::now().timestamp_millis());
+    let run_id = format!("maru-e2e-{}", Utc::now().timestamp_millis());
     let skill_id = ensure_sample_skill(&work_path)?;
     append_run_event_payload(
         &work_path,
         &run_id,
         "run.started",
-        "anchor-e2e",
+        "maru-e2e",
         json!({
             "dispatch": {
                 "skillId": skill_id,
                 "skillName": SAMPLE_SKILL_NAME,
                 "runtime": "fixture",
                 "cwd": work_path,
-                "prompt": "Generate deterministic Anchor E2E report and slides.",
-                "context": [{ "path": "anchor-weekly-meeting.md", "kind": "sample" }]
+                "prompt": "Generate deterministic Maru E2E report and slides.",
+                "context": [{ "path": "maru-weekly-meeting.md", "kind": "sample" }]
             }
         }),
     )?;
@@ -200,8 +200,8 @@ pub fn anchor_e2e_run(
         &work_path,
         &run_id,
         "llm.fixture.completed",
-        "anchor-e2e",
-        json!({ "providerBoundary": true, "fixture": "anchor-e2e-flow-v1" }),
+        "maru-e2e",
+        json!({ "providerBoundary": true, "fixture": "maru-e2e-flow-v1" }),
     )?;
     let skill_lifecycle_ms = elapsed_ms(skill_start);
 
@@ -228,8 +228,8 @@ pub fn anchor_e2e_run(
             requery_ms: 0.0,
         },
     };
-    let storage_rel = format!(".anchor/e2e-runs/{run_id}");
-    let storage_dir = work.join(".anchor").join("e2e-runs").join(&run_id);
+    let storage_rel = format!(".maru/e2e-runs/{run_id}");
+    let storage_dir = work.join(".maru").join("e2e-runs").join(&run_id);
     fs::create_dir_all(&storage_dir)
         .map_err(|err| format!("Cannot create E2E artifact directory: {err}"))?;
     let local_storage_result = E2EFlowLocalStorageResult {
@@ -280,7 +280,7 @@ pub fn anchor_e2e_run(
         &work_path,
         &run_id,
         "proposal.created",
-        "anchor-e2e",
+        "maru-e2e",
         json!({
             "summary": "Deterministic E2E artifacts saved locally",
             "artifacts": ["metadata.json", "report.md", "slides.html", "todos.json", "timings.json"]
@@ -297,10 +297,10 @@ pub fn anchor_e2e_run(
 }
 
 #[tauri::command]
-pub fn anchor_e2e_read(work_path: String, run_id: String) -> Result<E2EFlowRun, String> {
+pub fn maru_e2e_read(work_path: String, run_id: String) -> Result<E2EFlowRun, String> {
     let work = normalize_existing_dir(&work_path)?;
     validate_run_id(&run_id)?;
-    let storage_dir = work.join(".anchor").join("e2e-runs").join(&run_id);
+    let storage_dir = work.join(".maru").join("e2e-runs").join(&run_id);
     let metadata: E2EFlowMetadata = read_json(&storage_dir.join("metadata.json"))?;
     let report_markdown = fs::read_to_string(storage_dir.join("report.md"))
         .map_err(|err| format!("Cannot read E2E report: {err}"))?;
@@ -325,17 +325,17 @@ fn ensure_sample_skill(work_path: &str) -> Result<String, String> {
         Some(skill) => skill,
         None => skills_create_skill(
             SAMPLE_SKILL_NAME.to_string(),
-            Some("Anchor E2E Sample".to_string()),
+            Some("Maru E2E Sample".to_string()),
         )?,
     };
     let skill_doc = format!(
-        r#"# Anchor E2E Sample
+        r#"# Maru E2E Sample
 
-Deterministic managed skill for the README-driven Anchor E2E flow.
+Deterministic managed skill for the README-driven Maru E2E flow.
 
 ## Instructions
 - Use `README.md` as source of truth.
-- Use local `.anchor/e2e-runs` artifact storage.
+- Use local `.maru/e2e-runs` artifact storage.
 - Treat LLM/provider output as the fixture boundary for this flow.
 - Produce Markdown report and HTML slides.
 
@@ -349,7 +349,7 @@ Workspace: {work_path}
 
 fn ensure_report_template(work_path: &str) -> Result<String, String> {
     let template = r#"---
-title: Anchor E2E Development Report
+title: Maru E2E Development Report
 type: report
 ---
 # {{title}}
@@ -363,33 +363,33 @@ type: report
 {{sample_excerpt}}
 
 ## 산출물
-- Skill lifecycle: registered, edited, executed through real Anchor paths
+- Skill lifecycle: registered, edited, executed through real Maru paths
 - Report artifact: deterministic Markdown
 - Slide artifact: deterministic HTML
-- Local storage: queryable `.anchor/e2e-runs` metadata
+- Local storage: queryable `.maru/e2e-runs` metadata
 "#;
-    save_anchor_template(
+    save_maru_template(
         work_path.to_string(),
         TEMPLATE_NAME.to_string(),
         template.to_string(),
     )?;
-    read_anchor_template(work_path.to_string(), TEMPLATE_NAME.to_string())
+    read_maru_template(work_path.to_string(), TEMPLATE_NAME.to_string())
 }
 
 fn read_sample_input(work: &Path) -> Result<String, String> {
-    let sample_path = work.join("anchor-weekly-meeting.md");
+    let sample_path = work.join("maru-weekly-meeting.md");
     if sample_path.exists() {
         return fs::read_to_string(&sample_path)
             .map_err(|err| format!("Cannot read sample input: {err}"));
     }
-    Ok("# Anchor 사업 주간 점검 회의\n\nSkills 관리와 문서 템플릿을 확인했다.\n".to_string())
+    Ok("# Maru 사업 주간 점검 회의\n\nSkills 관리와 문서 템플릿을 확인했다.\n".to_string())
 }
 
 fn apply_report_template(template: &str, sample: &str) -> String {
     template
-        .replace("{{title}}", "Anchor E2E Development Report")
+        .replace("{{title}}", "Maru E2E Development Report")
         .replace("{{source_of_truth}}", "README.md")
-        .replace("{{sample_title}}", "Anchor 사업 주간 점검 회의")
+        .replace("{{sample_title}}", "Maru 사업 주간 점검 회의")
         .replace("{{sample_excerpt}}", &sample_excerpt(sample))
 }
 
@@ -399,7 +399,7 @@ fn build_slides_html(sample: &str) -> String {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Anchor E2E Flow</title>
+  <title>Maru E2E Flow</title>
   <style>
     body {{ margin: 0; font-family: Inter, system-ui, sans-serif; background: #0f172a; color: #f8fafc; }}
     main {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; min-height: 100vh; padding: 48px; box-sizing: border-box; }}
@@ -411,9 +411,9 @@ fn build_slides_html(sample: &str) -> String {
 </head>
 <body>
   <main>
-    <h1>Anchor E2E Flow</h1>
+    <h1>Maru E2E Flow</h1>
     <section><h2>1. Sample</h2><p>{}</p></section>
-    <section><h2>2. Skills</h2><p>Registration, editing, and execution use Anchor-managed paths.</p></section>
+    <section><h2>2. Skills</h2><p>Registration, editing, and execution use Maru-managed paths.</p></section>
     <section><h2>3. Artifacts</h2><p>Report and slides are saved locally and re-queried as JSON metadata.</p></section>
   </main>
 </body>
@@ -442,9 +442,9 @@ fn build_metadata(
             "presentation-slide-generation".to_string(),
         ],
         sample_input: E2EFlowSampleInput {
-            id: "anchor-weekly-meeting".to_string(),
-            title: "Anchor 사업 주간 점검 회의".to_string(),
-            path: "anchor-weekly-meeting.md".to_string(),
+            id: "maru-weekly-meeting".to_string(),
+            title: "Maru 사업 주간 점검 회의".to_string(),
+            path: "maru-weekly-meeting.md".to_string(),
             kind: "meeting-notes/requirements".to_string(),
         },
         skill_lifecycle: E2EFlowSkillLifecycle {
@@ -456,14 +456,14 @@ fn build_metadata(
         },
         report_artifact: E2EFlowReportArtifact {
             format: "markdown".to_string(),
-            path: format!(".anchor/e2e-runs/{run_id}/report.md"),
-            title: "Anchor E2E Development Report".to_string(),
+            path: format!(".maru/e2e-runs/{run_id}/report.md"),
+            title: "Maru E2E Development Report".to_string(),
             preview_text: "README-driven E2E flow with deterministic report output.".to_string(),
         },
         slide_artifact: E2EFlowSlideArtifact {
             format: "html".to_string(),
-            path: format!(".anchor/e2e-runs/{run_id}/slides.html"),
-            title: "Anchor E2E Flow".to_string(),
+            path: format!(".maru/e2e-runs/{run_id}/slides.html"),
+            title: "Maru E2E Flow".to_string(),
             style: "anti-gravity".to_string(),
             preview_text: sample_excerpt(sample),
         },
@@ -572,7 +572,7 @@ fn todo_ledger() -> Vec<E2EFlowTodo> {
         ),
         todo(
             "hub-connector-deferred-local-first",
-            "Anchor Hub remains a separate service; this flow verifies local MCP/local storage only.",
+            "Maru Hub remains a separate service; this flow verifies local MCP/local storage only.",
         ),
         todo(
             "skill-name-drift",
@@ -616,7 +616,7 @@ fn validate_run_id(run_id: &str) -> Result<(), String> {
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
     {
-        return Err("anchor_e2e_run_id_invalid".to_string());
+        return Err("maru_e2e_run_id_invalid".to_string());
     }
     Ok(())
 }
@@ -664,18 +664,18 @@ mod tests {
     impl Drop for TestHome {
         fn drop(&mut self) {
             if let Some(previous) = self.previous.as_ref() {
-                std::env::set_var("ANCHOR_TEST_HOME", previous);
+                std::env::set_var("MARU_TEST_HOME", previous);
             } else {
-                std::env::remove_var("ANCHOR_TEST_HOME");
+                std::env::remove_var("MARU_TEST_HOME");
             }
         }
     }
 
     fn test_home() -> TestHome {
-        let guard = host_fs::test_anchor_home_lock();
+        let guard = host_fs::test_maru_home_lock();
         let home = TempDir::new().unwrap();
-        let previous = std::env::var_os("ANCHOR_TEST_HOME");
-        std::env::set_var("ANCHOR_TEST_HOME", home.path());
+        let previous = std::env::var_os("MARU_TEST_HOME");
+        std::env::set_var("MARU_TEST_HOME", home.path());
         TestHome {
             _home: home,
             previous,
@@ -684,16 +684,16 @@ mod tests {
     }
 
     #[test]
-    fn anchor_e2e_run_persists_artifacts_and_uses_real_paths() {
+    fn maru_e2e_run_persists_artifacts_and_uses_real_paths() {
         let _home = test_home();
         let workspace = TempDir::new().unwrap();
         fs::write(
-            workspace.path().join("anchor-weekly-meeting.md"),
-            "# Anchor 사업 주간 점검 회의\n\nSkills 관리와 문서 템플릿을 확인했다.\n",
+            workspace.path().join("maru-weekly-meeting.md"),
+            "# Maru 사업 주간 점검 회의\n\nSkills 관리와 문서 템플릿을 확인했다.\n",
         )
         .unwrap();
 
-        let result = anchor_e2e_run(
+        let result = maru_e2e_run(
             workspace.path().to_string_lossy().to_string(),
             Some(4019.88),
         )
@@ -704,7 +704,7 @@ mod tests {
         assert_eq!(result.metadata.slide_artifact.format, "html");
         assert!(result
             .report_markdown
-            .contains("Anchor E2E Development Report"));
+            .contains("Maru E2E Development Report"));
         assert!(result.slides_html.contains("<!doctype html>"));
         assert!(workspace
             .path()
@@ -712,14 +712,14 @@ mod tests {
             .exists());
         assert!(workspace
             .path()
-            .join(".anchor/templates/anchor-e2e-report-template.md")
+            .join(".maru/templates/maru-e2e-report-template.md")
             .exists());
         assert!(result
             .todos
             .iter()
             .any(|todo| todo.id == "readme-slide-export-conflict"));
 
-        let reread = anchor_e2e_read(
+        let reread = maru_e2e_read(
             workspace.path().to_string_lossy().to_string(),
             result.metadata.local_storage_result.id.clone(),
         )

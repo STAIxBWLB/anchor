@@ -8,7 +8,7 @@ import { useTranslation } from "../lib/i18n";
 import type { VaultEntry } from "../lib/types";
 import { buildEntryIndex, resolveTargetIndexed } from "../lib/wikilinkSuggestions";
 import {
-  defaultAnchorDocType,
+  defaultMaruDocType,
   fetchGuidelines,
   fetchTemplate,
   fetchTemplates,
@@ -193,7 +193,7 @@ export function NewDocumentDialog({
       const tplTitle = full.title.replace(/\s*\(합성\)\s*$/, "");
       if (!title) setTitle(initialTitle || tplTitle);
       if (docType === "reference" || docType === initialDocType) {
-        setDocType(defaultAnchorDocType(summary));
+        setDocType(defaultMaruDocType(summary));
       }
       setBody(renderTemplateBody(full, "내용 입력"));
       setSelectedTemplateSlug(slug);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Telegram reader for Anchor's io-telegram skill.
+"""Telegram reader for Maru's io-telegram skill.
 
 Default mode is JSON-only: no inbox/drop writes happen unless another wrapper
 chooses to persist the returned messages.
@@ -17,7 +17,7 @@ from typing import Any
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Read recent Telegram messages for Anchor")
+    parser = argparse.ArgumentParser(description="Read recent Telegram messages for Maru")
     parser.add_argument("--once", action="store_true", help="Run one scan and exit")
     parser.add_argument("--output-json", action="store_true", help="Write normalized JSON to stdout")
     parser.add_argument("--session-file", required=True, help="Absolute Telethon session file path")
@@ -116,7 +116,7 @@ async def scan(args: argparse.Namespace) -> list[dict[str, Any]]:
     try:
         from telethon import TelegramClient
     except ImportError as exc:
-        raise SystemExit("telethon is not installed in ~/.anchor/env") from exc
+        raise SystemExit("telethon is not installed in ~/.maru/env") from exc
 
     session_file = require_runtime(args)
     session_file.parent.mkdir(parents=True, exist_ok=True)

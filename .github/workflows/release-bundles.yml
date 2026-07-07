@@ -185,7 +185,7 @@ jobs:
           echo "APPLE_SIGNING_IDENTITY=$CERT_ID" >> "$GITHUB_ENV"
 
       # Notarization re-enabled (2026-06): Apple notary now accepts signed
-      # Anchor bundles again (verified locally — submission Accepted in ~1 min).
+      # Maru bundles again (verified locally — submission Accepted in ~1 min).
       # tauri-action notarizes macOS bundles when APPLE_ID + APPLE_PASSWORD
       # (app-specific) + APPLE_TEAM_ID are present; non-macOS legs ignore them.
       # If the notary stalls again, drop the three APPLE_ID/PASSWORD/TEAM_ID
@@ -206,7 +206,7 @@ jobs:
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
           includeUpdaterJson: true
-          assetNamePattern: Anchor_[version]_[platform]_[arch]_[bundle][ext]
+          assetNamePattern: Maru_[version]_[platform]_[arch]_[bundle][ext]
 
   cli-macos:
     name: Build CLI macOS ${{ matrix.asset_arch }}
@@ -268,12 +268,12 @@ jobs:
         run: |
           set -euo pipefail
           version="${RELEASE_TAG#v}"
-          cargo build --manifest-path src-tauri/Cargo.toml --release --bin anchor-cli --target "$TARGET"
+          cargo build --manifest-path src-tauri/Cargo.toml --release --bin maru-cli --target "$TARGET"
           rm -rf dist-cli
           mkdir -p dist-cli
-          install -m 0755 "src-tauri/target/$TARGET/release/anchor-cli" dist-cli/anchor
-          asset="anchor-cli_${version}_darwin_${ASSET_ARCH}.tar.gz"
-          tar -czf "$asset" -C dist-cli anchor
+          install -m 0755 "src-tauri/target/$TARGET/release/maru-cli" dist-cli/maru
+          asset="maru-cli_${version}_darwin_${ASSET_ARCH}.tar.gz"
+          tar -czf "$asset" -C dist-cli maru
           shasum -a 256 "$asset" | awk '{print $1}' > "$asset.sha256"
           echo "ASSET=$asset" >> "$GITHUB_ENV"
 
@@ -311,7 +311,7 @@ jobs:
           echo "id=$id" >> "$GITHUB_OUTPUT"
           echo "Resolved release: tag=$tag id=$id"
 
-      - name: Checkout anchor
+      - name: Checkout maru
         uses: actions/checkout@v5
         with:
           ref: ${{ steps.release.outputs.tag }}

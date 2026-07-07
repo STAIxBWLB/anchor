@@ -10,7 +10,7 @@
 
 import { hubFetchCatalog, hubStatus, type HubResource, type HubStatus } from "./hubClient";
 
-// ---------- Types matching anchor_hub/domain/catalog.py ----------
+// ---------- Types matching maru_hub/domain/catalog.py ----------
 
 export type DocumentCategory =
   | "formal_report"
@@ -248,15 +248,15 @@ export async function getHubStatus(workspaceRoot: string): Promise<HubStatus> {
   return hubStatus(workspaceRoot);
 }
 
-// ---------- doc_type code → Anchor docType mapping ----------
+// ---------- doc_type code → Maru docType mapping ----------
 
 /**
- * Map Hub document_type codes (frontmatter-schema §3) to the Anchor
- * editor's local docType field, which is a free-text label. The Anchor
+ * Map Hub document_type codes (frontmatter-schema §3) to the Maru
+ * editor's local docType field, which is a free-text label. The Maru
  * UI groups documents by docType under projects/templates, so we keep
  * the Hub category name there and let the user adjust.
  */
-export function defaultAnchorDocType(template: TemplateSummary | null): string {
+export function defaultMaruDocType(template: TemplateSummary | null): string {
   if (!template) return "reference";
   switch (template.document_type_category) {
     case "formal_report":

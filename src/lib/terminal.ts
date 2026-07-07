@@ -1,6 +1,6 @@
 import type {
-  AnchorAppMode,
-  AnchorSettings,
+  MaruAppMode,
+  MaruSettings,
   TerminalAttachMentionStyle,
   TerminalLauncherId,
 } from "./settings";
@@ -115,7 +115,7 @@ export const EMPTY_TERMINAL_STATE: TerminalTabsState = {
   activeTaskId: null,
 };
 
-export const TERMINAL_STORAGE_KEY = "anchor:terminal:v1";
+export const TERMINAL_STORAGE_KEY = "maru:terminal:v1";
 
 export interface CreateTerminalTabOptions {
   taskId?: string | null;
@@ -443,7 +443,7 @@ export function terminalCommandPreview(kind: TerminalKind, cwd: string): string 
 }
 
 export function shouldAutoLaunchTerminal(
-  settings: AnchorSettings,
+  settings: MaruSettings,
   open: boolean,
   tabCount: number,
 ): TerminalKind | null {
@@ -605,7 +605,7 @@ export function isRelaunchableTab(tab: TerminalTab): boolean {
 }
 
 /**
- * Map a hook event token (emitted by `anchor-cli terminal-hook --event <token>`)
+ * Map a hook event token (emitted by `maru-cli terminal-hook --event <token>`)
  * to a precise agent status. The hook installer translates each agent's native
  * lifecycle events into these canonical tokens, so the mapping is version-robust.
  * Unknown tokens return null (no status change).
@@ -639,11 +639,11 @@ export function terminalHookEventToStatus(token: string): AgentStatus | null {
 
 export type AttachMentionStyle = TerminalAttachMentionStyle;
 
-/** The Anchor active window/item, fed to CLI agents as context. */
+/** The Maru active window/item, fed to CLI agents as context. */
 export interface ActiveTerminalContext {
   workspaceRoot: string | null;
   workspaceVisibility: "private" | "public";
-  appMode: AnchorAppMode;
+  appMode: MaruAppMode;
   docAbsPath: string | null;
   docRelPath: string | null;
   docTitle: string | null;
@@ -656,29 +656,29 @@ function applyActiveContextEnv(
   enabled: boolean,
 ): Record<string, string> {
   if (!enabled) return env;
-  if (ctx.workspaceRoot) env.ANCHOR_WORKSPACE = ctx.workspaceRoot;
-  env.ANCHOR_WORKSPACE_VISIBILITY = ctx.workspaceVisibility;
-  env.ANCHOR_APP_MODE = ctx.appMode;
-  if (ctx.docAbsPath) env.ANCHOR_ACTIVE_DOC = ctx.docAbsPath;
-  if (ctx.docRelPath) env.ANCHOR_ACTIVE_DOC_REL = ctx.docRelPath;
-  if (ctx.docTitle) env.ANCHOR_ACTIVE_DOC_TITLE = ctx.docTitle;
-  if (ctx.docType) env.ANCHOR_ACTIVE_DOC_TYPE = ctx.docType;
+  if (ctx.workspaceRoot) env.MARU_WORKSPACE = ctx.workspaceRoot;
+  env.MARU_WORKSPACE_VISIBILITY = ctx.workspaceVisibility;
+  env.MARU_APP_MODE = ctx.appMode;
+  if (ctx.docAbsPath) env.MARU_ACTIVE_DOC = ctx.docAbsPath;
+  if (ctx.docRelPath) env.MARU_ACTIVE_DOC_REL = ctx.docRelPath;
+  if (ctx.docTitle) env.MARU_ACTIVE_DOC_TITLE = ctx.docTitle;
+  if (ctx.docType) env.MARU_ACTIVE_DOC_TYPE = ctx.docType;
   return env;
 }
 
 /**
- * Environment variables injected into every Anchor-spawned PTY (cmux pattern).
+ * Environment variables injected into every Maru-spawned PTY (cmux pattern).
  * Item-dependent keys are omitted (not set to "") so agents can test `-n "$VAR"`.
  * When `enabled` is false only the safe markers are returned.
  */
-export function buildAnchorContextEnv(
+export function buildMaruContextEnv(
   ctx: ActiveTerminalContext,
   sessionId: string,
   enabled: boolean,
 ): Record<string, string> {
   const env: Record<string, string> = {
-    ANCHOR_TERMINAL: "1",
-    ANCHOR_SESSION_ID: sessionId,
+    MARU_TERMINAL: "1",
+    MARU_SESSION_ID: sessionId,
   };
   return applyActiveContextEnv(env, ctx, enabled);
 }
@@ -687,7 +687,7 @@ export function buildAnchorContextEnv(
  * Environment variables for non-PTY background agent runs. These carry the
  * same active item context but deliberately omit terminal hook markers.
  */
-export function buildAnchorBackgroundContextEnv(
+export function buildMaruBackgroundContextEnv(
   ctx: ActiveTerminalContext,
   enabled: boolean,
 ): Record<string, string> {

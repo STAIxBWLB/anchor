@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { FolderOpen, FolderPlus, Link2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { chooseWorkspaceDirectory } from "../lib/api";
-import { detectWorkspace } from "../lib/anchorDir";
+import { detectWorkspace } from "../lib/maruDir";
 import { useTranslation } from "../lib/i18n";
 import type {
   WorkspaceDetect,

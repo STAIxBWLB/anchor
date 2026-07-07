@@ -235,5 +235,5 @@ function buildSearchText(entry: VaultEntry): string {
 }
 
 function isContentEntry(entry: VaultEntry): boolean {
-  return !entry.relPath.startsWith("_sys/") && !entry.relPath.startsWith(".anchor/");
+  return !entry.relPath.startsWith("_sys/") && !entry.relPath.startsWith(".maru/");
 }

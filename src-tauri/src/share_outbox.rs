@@ -27,7 +27,7 @@ const REQUIRED_KEYS: [&str; 6] = [
     "paths",
 ];
 /// Mirrors the private `skill_host::store::BUILTIN_SOURCE_ID`.
-const BUILTIN_SOURCE_ID: &str = "anchor-builtin";
+const BUILTIN_SOURCE_ID: &str = "maru-builtin";
 const SCAN_LIMIT: usize = 50;
 const DEFAULT_RECEIPTS: &str = "_state/index.jsonl";
 

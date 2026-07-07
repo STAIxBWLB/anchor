@@ -1,7 +1,7 @@
 ---
 type: Meeting
 status: draft
-project: Anchor Project
+project: Maru Project
 tags:
   - 회의록
 people:
@@ -10,7 +10,7 @@ people:
 created_at: 2026-04-24T15:00:00+09:00
 updated_at: 2026-04-24T17:30:00+09:00
 ---
-# Anchor 사업 주간 점검 회의
+# Maru 사업 주간 점검 회의
 
 ## 메모
 참석자들은 핵심인재양성본부 KPI 산식과 예산 집행률 보고 기준을 다음 회의 전까지 정리하기로 했다.

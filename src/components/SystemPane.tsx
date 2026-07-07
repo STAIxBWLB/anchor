@@ -1,8 +1,8 @@
-// SystemPane — anchor's `.anchor/` operations surface.
+// SystemPane — maru's `.maru/` operations surface.
 //
-// One pane for workspace settings and `.anchor/` operations. Workspace-local
-// JSON stays under `<work>/.anchor/`; skill management also talks to the
-// global `~/.anchor/skills` registry.
+// One pane for workspace settings and `.maru/` operations. Workspace-local
+// JSON stays under `<work>/.maru/`; skill management also talks to the
+// global `~/.maru/skills` registry.
 
 import {
   AlertTriangle,
@@ -34,33 +34,33 @@ import {
 } from "../lib/api";
 import {
   applySysImport,
-  deleteAnchorRule,
-  deleteAnchorTemplate,
-  listAnchorRules,
-  listAnchorTemplates,
+  deleteMaruRule,
+  deleteMaruTemplate,
+  listMaruRules,
+  listMaruTemplates,
   listWorkspaceProjects,
   deleteSecretText,
   doctorSecrets,
   migrateSecrets,
   planSysImport,
   readSecretText,
-  readAnchorMcp,
-  readAnchorProjects,
-  readAnchorRule,
-  readAnchorTemplate,
+  readMaruMcp,
+  readMaruProjects,
+  readMaruRule,
+  readMaruTemplate,
   readWorkspaceConfig,
   scanSecrets,
-  saveAnchorMcp,
-  saveAnchorRule,
-  saveAnchorTemplate,
+  saveMaruMcp,
+  saveMaruRule,
+  saveMaruTemplate,
   writeSecretText,
-} from "../lib/anchorDir";
+} from "../lib/maruDir";
 import { useTranslation } from "../lib/i18n";
 import type {
   AiClassifierRuntime,
   AiPermissionMode,
   AiRuntime,
-  AnchorSettings,
+  MaruSettings,
   DocumentBrowserMode,
   DocumentLabelMode,
   ExplorerPaneMode,
@@ -79,7 +79,7 @@ import {
   applyWorkspaceMeetingsOverrides,
   applyWorkspaceTasksOverrides,
   formatBinaryFileIncludePatterns,
-  normalizeAnchorSettings,
+  normalizeMaruSettings,
   normalizeDotFolderIncludes,
   parseBinaryFileIncludePatternsText,
 } from "../lib/settings";
@@ -219,8 +219,8 @@ async function emitSettingsTerminalLaunch(
 
 interface SystemPaneProps {
   workPath: string | null;
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
   onInboxRuntimeConfigChange?: (config: InboxRuntimeConfig) => void;
   initialTab?: string | null;
 }
@@ -319,7 +319,7 @@ export function SystemPane({
             value={settings.terminal}
             onSave={(value) =>
               onSettingsChange(
-                normalizeAnchorSettings({
+                normalizeMaruSettings({
                   ...settings,
                   terminal: value,
                 }),
@@ -365,7 +365,7 @@ export function SystemPane({
             value={settings.connectors}
             onSave={(value) =>
               onSettingsChange(
-                normalizeAnchorSettings({
+                normalizeMaruSettings({
                   ...settings,
                   connectors: value,
                 }),
@@ -558,7 +558,7 @@ function SecretsTab({ workPath }: { workPath: string }) {
     if (
       typeof window !== "undefined" &&
       !window.confirm(
-        `Delete the text secret file .anchor/secrets/${editor.relPath}? This removes the file from disk.`,
+        `Delete the text secret file .maru/secrets/${editor.relPath}? This removes the file from disk.`,
       )
     ) {
       return;
@@ -598,7 +598,7 @@ function SecretsTab({ workPath }: { workPath: string }) {
         <div className="settings-section-heading">
           <div>
             <strong>Workspace Secrets</strong>
-            <span>Managed under .anchor/secrets with .secrets kept as a compatibility symlink. Secret values stay hidden unless explicitly revealed.</span>
+            <span>Managed under .maru/secrets with .secrets kept as a compatibility symlink. Secret values stay hidden unless explicitly revealed.</span>
           </div>
           <div className="system-detail-actions compact">
             <Button size="sm" variant="ghost" icon={<RefreshCcw size={14} />} onClick={refresh} disabled={busy}>
@@ -692,7 +692,7 @@ function SecretsTab({ workPath }: { workPath: string }) {
           <div className="settings-section-heading">
             <div>
               <strong>Unmanaged Candidates</strong>
-              <span>Secret-like files outside .anchor/secrets. Values are not displayed.</span>
+              <span>Secret-like files outside .maru/secrets. Values are not displayed.</span>
             </div>
           </div>
           <div className="secrets-table-wrap">
@@ -920,7 +920,7 @@ function SecretTextEditorDialog({
                 </div>
               ) : null}
               <label className="field">
-                <span>Relative path under .anchor/secrets</span>
+                <span>Relative path under .maru/secrets</span>
                 <input
                   value={editor.relPath}
                   readOnly={editor.mode === "edit"}
@@ -1057,7 +1057,7 @@ function isGeneratedSecretLeafPath(relPath: string): boolean {
 }
 
 function shortenSecretPath(path: string): string {
-  const marker = ".anchor/secrets/";
+  const marker = ".maru/secrets/";
   const index = path.indexOf(marker);
   return index >= 0 ? path.slice(index + marker.length) : path;
 }
@@ -1076,8 +1076,8 @@ function CommsSettingsSystemTab({
   onOpenSkills,
 }: {
   workPath: string;
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
   onSaved?: (config: InboxRuntimeConfig) => void;
   onOpenSkills: () => void;
 }) {
@@ -1266,7 +1266,7 @@ function CommsSettingsSystemTab({
       }
       onSaved?.(saved);
       onSettingsChange(
-        normalizeAnchorSettings({
+        normalizeMaruSettings({
           ...settings,
           comms: draftComms,
         }),
@@ -1364,8 +1364,8 @@ function MeetingsSettingsSystemTab({
   onSettingsChange,
 }: {
   workPath: string;
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
 }) {
   const { t } = useTranslation();
   const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null);
@@ -1401,7 +1401,7 @@ function MeetingsSettingsSystemTab({
     setStatus(null);
     try {
       onSettingsChange(
-        normalizeAnchorSettings({
+        normalizeMaruSettings({
           ...settings,
           meetings: draftMeetings,
         }),
@@ -1462,8 +1462,8 @@ function TasksSettingsSystemTab({
   onSettingsChange,
 }: {
   workPath: string;
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
 }) {
   const { t } = useTranslation();
   const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null);
@@ -1499,7 +1499,7 @@ function TasksSettingsSystemTab({
     setStatus(null);
     try {
       onSettingsChange(
-        normalizeAnchorSettings({
+        normalizeMaruSettings({
           ...settings,
           tasks: draftTasks,
         }),
@@ -1585,8 +1585,8 @@ function AiSettingsTab({
   settings,
   onSettingsChange,
 }: {
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
 }) {
   const { t } = useTranslation();
   const ai = settings.ai;
@@ -1598,9 +1598,9 @@ function AiSettingsTab({
     setCodexOverride(ai.commandOverrides.codex ?? "");
   }, [ai.commandOverrides.claude, ai.commandOverrides.codex]);
 
-  const commitAi = (patch: Partial<AnchorSettings["ai"]>) => {
+  const commitAi = (patch: Partial<MaruSettings["ai"]>) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ai: { ...settings.ai, ...patch },
       }),
@@ -1695,8 +1695,8 @@ function PreferencesTab({
   settings,
   onSettingsChange,
 }: {
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
 }) {
   const { t } = useTranslation();
   const [binaryPatternsText, setBinaryPatternsText] = useState(() =>
@@ -1709,7 +1709,7 @@ function PreferencesTab({
 
   const updateBrowserMode = (mode: DocumentBrowserMode) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1721,7 +1721,7 @@ function PreferencesTab({
 
   const updateExplorerPaneMode = (explorerPaneMode: ExplorerPaneMode) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1733,7 +1733,7 @@ function PreferencesTab({
 
   const updateWorkspaceFileFilter = (workspaceFileFilter: WorkspaceFileFilter) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1745,7 +1745,7 @@ function PreferencesTab({
 
   const updateFilesBrowserMode = (filesBrowserMode: FilesBrowserMode) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1757,7 +1757,7 @@ function PreferencesTab({
 
   const updateFilesSortKey = (filesSortKey: FilesSortKey) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1769,7 +1769,7 @@ function PreferencesTab({
 
   const updateFilesListAttributes = (filesListAttributes: FilesListAttribute[]) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1789,7 +1789,7 @@ function PreferencesTab({
 
   const commitBinaryFileIncludePatterns = (text: string) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1803,7 +1803,7 @@ function PreferencesTab({
     fileQueueDefaultOperation: FileQueueDefaultOperation,
   ) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1815,7 +1815,7 @@ function PreferencesTab({
 
   const updateDocumentLabelMode = (documentLabelMode: DocumentLabelMode) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1827,7 +1827,7 @@ function PreferencesTab({
 
   const updateThemeMode = (themeMode: ThemeMode) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1839,7 +1839,7 @@ function PreferencesTab({
 
   const updateAccentColor = (accentColor: string) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1851,7 +1851,7 @@ function PreferencesTab({
 
   const updateAutoLaunch = (autoLaunch: TerminalLauncherId | null) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         terminal: {
           ...settings.terminal,
@@ -1863,7 +1863,7 @@ function PreferencesTab({
 
   const updateTerminalDock = (terminalDock: TerminalDock) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         ui: {
           ...settings.ui,
@@ -1878,7 +1878,7 @@ function PreferencesTab({
 
   const updateTerminalCopyOnSelect = (copyOnSelect: boolean) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         terminal: {
           ...settings.terminal,
@@ -1890,7 +1890,7 @@ function PreferencesTab({
 
   const updateTerminalShortcut = (action: TerminalShortcutAction, value: string) => {
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         terminal: {
           ...settings.terminal,
@@ -2144,7 +2144,7 @@ function DiagramPreviewToggle() {
           checked={enabled}
           onChange={(event) => toggle(event.target.checked)}
         />
-        <small style={{ color: "var(--anchor-muted, #6b7280)" }}>
+        <small style={{ color: "var(--maru-muted, #6b7280)" }}>
           {t("diagram.system.preview.hint")}
         </small>
       </div>
@@ -2161,8 +2161,8 @@ function InboxRuntimeConfigTab({
   onSaved,
 }: {
   workPath: string;
-  settings: AnchorSettings;
-  onSettingsChange: (settings: AnchorSettings) => void;
+  settings: MaruSettings;
+  onSettingsChange: (settings: MaruSettings) => void;
   onSaved?: (config: InboxRuntimeConfig) => void;
 }) {
   const { t } = useTranslation();
@@ -2254,7 +2254,7 @@ function InboxRuntimeConfigTab({
   const updateDotFolderIncludes = (text: string) => {
     const includeDotFolders = normalizeDotFolderIncludes(text.split(/\r?\n/));
     onSettingsChange(
-      normalizeAnchorSettings({
+      normalizeMaruSettings({
         ...settings,
         scan: {
           ...settings.scan,
@@ -2440,7 +2440,7 @@ function InboxRuntimeConfigTab({
             </label>
           </div>
           {!fileDropChannel ? (
-            <small className="settings-warning">Configured file drop channel is missing; Anchor will fall back to the first available channel.</small>
+            <small className="settings-warning">Configured file drop channel is missing; Maru will fall back to the first available channel.</small>
           ) : null}
         </section>
 
@@ -2786,7 +2786,7 @@ function RulesTab({ workPath }: { workPath: string }) {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await listAnchorRules(workPath);
+      const list = await listMaruRules(workPath);
       setEntries(list);
       if (selected && !list.some((e) => e.name === selected)) {
         setSelected(null);
@@ -2806,7 +2806,7 @@ function RulesTab({ workPath }: { workPath: string }) {
     async (name: string) => {
       setError(null);
       try {
-        const doc = await readAnchorRule(workPath, name);
+        const doc = await readMaruRule(workPath, name);
         setSelected(name);
         setContent(doc.content);
         setPristine(doc.content);
@@ -2822,7 +2822,7 @@ function RulesTab({ workPath }: { workPath: string }) {
     setSaving(true);
     setError(null);
     try {
-      await saveAnchorRule(workPath, selected, content);
+      await saveMaruRule(workPath, selected, content);
       setPristine(content);
       await refresh();
     } catch (err) {
@@ -2836,7 +2836,7 @@ function RulesTab({ workPath }: { workPath: string }) {
     if (!selected) return;
     if (!window.confirm(t("system.rules.delete.confirm"))) return;
     try {
-      await deleteAnchorRule(workPath, selected);
+      await deleteMaruRule(workPath, selected);
       setSelected(null);
       setContent("");
       setPristine("");
@@ -2853,7 +2853,7 @@ function RulesTab({ workPath }: { workPath: string }) {
     if (!name) return;
     const stub = `---\nenabled: true\n---\n# ${name}\n\n`;
     try {
-      await saveAnchorRule(workPath, name, stub);
+      await saveMaruRule(workPath, name, stub);
       await refresh();
       await onSelect(name);
     } catch (err) {
@@ -2950,7 +2950,7 @@ function TemplatesTab({ workPath }: { workPath: string }) {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await listAnchorTemplates(workPath);
+      const list = await listMaruTemplates(workPath);
       setEntries(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -2964,7 +2964,7 @@ function TemplatesTab({ workPath }: { workPath: string }) {
   const onSelect = useCallback(
     async (name: string) => {
       try {
-        const c = await readAnchorTemplate(workPath, name);
+        const c = await readMaruTemplate(workPath, name);
         setSelected(name);
         setContent(c);
         setPristine(c);
@@ -2978,7 +2978,7 @@ function TemplatesTab({ workPath }: { workPath: string }) {
   const onSave = useCallback(async () => {
     if (!selected) return;
     try {
-      await saveAnchorTemplate(workPath, selected, content);
+      await saveMaruTemplate(workPath, selected, content);
       setPristine(content);
       await refresh();
     } catch (err) {
@@ -2990,7 +2990,7 @@ function TemplatesTab({ workPath }: { workPath: string }) {
     if (!selected) return;
     if (!window.confirm(t("system.rules.delete.confirm"))) return;
     try {
-      await deleteAnchorTemplate(workPath, selected);
+      await deleteMaruTemplate(workPath, selected);
       setSelected(null);
       setContent("");
       setPristine("");
@@ -3007,7 +3007,7 @@ function TemplatesTab({ workPath }: { workPath: string }) {
     if (!name) return;
     const stub = `---\ntype: note\n---\n# ${name}\n\n`;
     try {
-      await saveAnchorTemplate(workPath, name, stub);
+      await saveMaruTemplate(workPath, name, stub);
       await refresh();
       await onSelect(name);
     } catch (err) {
@@ -3101,7 +3101,7 @@ function McpTab({ workPath }: { workPath: string }) {
 
   const refresh = useCallback(async () => {
     try {
-      const value = await readAnchorMcp(workPath);
+      const value = await readMaruMcp(workPath);
       const json = JSON.stringify(value ?? {}, null, 2);
       setText(json);
       setPristine(json);
@@ -3124,7 +3124,7 @@ function McpTab({ workPath }: { workPath: string }) {
       return;
     }
     try {
-      await saveAnchorMcp(workPath, parsed);
+      await saveMaruMcp(workPath, parsed);
       setPristine(text);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -3175,7 +3175,7 @@ function ProjectsTab({ workPath }: { workPath: string }) {
   useEffect(() => {
     void (async () => {
       try {
-        setValue(await readAnchorProjects(workPath));
+        setValue(await readMaruProjects(workPath));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -3732,7 +3732,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
 
   const removeSource = useCallback(
     async (source: SkillSource) => {
-      if (source.kind === "managed" || source.id === "anchor-managed") {
+      if (source.kind === "managed" || source.id === "maru-managed") {
         setError(t("system.skills.removeManagedSourceBlocked"));
         return;
       }
@@ -4371,7 +4371,7 @@ function SkillsTab({ workPath }: { workPath: string }) {
               const sourceRemovable =
                 source.kind !== "managed" &&
                 source.kind !== "builtin" &&
-                source.id !== "anchor-managed";
+                source.id !== "maru-managed";
               const sourceHasInstalls = sourceHasInstalledSkills(source.id);
               const removeTitle = sourceHasInstalls
                   ? t("system.skills.removeSourceInstalledBlocked", { id: source.id })

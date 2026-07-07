@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAnchorSettings } from "./settings";
+import { normalizeMaruSettings } from "./settings";
 import { buildThemeVars, normalizeAccentInput } from "./theme";
 
 describe("theme helpers", () => {
   it("builds CSS variables from the configured accent color", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       ui: {
         accentColor: "#336699",
       },

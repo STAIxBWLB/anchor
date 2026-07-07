@@ -12,7 +12,7 @@ contract:
 Hermetic: every write lands in a pytest tmp dir; the real fixture is a bundled
 template under templates/. hwp-cli-only cases skip when `hwp` is absent.
 
-Run: ~/.anchor/env/.venv/bin/python3 -m pytest scripts/tests
+Run: ~/.maru/env/.venv/bin/python3 -m pytest scripts/tests
 """
 from __future__ import annotations
 

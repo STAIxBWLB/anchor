@@ -11,8 +11,8 @@
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--anchor-bg, #fafafa);
-  color: var(--anchor-fg, #1f2937);
+  background: var(--maru-bg, #fafafa);
+  color: var(--maru-fg, #1f2937);
 }
 
 .graph-header {
@@ -156,7 +156,7 @@
 
 .graph-node circle {
   cursor: pointer;
-  stroke: var(--anchor-bg, #fff);
+  stroke: var(--maru-bg, #fff);
   stroke-width: 1;
 }
 
@@ -183,7 +183,7 @@
 .graph-node-label {
   font-size: 10px;
   text-anchor: middle;
-  fill: var(--anchor-fg, #374151);
+  fill: var(--maru-fg, #374151);
   pointer-events: none;
   user-select: none;
 }

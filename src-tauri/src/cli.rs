@@ -17,7 +17,7 @@ pub fn run_cli(args: Vec<String>) -> i32 {
             0
         }
         "--version" | "-V" | "version" => {
-            println!("anchor {}", env!("CARGO_PKG_VERSION"));
+            println!("maru {}", env!("CARGO_PKG_VERSION"));
             0
         }
         "doctor" => run_doctor(&args[1..]),
@@ -55,7 +55,7 @@ fn run_secrets_scan(args: &[String]) -> i32 {
             "--json" => json = true,
             other => {
                 eprintln!("unknown option: {other}");
-                eprintln!("usage: anchor secrets scan [--json]");
+                eprintln!("usage: maru secrets scan [--json]");
                 return 2;
             }
         }
@@ -110,7 +110,7 @@ fn run_secrets_doctor(args: &[String]) -> i32 {
             "--quiet" => quiet = true,
             other => {
                 eprintln!("unknown option: {other}");
-                eprintln!("usage: anchor secrets doctor [--json] [--quiet]");
+                eprintln!("usage: maru secrets doctor [--json] [--quiet]");
                 return 2;
             }
         }
@@ -199,7 +199,7 @@ fn run_secrets_migrate(args: &[String]) -> i32 {
             other => {
                 eprintln!("unknown option: {other}");
                 eprintln!(
-                    "usage: anchor secrets migrate --dry-run|--apply [--select <relpath>] [--json]"
+                    "usage: maru secrets migrate --dry-run|--apply [--select <relpath>] [--json]"
                 );
                 return 2;
             }
@@ -258,7 +258,7 @@ fn run_doctor(args: &[String]) -> i32 {
             "--quiet" => quiet = true,
             other => {
                 eprintln!("unknown option: {other}");
-                eprintln!("usage: anchor doctor [--json] [--quiet]");
+                eprintln!("usage: maru doctor [--json] [--quiet]");
                 return 2;
             }
         }
@@ -342,7 +342,7 @@ fn run_skills_dirty(args: &[String]) -> i32 {
             "--json" => json = true,
             other => {
                 eprintln!("unknown option: {other}");
-                eprintln!("usage: anchor skills dirty [--json]");
+                eprintln!("usage: maru skills dirty [--json]");
                 return 2;
             }
         }
@@ -386,7 +386,7 @@ fn run_skills_reconcile(args: &[String]) -> i32 {
                 if action.as_deref().is_some_and(|value| value != "accept") {
                     eprintln!("conflicting options: --accept and --discard");
                     eprintln!(
-                        "usage: anchor skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]"
+                        "usage: maru skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]"
                     );
                     return 2;
                 }
@@ -396,7 +396,7 @@ fn run_skills_reconcile(args: &[String]) -> i32 {
                 if action.as_deref().is_some_and(|value| value != "discard") {
                     eprintln!("conflicting options: --accept and --discard");
                     eprintln!(
-                        "usage: anchor skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]"
+                        "usage: maru skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]"
                     );
                     return 2;
                 }
@@ -465,7 +465,7 @@ fn run_skills_import(args: &[String]) -> i32 {
                 if mode.as_deref().is_some_and(|value| value != "copy") {
                     eprintln!("conflicting options: --copy and --link");
                     eprintln!(
-                        "usage: anchor skills import <source-path> [--name <name>] [--copy|--link]"
+                        "usage: maru skills import <source-path> [--name <name>] [--copy|--link]"
                     );
                     return 2;
                 }
@@ -475,7 +475,7 @@ fn run_skills_import(args: &[String]) -> i32 {
                 if mode.as_deref().is_some_and(|value| value != "link") {
                     eprintln!("conflicting options: --copy and --link");
                     eprintln!(
-                        "usage: anchor skills import <source-path> [--name <name>] [--copy|--link]"
+                        "usage: maru skills import <source-path> [--name <name>] [--copy|--link]"
                     );
                     return 2;
                 }
@@ -539,15 +539,15 @@ fn current_work_path() -> Option<String> {
 }
 
 fn skills_usage() -> &'static str {
-    "usage: anchor skills dirty|reconcile|import|import-unmanage"
+    "usage: maru skills dirty|reconcile|import|import-unmanage"
 }
 
 fn secrets_usage() -> &'static str {
-    "usage: anchor secrets scan|doctor|migrate"
+    "usage: maru secrets scan|doctor|migrate"
 }
 
 fn usage() -> &'static str {
-    "usage: anchor [--version] [--help] <command>\n\ncommands:\n  doctor [--json] [--quiet]\n  secrets scan [--json]\n  secrets doctor [--json] [--quiet]\n  secrets migrate --dry-run|--apply [--select <relpath>] [--json]\n  skills dirty [--json]\n  skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]\n  skills import <source-path> [--name <name>] [--copy|--link]\n  skills import-unmanage <name> [--delete-files]"
+    "usage: maru [--version] [--help] <command>\n\ncommands:\n  doctor [--json] [--quiet]\n  secrets scan [--json]\n  secrets doctor [--json] [--quiet]\n  secrets migrate --dry-run|--apply [--select <relpath>] [--json]\n  skills dirty [--json]\n  skills reconcile <name-or-id> (--accept|--discard) [--message <m>] [--dry-run]\n  skills import <source-path> [--name <name>] [--copy|--link]\n  skills import-unmanage <name> [--delete-files]"
 }
 
 #[cfg(test)]

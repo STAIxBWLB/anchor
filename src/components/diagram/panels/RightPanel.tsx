@@ -34,7 +34,7 @@ function NumberField({
 }) {
   const { t } = useTranslation();
   return (
-    <label className="anchor-diagram-prop">
+    <label className="maru-diagram-prop">
       <span>{t(labelKey)}</span>
       <input
         type="number"
@@ -62,7 +62,7 @@ function TextField({
 }) {
   const { t } = useTranslation();
   return (
-    <label className="anchor-diagram-prop">
+    <label className="maru-diagram-prop">
       <span>{t(labelKey)}</span>
       <input value={value} onChange={(e) => onCommit(e.target.value)} />
     </label>
@@ -80,7 +80,7 @@ function ColorField({
 }) {
   const { t } = useTranslation();
   return (
-    <label className="anchor-diagram-prop anchor-diagram-prop-color">
+    <label className="maru-diagram-prop maru-diagram-prop-color">
       <span>{t(labelKey)}</span>
       <input
         type="color"
@@ -111,7 +111,7 @@ function SelectField<T extends string>({
 }) {
   const { t } = useTranslation();
   return (
-    <label className="anchor-diagram-prop">
+    <label className="maru-diagram-prop">
       <span>{t(labelKey)}</span>
       <select value={value} onChange={(e) => onCommit(e.target.value as T)}>
         {options.map((o) => (
@@ -148,7 +148,7 @@ function NodeProps({ node }: { node: DiagramNode }) {
   const memo = typeof node.meta?.memo === "string" ? (node.meta.memo as string) : "";
 
   return (
-    <div className="anchor-diagram-prop-sections">
+    <div className="maru-diagram-prop-sections">
       <section>
         <h3>{t("diagram.panel.properties.text")}</h3>
         <TextField
@@ -171,7 +171,7 @@ function NodeProps({ node }: { node: DiagramNode }) {
             { value: "blocked", labelKey: "diagram.status.blocked" },
           ]}
         />
-        <label className="anchor-diagram-prop">
+        <label className="maru-diagram-prop">
           <span>{t("diagram.progress.label")}</span>
           <input
             type="range"
@@ -184,11 +184,11 @@ function NodeProps({ node }: { node: DiagramNode }) {
               patchMeta({ progress: v < 0 ? null : v });
             }}
           />
-          <span style={{ width: 38, textAlign: "right", color: "var(--anchor-muted, #6b7280)" }}>
+          <span style={{ width: 38, textAlign: "right", color: "var(--maru-muted, #6b7280)" }}>
             {progress < 0 ? t("diagram.status.none") : t("diagram.progress.value", { percent: String(progress) })}
           </span>
         </label>
-        <label className="anchor-diagram-prop">
+        <label className="maru-diagram-prop">
           <span>{t("diagram.memo.dialog.title")}</span>
           <textarea
             value={memo}
@@ -200,14 +200,14 @@ function NodeProps({ node }: { node: DiagramNode }) {
       </section>
       <section>
         <h3>{t("diagram.panel.properties.position")}</h3>
-        <div className="anchor-diagram-prop-row">
+        <div className="maru-diagram-prop-row">
           <NumberField labelKey="diagram.properties.x" value={node.x} onCommit={(v) => patch({ x: v })} />
           <NumberField labelKey="diagram.properties.y" value={node.y} onCommit={(v) => patch({ y: v })} />
         </div>
       </section>
       <section>
         <h3>{t("diagram.panel.properties.size")}</h3>
-        <div className="anchor-diagram-prop-row">
+        <div className="maru-diagram-prop-row">
           <NumberField labelKey="diagram.properties.w" value={node.w} onCommit={(v) => patch({ w: Math.max(20, v) })} min={20} />
           <NumberField labelKey="diagram.properties.h" value={node.h} onCommit={(v) => patch({ h: Math.max(20, v) })} min={20} />
         </div>
@@ -217,7 +217,7 @@ function NodeProps({ node }: { node: DiagramNode }) {
         <ColorField labelKey="diagram.properties.bg" value={node.style?.bg ?? "#ffffff"} onCommit={(v) => patchStyle({ bg: v })} />
         <ColorField labelKey="diagram.properties.border" value={node.style?.border ?? "#1f2937"} onCommit={(v) => patchStyle({ border: v })} />
         <ColorField labelKey="diagram.properties.fc" value={node.style?.fc ?? "#111827"} onCommit={(v) => patchStyle({ fc: v })} />
-        <div className="anchor-diagram-prop-row">
+        <div className="maru-diagram-prop-row">
           <NumberField labelKey="diagram.properties.fs" value={node.style?.fs ?? 12} onCommit={(v) => patchStyle({ fs: v })} min={8} max={48} />
           <NumberField labelKey="diagram.properties.br" value={node.style?.br ?? 4} onCommit={(v) => patchStyle({ br: v })} min={0} max={40} />
           <NumberField labelKey="diagram.properties.bw" value={node.style?.bw ?? 1.5} onCommit={(v) => patchStyle({ bw: v })} min={0} max={10} step={0.5} />
@@ -257,7 +257,7 @@ function EdgeProps({ edge }: { edge: DiagramEdge }) {
     [edge.id, store],
   );
   return (
-    <div className="anchor-diagram-prop-sections">
+    <div className="maru-diagram-prop-sections">
       <section>
         <h3>{t("diagram.panel.properties.edge")}</h3>
         <SelectField<EdgeRouteMode>
@@ -333,18 +333,18 @@ export function RightPanel() {
 
   if (total === 0) {
     return (
-      <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
+      <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
         <h2>{t("diagram.panel.properties")}</h2>
-        <p className="anchor-diagram-side-panel-empty">{t("diagram.panel.properties.empty")}</p>
+        <p className="maru-diagram-side-panel-empty">{t("diagram.panel.properties.empty")}</p>
       </aside>
     );
   }
 
   if (total > 1) {
     return (
-      <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
+      <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
         <h2>{t("diagram.panel.properties")}</h2>
-        <p className="anchor-diagram-side-panel-empty">
+        <p className="maru-diagram-side-panel-empty">
           {t("diagram.panel.properties.multi", { count: String(total) })}
         </p>
       </aside>
@@ -355,7 +355,7 @@ export function RightPanel() {
     const id = [...selection.nodes][0]!;
     const node = nodes.find((n) => n.id === id);
     return (
-      <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
+      <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
         <h2>{t("diagram.panel.properties")}</h2>
         {node ? <NodeProps node={node} /> : null}
       </aside>
@@ -366,7 +366,7 @@ export function RightPanel() {
     const id = [...selection.edges][0]!;
     const edge = edges.find((e) => e.id === id);
     return (
-      <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
+      <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.properties")}>
         <h2>{t("diagram.panel.properties")}</h2>
         {edge ? <EdgeProps edge={edge} /> : null}
       </aside>

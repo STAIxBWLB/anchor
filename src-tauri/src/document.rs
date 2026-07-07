@@ -2,7 +2,7 @@ use crate::filename_rules::{validate_filename_stem, validate_folder_name};
 use crate::frontmatter::{build_frontmatter, update_frontmatter_content, FrontmatterValue};
 use crate::vault::{parse_frontmatter, resolve_inside_vault, slugify, title_from_content};
 use crate::vault_guard::{is_managed_root, validate_managed_write};
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
@@ -112,7 +112,7 @@ pub fn save_document(
     document_path: String,
     content: String,
 ) -> Result<DocumentPayload, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
     validate_managed_write(&vault_path, &document_path, &content)?;
     let path = resolve_inside_vault(&vault_path, &document_path)?;
     // Managed roots snapshot the on-disk content before every overwrite
@@ -150,7 +150,7 @@ pub fn update_frontmatter_field(
     key: String,
     value: Option<FieldInput>,
 ) -> Result<DocumentPayload, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
     let path = resolve_inside_vault(&vault_path, &document_path)?;
     let original =
         fs::read_to_string(&path).map_err(|err| format!("Cannot read document: {err}"))?;
@@ -206,7 +206,7 @@ pub fn create_document(
     target_rel_path: Option<String>,
     #[allow(non_snake_case)] extras: Option<CreateDocumentExtras>,
 ) -> Result<CreatedDocument, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Create)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Create)?;
     let now = Utc::now().to_rfc3339();
     let rel_path = match target_rel_path
         .as_deref()
@@ -329,7 +329,7 @@ pub fn move_document(
     document_path: String,
     target_rel_path: String,
 ) -> Result<DocumentPayload, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::RenameMove)?;
     let source_path = resolve_inside_vault(&vault_path, &document_path)?;
     let vault = resolve_inside_vault(&vault_path, ".")?;
     ensure_existing_document(&source_path)?;
@@ -361,7 +361,7 @@ pub fn duplicate_document(
     vault_path: String,
     document_path: String,
 ) -> Result<DocumentPayload, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Create)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Create)?;
     let source_path = resolve_inside_vault(&vault_path, &document_path)?;
     ensure_existing_document(&source_path)?;
     let target_path = unique_duplicate_path(&source_path);
@@ -381,7 +381,7 @@ pub fn trash_document(
     vault_path: String,
     document_path: String,
 ) -> Result<DeletedDocument, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Delete)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Delete)?;
     let source_path = resolve_inside_vault(&vault_path, &document_path)?;
     let vault = resolve_inside_vault(&vault_path, ".")?;
     ensure_existing_document(&source_path)?;
@@ -463,7 +463,7 @@ fn unique_trash_path(source_path: &Path, vault: &Path) -> Result<PathBuf, String
         .unwrap_or("document");
     let timestamp = Utc::now().format("%Y%m%d-%H%M%S");
     let trash_dir = vault
-        .join(".anchor")
+        .join(".maru")
         .join("trash")
         .join("documents")
         .join(original_rel_parent);
@@ -490,7 +490,7 @@ pub fn create_version(
     content: String,
     summary: String,
 ) -> Result<VersionSnapshot, String> {
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Create)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Create)?;
     write_version_snapshot(&vault_path, &document_path, &title, &content, &summary)
 }
 
@@ -512,7 +512,7 @@ pub(crate) fn write_version_snapshot(
         .and_then(|s| s.to_str())
         .unwrap_or("document");
     let timestamp = Utc::now();
-    let version_dir = vault.join(".anchor").join("versions");
+    let version_dir = vault.join(".maru").join("versions");
     fs::create_dir_all(&version_dir)
         .map_err(|err| format!("Cannot create version directory: {err}"))?;
     let file_name = format!("{stem}-{}.md", timestamp.format("%Y%m%d-%H%M%S"));
@@ -565,9 +565,9 @@ mod tests {
     use tempfile::TempDir;
 
     /// The Phase 0 verification gate as a unit test: a real-world Korean
-    /// frontmatter note read by anchor and written back unchanged must
+    /// frontmatter note read by maru and written back unchanged must
     /// produce byte-identical output. If this ever breaks, Obsidian users
-    /// pointing anchor at their vault will see frontmatter mangle.
+    /// pointing maru at their vault will see frontmatter mangle.
     #[test]
     fn read_then_save_unchanged_is_byte_identical() {
         let tmp = TempDir::new().unwrap();
@@ -578,7 +578,7 @@ mod tests {
             status: 진행중\n\
             tags:\n  - 보고서\n  - 행정\n\
             author: 이영준 (李永俊)\n\
-            project: \"[[Anchor]]\"\n\
+            project: \"[[Maru]]\"\n\
             ---\n\
             # 본문\n\
             \n\
@@ -925,7 +925,7 @@ mod tests {
     }
 
     #[test]
-    fn trash_document_moves_to_anchor_trash_and_removes_source() {
+    fn trash_document_moves_to_maru_trash_and_removes_source() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().to_string_lossy().to_string();
         let source = tmp.path().join("meetings").join("weekly.md");
@@ -938,7 +938,7 @@ mod tests {
         assert!(!source.exists());
         assert!(deleted
             .trash_rel_path
-            .starts_with(".anchor/trash/documents/meetings/weekly-"));
+            .starts_with(".maru/trash/documents/meetings/weekly-"));
         assert!(Path::new(&deleted.trash_path).exists());
         assert_eq!(
             fs::read_to_string(deleted.trash_path).unwrap(),

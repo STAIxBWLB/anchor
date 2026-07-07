@@ -1,5 +1,5 @@
-// Workspace registry. Anchor stores registered document roots in
-// `<config>/com.anchor.app/workspaces.json`. Older builds wrote the same
+// Workspace registry. Maru stores registered document roots in
+// `<config>/com.maru.app/workspaces.json`. Older builds wrote the same
 // concept to `vaults.json`; the loader migrates that shape on first use
 // and keeps the old file untouched.
 
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const APP_CONFIG_DIR: &str = "com.anchor.app";
+const APP_CONFIG_DIR: &str = "com.maru.app";
 const WORKSPACE_REGISTRY_FILE: &str = "workspaces.json";
 const LEGACY_VAULTS_FILE: &str = "vaults.json";
 
@@ -286,7 +286,7 @@ fn provider_from_external_writer(writer: &Option<String>) -> Option<String> {
 
 fn normalize_write_policy(value: &str, external_writer: &Option<String>) -> String {
     // "managed" survives an external_writer (maru-vault-graph-spec §2.4):
-    // Anchor writes through the schema guard while MCP remains a co-writer.
+    // Maru writes through the schema guard while MCP remains a co-writer.
     if value == "managed" {
         return "managed".to_string();
     }
@@ -413,11 +413,11 @@ pub fn list_workspace_roots() -> Result<WorkspaceRegistry, String> {
 }
 
 #[allow(dead_code)]
-pub fn assert_anchor_owns_writes(workspace_path: &str) -> Result<(), String> {
-    assert_anchor_can_write(workspace_path, WorkspaceWriteAction::Modify)
+pub fn assert_maru_owns_writes(workspace_path: &str) -> Result<(), String> {
+    assert_maru_can_write(workspace_path, WorkspaceWriteAction::Modify)
 }
 
-pub fn assert_anchor_can_write(
+pub fn assert_maru_can_write(
     workspace_path: &str,
     action: WorkspaceWriteAction,
 ) -> Result<(), String> {
@@ -441,7 +441,7 @@ pub fn assert_anchor_can_write(
                     _ => "provider capabilities",
                 });
         return Err(format!(
-            "Workspace writes are blocked by {writer}; Anchor will not write directly."
+            "Workspace writes are blocked by {writer}; Maru will not write directly."
         ));
     }
     Ok(())
