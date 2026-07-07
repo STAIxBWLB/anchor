@@ -4,7 +4,7 @@ import type {
   TelegramMonitorConfigView,
 } from "./types";
 
-export const TELEGRAM_SECRET_UNCHANGED = "__ANCHOR_KEEP_SECRET__";
+export const TELEGRAM_SECRET_UNCHANGED = "__MARU_KEEP_SECRET__";
 
 export type TelegramChatMappingAction =
   | { type: "add"; chat?: Partial<TelegramMonitorChat> }

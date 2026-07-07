@@ -734,7 +734,7 @@ export async function updateFrontmatterField(
 /**
  * Optional Hub-driven frontmatter prefill values.
  *
- * Mirrors `document::CreateDocumentExtras` on the Rust side. Anchor sends
+ * Mirrors `document::CreateDocumentExtras` on the Rust side. Maru sends
  * these via `create_document` so the new file's frontmatter carries a
  * proper `template_id` / `template_slug` / `template_version` /
  * `business_unit` / `program_id` / `guideline_ids` block alongside the
@@ -1008,7 +1008,7 @@ export async function stopInboxWatcher(): Promise<void> {
   await invoke("stop_inbox_watcher");
 }
 
-/** Build the prompt anchor sends to Claude for one inbox item. Pure
+/** Build the prompt maru sends to Claude for one inbox item. Pure
  *  Rust side — keeps the prompt template under version control instead
  *  of in TS. */
 export async function buildInboxClassificationPrompt(item: InboxDropItem): Promise<string> {
@@ -1340,7 +1340,7 @@ export async function removeAgentContextHint(
 }
 
 /** Pull unread Gmail messages via the user's existing `gws` Google
- *  Workspace CLI. Returns id / from / subject / date — anchor never
+ *  Workspace CLI. Returns id / from / subject / date — maru never
  *  fetches the message body, just the envelope, matching the Phase 2
  *  triage surface. Empty `query` falls back to gws's default
  *  `is:unread`. */
@@ -1391,7 +1391,7 @@ export async function decideGmailItem(
     return {
       messageId,
       decision,
-      labelName: decision === "accepted" ? "anchor-accepted" : "anchor-rejected",
+      labelName: decision === "accepted" ? "maru-accepted" : "maru-rejected",
       archived: decision === "accepted",
       ok: true,
       error: null,
@@ -1414,7 +1414,7 @@ export async function decideGmailItems(
     return items.map((item) => ({
       messageId: item.messageId,
       decision: item.decision,
-      labelName: item.decision === "accepted" ? "anchor-accepted" : "anchor-rejected",
+      labelName: item.decision === "accepted" ? "maru-accepted" : "maru-rejected",
       archived: item.decision === "accepted",
       ok: true,
       error: null,
@@ -1480,7 +1480,7 @@ export async function decideOutlookItem(
     return {
       messageId,
       decision,
-      categoryName: decision === "accepted" ? "anchor-accepted" : "anchor-rejected",
+      categoryName: decision === "accepted" ? "maru-accepted" : "maru-rejected",
       archived: false,
       ok: true,
       error: null,
@@ -1505,7 +1505,7 @@ export async function decideOutlookItems(
     return items.map((item) => ({
       messageId: item.messageId,
       decision: item.decision,
-      categoryName: item.decision === "accepted" ? "anchor-accepted" : "anchor-rejected",
+      categoryName: item.decision === "accepted" ? "maru-accepted" : "maru-rejected",
       archived: false,
       ok: true,
       error: null,
@@ -1689,7 +1689,7 @@ export async function storeShelfFiles(
   if (!isTauri()) {
     return sources.map((sourcePath) => ({
       sourcePath,
-      targetPath: `${vaultPath}/.anchor/stash/files/${sourcePath.split("/").pop() ?? "file"}`,
+      targetPath: `${vaultPath}/.maru/stash/files/${sourcePath.split("/").pop() ?? "file"}`,
       fileName: sourcePath.split("/").pop() ?? "file",
       operation,
     }));
@@ -1752,7 +1752,7 @@ export async function saveMemo(
     const fileName = `${leaf.replace(/\.(md|markdown|txt)$/i, "")}.${ext}`;
     return {
       name: fileName,
-      path: `${vaultPath}/.anchor/memos/${fileName}`,
+      path: `${vaultPath}/.maru/memos/${fileName}`,
       format,
       updatedAt: null,
       sizeBytes: content.length,
@@ -1845,7 +1845,7 @@ function mockAuthStatus(provider: string): ProviderAuthStatus {
         ? "/opt/homebrew/bin/m365"
         : provider === "gws"
           ? "/opt/homebrew/bin/gws"
-          : "$HOME/.anchor/env/.venv/bin/python",
+          : "$HOME/.maru/env/.venv/bin/python",
     account: provider === "telegram" ? null : "mock@example.com",
   };
 }
@@ -1857,7 +1857,7 @@ function mockTelegramMonitorConfig(
   return {
     path:
       monitorConfigPath ??
-      `${workPath ?? MOCK_VAULT_PATH}/.anchor/secrets/services/telegram-monitor.config.yaml`,
+      `${workPath ?? MOCK_VAULT_PATH}/.maru/secrets/services/telegram-monitor.config.yaml`,
     exists: false,
     warnings: [],
     telegram: {

@@ -11,9 +11,9 @@ import {
 
 const rows: MeetingNoteRow[] = [
   {
-    path: "/work/meetings/2026/2026-04/04-20 회의 - Anchor 사업 주간 점검 - KPI.md",
-    relPath: "meetings/2026/2026-04/04-20 회의 - Anchor 사업 주간 점검 - KPI.md",
-    fileName: "04-20 회의 - Anchor 사업 주간 점검 - KPI.md",
+    path: "/work/meetings/2026/2026-04/04-20 회의 - Maru 사업 주간 점검 - KPI.md",
+    relPath: "meetings/2026/2026-04/04-20 회의 - Maru 사업 주간 점검 - KPI.md",
+    fileName: "04-20 회의 - Maru 사업 주간 점검 - KPI.md",
     sizeBytes: 100,
     updatedAt: "2026-04-20T10:00:00+09:00",
     frontmatter: {},
@@ -47,7 +47,7 @@ describe("parseMeetingFilename", () => {
       month: 4,
       day: 20,
       type: "회의",
-      topic: "Anchor 사업 주간 점검",
+      topic: "Maru 사업 주간 점검",
       detail: "KPI",
       size: 100,
     });
@@ -55,15 +55,15 @@ describe("parseMeetingFilename", () => {
 
   it("derives title from type · topic when frontmatter has none", () => {
     const entry = parseMeetingFilename(rows[0].relPath, rows[0]);
-    expect(entry?.title).toBe("회의 · Anchor 사업 주간 점검");
+    expect(entry?.title).toBe("회의 · Maru 사업 주간 점검");
   });
 
   it("prefers frontmatter title (then name) over type · topic", () => {
     const withTitle = parseMeetingFilename(rows[0].relPath, {
       ...rows[0],
-      frontmatter: { title: "Anchor 주간 KPI 회의" },
+      frontmatter: { title: "Maru 주간 KPI 회의" },
     });
-    expect(withTitle?.title).toBe("Anchor 주간 KPI 회의");
+    expect(withTitle?.title).toBe("Maru 주간 KPI 회의");
 
     const withName = parseMeetingFilename(rows[0].relPath, {
       ...rows[0],
@@ -74,12 +74,12 @@ describe("parseMeetingFilename", () => {
 
   it("excludes invalid names and mismatched folder months", () => {
     expect(parseMeetingFilename("meetings/2026/2026-05/not-a-meeting.md")).toBeNull();
-    expect(parseMeetingFilename("meetings/2026/2026-05/05-20 회의 - Anchor - KPI.md")).toBeNull();
+    expect(parseMeetingFilename("meetings/2026/2026-05/05-20 회의 - Maru - KPI.md")).toBeNull();
     expect(
-      parseMeetingFilename("meetings/2026/2026-05/04-20 회의 - Anchor - KPI.md"),
+      parseMeetingFilename("meetings/2026/2026-05/04-20 회의 - Maru - KPI.md"),
     ).toBeNull();
     expect(
-      parseMeetingFilename("meetings/2026/2026-05/05-99 회의 - Anchor - KPI.md"),
+      parseMeetingFilename("meetings/2026/2026-05/05-99 회의 - Maru - KPI.md"),
     ).toBeNull();
   });
 
@@ -133,18 +133,18 @@ describe("parseMeetingFilename", () => {
   });
 
   it("falls back to the YYMMDD prefix when no frontmatter date is present", () => {
-    const relPath = "meetings/2026/2026-04/260420-meeting-anchor-weekly.md";
+    const relPath = "meetings/2026/2026-04/260420-meeting-maru-weekly.md";
     const entry = parseMeetingFilename(relPath, {
       path: `/work/${relPath}`,
       relPath,
-      fileName: "260420-meeting-anchor-weekly.md",
+      fileName: "260420-meeting-maru-weekly.md",
       sizeBytes: 50,
       updatedAt: null,
       frontmatter: {},
     });
 
     expect(entry?.date).toBe("2026-04-20");
-    expect(entry?.topic).toBe("anchor weekly");
+    expect(entry?.topic).toBe("maru weekly");
   });
 });
 
@@ -189,7 +189,7 @@ describe("meeting entry helpers", () => {
 
     expect(filterMeetingsByQuery(entries, "codex").map((entry) => entry.type)).toEqual(["상담"]);
     expect(filterMeetingsByQuery(entries, "", ["회의"]).map((entry) => entry.topic)).toEqual([
-      "Anchor 사업 주간 점검",
+      "Maru 사업 주간 점검",
     ]);
   });
 

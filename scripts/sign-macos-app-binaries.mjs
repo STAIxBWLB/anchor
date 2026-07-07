@@ -21,15 +21,15 @@ const targetTriple =
 
 const candidatePaths = [
   targetTriple
-    ? resolve(repoRoot, "src-tauri", "target", targetTriple, "release", "anchor-cli")
+    ? resolve(repoRoot, "src-tauri", "target", targetTriple, "release", "maru-cli")
     : null,
-  resolve(repoRoot, "src-tauri", "target", "release", "anchor-cli"),
+  resolve(repoRoot, "src-tauri", "target", "release", "maru-cli"),
 ].filter(Boolean);
 
 const binaries = [...new Set(candidatePaths)].filter((path) => existsSync(path));
 
 if (binaries.length === 0) {
-  console.log("[sign-macos-app-binaries] no anchor-cli binary found; skipping");
+  console.log("[sign-macos-app-binaries] no maru-cli binary found; skipping");
   process.exit(0);
 }
 

@@ -63,7 +63,7 @@ import type {
   TerminalPanelHandle,
 } from "./components/TerminalPanel";
 import {
-  buildAnchorBackgroundContextEnv,
+  buildMaruBackgroundContextEnv,
   hasPersistedTerminalTabs,
   TERMINAL_LAUNCHERS,
   terminalCommandPreview,
@@ -170,14 +170,14 @@ import {
   type StudioPackageResult,
 } from "./lib/studio";
 import {
-  readAnchorSettings,
+  readMaruSettings,
   readWorkspaceConfig,
   listWorkspaceProjects,
   registerWorkspaceRoots,
-  saveAnchorSettings,
-  listenAnchorSettingsUpdated,
-  updateAnchorWorkspace,
-} from "./lib/anchorDir";
+  saveMaruSettings,
+  listenMaruSettingsUpdated,
+  updateMaruWorkspace,
+} from "./lib/maruDir";
 import { classifyInboxItem } from "./lib/aiInvoke";
 import { createDebouncedSaver, type DebouncedSaver } from "./lib/debouncedSave";
 import { documentDisplayName } from "./lib/document";
@@ -295,14 +295,14 @@ import {
   type ExplorerDragPayload,
 } from "./lib/fileDrag";
 import {
-  DEFAULT_ANCHOR_SETTINGS,
+  DEFAULT_MARU_SETTINGS,
   applyWorkspaceCommsOverrides,
   applyWorkspaceMeetingsOverrides,
   applyWorkspaceTasksOverrides,
-  normalizeAnchorSettings,
+  normalizeMaruSettings,
   resolveClassifierRuntime,
-  type AnchorSettings,
-  type AnchorAppMode,
+  type MaruSettings,
+  type MaruAppMode,
   type DocumentBrowserMode,
   type DocumentViewDefinition,
   type EditorViewModeSetting,
@@ -357,9 +357,9 @@ import {
   type NavHistory,
 } from "./lib/neighborhoodHistory";
 
-const LAST_OPEN_KEY = "anchor:lastOpenedNote:v1";
-const OPEN_TABS_KEY = "anchor:openTabs:v1";
-const RECENT_KEY = "anchor:recent:v1";
+const LAST_OPEN_KEY = "maru:lastOpenedNote:v1";
+const OPEN_TABS_KEY = "maru:openTabs:v1";
+const RECENT_KEY = "maru:recent:v1";
 const APP_ICON_URL = new URL("./assets/app-icon-dark.png", import.meta.url).href;
 const MIN_DOCUMENTS_PANE_WIDTH = 260;
 const MAX_DOCUMENTS_PANE_WIDTH = 560;
@@ -390,7 +390,7 @@ function TerminalDockPlaceholder({
 }: {
   cwd: string | null;
   dock: TerminalDock;
-  settings: AnchorSettings;
+  settings: MaruSettings;
   t: (key: string, vars?: Record<string, string | number>) => string;
   onOpen: () => void;
   onLaunch: (kind: TerminalKind) => void;
@@ -533,7 +533,7 @@ const EMPTY_WORKSPACE_FILES_STATE: WorkspaceFilesState = {
   refreshing: false,
 };
 
-type AppMode = AnchorAppMode;
+type AppMode = MaruAppMode;
 
 interface InboxCarry {
   decision: InboxDecision;
@@ -583,7 +583,7 @@ function titleFromWikilinkTarget(target: string): string {
 }
 
 // (Phase 4 W7) The W5 `appendHubProvenance` helper that emitted
-// `<!-- anchor:template … -->` comment trailers has been removed: the Hub
+// `<!-- maru:template … -->` comment trailers has been removed: the Hub
 // template / guideline metadata now flows into proper frontmatter via
 // `CreateDocumentExtras` in lib/api.ts and document::create_document.
 
@@ -657,7 +657,7 @@ function formatGmailTtl(seconds: number): string {
 
 function initialStartupVisibility(
   registry: WorkspaceRegistry,
-  settings: AnchorSettings | null,
+  settings: MaruSettings | null,
 ): WorkspaceVisibility {
   const preferred = settings?.ui.activeWorkspaceVisibility;
   if (preferred && visibilityAvailable(registry, preferred)) return preferred;
@@ -760,8 +760,8 @@ function SettingsWindowRoot({
 }) {
   const localeValue = useLocaleState();
   const { t } = localeValue;
-  const [settings, setSettings] = useState<AnchorSettings>(() =>
-    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
+  const [settings, setSettings] = useState<MaruSettings>(() =>
+    normalizeMaruSettings(DEFAULT_MARU_SETTINGS),
   );
   const [error, setError] = useState<string | null>(null);
   const themeVars = useMemo(() => buildThemeVars(settings), [settings]);
@@ -774,10 +774,10 @@ function SettingsWindowRoot({
   useEffect(() => {
     let cancelled = false;
     if (!workPath) {
-      setSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+      setSettings(normalizeMaruSettings(DEFAULT_MARU_SETTINGS));
       return;
     }
-    void readAnchorSettings(workPath)
+    void readMaruSettings(workPath)
       .then((next) => {
         if (!cancelled) setSettings(next);
       })
@@ -791,11 +791,11 @@ function SettingsWindowRoot({
 
   useEffect(() => {
     let dispose: (() => void) | null = null;
-    void listenAnchorSettingsUpdated((payload) => {
+    void listenMaruSettingsUpdated((payload) => {
       if (payload.workPath === workPath) {
-        setSettings(normalizeAnchorSettings(payload.settings));
+        setSettings(normalizeMaruSettings(payload.settings));
       } else if (payload.globalChanged && workPath) {
-        void readAnchorSettings(workPath)
+        void readMaruSettings(workPath)
           .then((next) => setSettings(next))
           .catch((err) => setError(err instanceof Error ? err.message : String(err)));
       }
@@ -806,11 +806,11 @@ function SettingsWindowRoot({
   }, [workPath]);
 
   const updateSettings = useCallback(
-    (nextSettings: AnchorSettings) => {
-      const normalized = normalizeAnchorSettings(nextSettings);
+    (nextSettings: MaruSettings) => {
+      const normalized = normalizeMaruSettings(nextSettings);
       setSettings((current) => {
         if (workPath) {
-          void saveAnchorSettings(workPath, normalized, current).catch((err) => {
+          void saveMaruSettings(workPath, normalized, current).catch((err) => {
             setError(err instanceof Error ? err.message : String(err));
           });
         }
@@ -941,10 +941,10 @@ function MainApp() {
     useState<WorkspaceVisibility>("private");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>(
-    DEFAULT_ANCHOR_SETTINGS.ui.editorViewMode,
+    DEFAULT_MARU_SETTINGS.ui.editorViewMode,
   );
   const [rightPaneTab, setRightPaneTab] = useState<RightPaneTab>(
-    DEFAULT_ANCHOR_SETTINGS.ui.rightPaneTab,
+    DEFAULT_MARU_SETTINGS.ui.rightPaneTab,
   );
   // Shareable absolute file paths reported by the Inbox selection, fed to the
   // Shared Outbox tab's queue.
@@ -967,8 +967,8 @@ function MainApp() {
   const editorSplitShellRef = useRef<HTMLDivElement>(null);
   const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const rightEditorTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const settingsSaverRef = useRef<DebouncedSaver<AnchorSettings> | null>(null);
-  const settingsSaveBaseRef = useRef<AnchorSettings | null>(null);
+  const settingsSaverRef = useRef<DebouncedSaver<MaruSettings> | null>(null);
+  const settingsSaveBaseRef = useRef<MaruSettings | null>(null);
   const pendingUpdateRef = useRef<AppUpdateCheckResult["update"] | null>(null);
   const installingUpdateRef = useRef(false);
   const collapsedTreeHydratedRef = useRef(false);
@@ -1018,7 +1018,7 @@ function MainApp() {
   // Phase 2 inbox surface. Polling scan + notify watcher feed
   // `inboxItems`; per-item classifier output is carried alongside the
   // raw drop item via the InboxItemState shape.
-  const [appMode, setAppMode] = useState<AppMode>(DEFAULT_ANCHOR_SETTINGS.ui.activeAppMode);
+  const [appMode, setAppMode] = useState<AppMode>(DEFAULT_MARU_SETTINGS.ui.activeAppMode);
   const e2eFlowEnabled = useMemo(() => isE2EFlowEnabled(), []);
   const diagramEnabled = useMemo(() => isDiagramEnabled(), []);
   // Graph mode focus target (NeighborhoodPane "그래프에서 보기" → k-hop focus).
@@ -1094,31 +1094,31 @@ function MainApp() {
   const [meetingsRequestedView, setMeetingsRequestedView] = useState<
     "transcript" | "external" | null
   >(null);
-  const [anchorSettings, setAnchorSettings] = useState<AnchorSettings>(() =>
-    normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS),
+  const [maruSettings, setMaruSettings] = useState<MaruSettings>(() =>
+    normalizeMaruSettings(DEFAULT_MARU_SETTINGS),
   );
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [, startExplorerTransition] = useTransition();
   const scanOptions = useMemo(
-    () => ({ includeDotFolders: anchorSettings.scan.includeDotFolders }),
-    [anchorSettings.scan.includeDotFolders],
+    () => ({ includeDotFolders: maruSettings.scan.includeDotFolders }),
+    [maruSettings.scan.includeDotFolders],
   );
   const terminalRuntimeCommands = useMemo<Partial<Record<SkillDispatchRuntime, string | null>>>(
     () => ({
-      claude: anchorSettings.terminal.launchers.claude.command ?? null,
-      codex: anchorSettings.terminal.launchers.codex.command ?? null,
+      claude: maruSettings.terminal.launchers.claude.command ?? null,
+      codex: maruSettings.terminal.launchers.codex.command ?? null,
     }),
     [
-      anchorSettings.terminal.launchers.claude.command,
-      anchorSettings.terminal.launchers.codex.command,
+      maruSettings.terminal.launchers.claude.command,
+      maruSettings.terminal.launchers.codex.command,
     ],
   );
   const aiRuntimeCommands = useMemo<Partial<Record<SkillDispatchRuntime, string | null>>>(
     () => ({
-      claude: anchorSettings.ai.commandOverrides.claude,
-      codex: anchorSettings.ai.commandOverrides.codex,
+      claude: maruSettings.ai.commandOverrides.claude,
+      codex: maruSettings.ai.commandOverrides.codex,
     }),
-    [anchorSettings.ai.commandOverrides.claude, anchorSettings.ai.commandOverrides.codex],
+    [maruSettings.ai.commandOverrides.claude, maruSettings.ai.commandOverrides.codex],
   );
 
   const privateWorkspaces = useMemo(
@@ -1153,18 +1153,18 @@ function MainApp() {
   const savedCollapsedFileFolders = collapsedFileFoldersByVisibility[explorerVisibility];
   const defaultCollapsedTreeFolders = useMemo(
     () =>
-      explorerVisibility === "private" && !anchorSettings.ui.documentTreeStateInitialized
+      explorerVisibility === "private" && !maruSettings.ui.documentTreeStateInitialized
         ? []
         : null,
-    [anchorSettings.ui.documentTreeStateInitialized, explorerVisibility],
+    [maruSettings.ui.documentTreeStateInitialized, explorerVisibility],
   );
   const collapsedTreeFolders = defaultCollapsedTreeFolders ?? savedCollapsedTreeFolders;
   const defaultCollapsedFileFolders = useMemo(
     () =>
-      explorerVisibility === "private" && !anchorSettings.ui.fileTreeStateInitialized
+      explorerVisibility === "private" && !maruSettings.ui.fileTreeStateInitialized
         ? []
         : null,
-    [anchorSettings.ui.fileTreeStateInitialized, explorerVisibility],
+    [maruSettings.ui.fileTreeStateInitialized, explorerVisibility],
   );
   const collapsedFileFolders = defaultCollapsedFileFolders ?? savedCollapsedFileFolders;
   const documentIndex = useMemo<DocumentIndex>(() => buildDocumentIndex(entries), [entries]);
@@ -1183,19 +1183,19 @@ function MainApp() {
   const customDocumentViewCounts = useMemo(
     () =>
       Object.fromEntries(
-        anchorSettings.ui.documentViews.map((view) => [
+        maruSettings.ui.documentViews.map((view) => [
           view.id,
           countDocumentFilter(
             documentIndex,
             { kind: "custom", viewId: view.id },
-            { customViews: anchorSettings.ui.documentViews },
+            { customViews: maruSettings.ui.documentViews },
           ),
         ]),
       ),
-    [anchorSettings.ui.documentViews, documentIndex],
+    [maruSettings.ui.documentViews, documentIndex],
   );
   useEffect(() => {
-    const viewIds = new Set(anchorSettings.ui.documentViews.map((view) => view.id));
+    const viewIds = new Set(maruSettings.ui.documentViews.map((view) => view.id));
     setDocumentFilterByVisibility((current) => {
       let changed = false;
       const next = { ...current };
@@ -1208,7 +1208,7 @@ function MainApp() {
       }
       return changed ? next : current;
     });
-  }, [anchorSettings.ui.documentViews]);
+  }, [maruSettings.ui.documentViews]);
   const selectedFilePaths = useMemo(
     () =>
       explorerWorkspacePath
@@ -1233,7 +1233,7 @@ function MainApp() {
     () => orderTabsById(unorderedAnyTabs, tabOrder),
     [tabOrder, unorderedAnyTabs],
   );
-  const layoutSettings = anchorSettings.ui.layout;
+  const layoutSettings = maruSettings.ui.layout;
   const editorSplitOpen = layoutSettings.editorSplitOpen && Boolean(rightActiveTabId);
   const firstTabId = orderedAnyTabs[0]?.id ?? null;
   const leftResolvedTabId = leftActiveTabId ?? activeTabId ?? firstTabId;
@@ -1313,7 +1313,7 @@ function MainApp() {
   ]);
   const terminalPanelRef = useRef<TerminalPanelHandle | null>(null);
   const shouldScanExplorerWorkspaceFiles = shouldLazyScanWorkspaceFiles({
-    paneMode: anchorSettings.ui.explorerPaneMode,
+    paneMode: maruSettings.ui.explorerPaneMode,
     startupIoReady: explorerWorkspaceState.startupIoReady,
     hasEntries: explorerWorkspaceFilesState.entries.length > 0,
     loading: explorerWorkspaceFilesState.loading,
@@ -1429,16 +1429,16 @@ function MainApp() {
     };
   }, [workspaceConfigPath]);
   const effectiveCommsSettings = useMemo(
-    () => applyWorkspaceCommsOverrides(anchorSettings.comms, workspaceConfig),
-    [anchorSettings.comms, workspaceConfig],
+    () => applyWorkspaceCommsOverrides(maruSettings.comms, workspaceConfig),
+    [maruSettings.comms, workspaceConfig],
   );
   const effectiveMeetingsSettings = useMemo(
-    () => applyWorkspaceMeetingsOverrides(anchorSettings.meetings, workspaceConfig),
-    [anchorSettings.meetings, workspaceConfig],
+    () => applyWorkspaceMeetingsOverrides(maruSettings.meetings, workspaceConfig),
+    [maruSettings.meetings, workspaceConfig],
   );
   const effectiveTasksSettings = useMemo(
-    () => applyWorkspaceTasksOverrides(anchorSettings.tasks, workspaceConfig),
-    [anchorSettings.tasks, workspaceConfig],
+    () => applyWorkspaceTasksOverrides(maruSettings.tasks, workspaceConfig),
+    [maruSettings.tasks, workspaceConfig],
   );
   const dirty = useMemo(
     () => Boolean(document && draftContent !== document.content),
@@ -1470,7 +1470,7 @@ function MainApp() {
           null;
         return {
           id: tab.id,
-          title: documentDisplayName(tab.document, anchorSettings.ui.documentLabelMode),
+          title: documentDisplayName(tab.document, maruSettings.ui.documentLabelMode),
           path: tab.document.path,
           relPath: tab.document.relPath,
           dirty: tab.draftContent !== tab.document.content,
@@ -1480,7 +1480,7 @@ function MainApp() {
           writeBlockedReason: workspaceWriteReason(workspace, "renameMove"),
         };
       }),
-    [anchorSettings.ui.documentLabelMode, orderedAnyTabs, workspaceRegistry.workspaces],
+    [maruSettings.ui.documentLabelMode, orderedAnyTabs, workspaceRegistry.workspaces],
   );
   const commandPaletteSkillActions = useMemo(
     () =>
@@ -1608,14 +1608,14 @@ function MainApp() {
           cancelled = true;
         };
       }
-      setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+      setMaruSettings(normalizeMaruSettings(DEFAULT_MARU_SETTINGS));
       setSettingsLoaded(true);
       return;
     }
-    void readAnchorSettings(settingsWorkPath)
+    void readMaruSettings(settingsWorkPath)
       .then((settings) => {
         if (!cancelled) {
-          setAnchorSettings(settings);
+          setMaruSettings(settings);
           setAppMode(settings.ui.activeAppMode);
           setEditorViewMode(settings.ui.editorViewMode);
           setRightPaneTab(settings.ui.rightPaneTab);
@@ -1624,7 +1624,7 @@ function MainApp() {
       })
       .catch(() => {
         if (!cancelled) {
-          setAnchorSettings(normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS));
+          setMaruSettings(normalizeMaruSettings(DEFAULT_MARU_SETTINGS));
           setSettingsLoaded(true);
         }
       });
@@ -1635,17 +1635,17 @@ function MainApp() {
 
   useEffect(() => {
     let dispose: (() => void) | null = null;
-    void listenAnchorSettingsUpdated((payload) => {
+    void listenMaruSettingsUpdated((payload) => {
       if (payload.workPath === settingsWorkPath) {
-        const next = normalizeAnchorSettings(payload.settings);
-        setAnchorSettings(next);
+        const next = normalizeMaruSettings(payload.settings);
+        setMaruSettings(next);
         setAppMode(next.ui.activeAppMode);
         setEditorViewMode(next.ui.editorViewMode);
         setRightPaneTab(next.ui.rightPaneTab);
       } else if (payload.globalChanged && settingsWorkPath) {
-        void readAnchorSettings(settingsWorkPath)
+        void readMaruSettings(settingsWorkPath)
           .then((next) => {
-            setAnchorSettings(next);
+            setMaruSettings(next);
             setAppMode(next.ui.activeAppMode);
             setEditorViewMode(next.ui.editorViewMode);
             setRightPaneTab(next.ui.rightPaneTab);
@@ -1659,9 +1659,9 @@ function MainApp() {
   }, [settingsWorkPath]);
 
   useEffect(() => {
-    applyThemePreference(anchorSettings.ui.themeMode);
-    applyThemeVars(buildThemeVars(anchorSettings));
-  }, [anchorSettings]);
+    applyThemePreference(maruSettings.ui.themeMode);
+    applyThemeVars(buildThemeVars(maruSettings));
+  }, [maruSettings]);
 
   useEffect(() => {
     if (!settingsWritable || !settingsWorkPath) {
@@ -1669,11 +1669,11 @@ function MainApp() {
       settingsSaveBaseRef.current = null;
       return;
     }
-    const saver = createDebouncedSaver<AnchorSettings>(
+    const saver = createDebouncedSaver<MaruSettings>(
       async (settings) => {
         const base = settingsSaveBaseRef.current ?? undefined;
         settingsSaveBaseRef.current = null;
-        await saveAnchorSettings(settingsWorkPath, settings, base);
+        await saveMaruSettings(settingsWorkPath, settings, base);
       },
       250,
       (err) => {
@@ -1738,11 +1738,11 @@ function MainApp() {
 
   const updateSettings = useCallback(
     (
-      updater: AnchorSettings | ((current: AnchorSettings) => AnchorSettings),
+      updater: MaruSettings | ((current: MaruSettings) => MaruSettings),
       options?: { flush?: boolean },
     ) => {
-      setAnchorSettings((current) => {
-        const next = normalizeAnchorSettings(
+      setMaruSettings((current) => {
+        const next = normalizeMaruSettings(
           typeof updater === "function" ? updater(current) : updater,
         );
         if (settingsWritable && settingsWorkPath) {
@@ -1756,7 +1756,7 @@ function MainApp() {
               void saver.flush();
             }
           } else {
-            void saveAnchorSettings(settingsWorkPath, next, current).catch((err) => {
+            void saveMaruSettings(settingsWorkPath, next, current).catch((err) => {
               setError(err instanceof Error ? err.message : String(err));
             });
           }
@@ -1769,7 +1769,7 @@ function MainApp() {
 
   const updateLayoutSettings = useCallback(
     (
-      patch: Partial<AnchorSettings["ui"]["layout"]>,
+      patch: Partial<MaruSettings["ui"]["layout"]>,
       options?: { flush?: boolean },
     ) => {
       updateSettings((current) => {
@@ -1804,15 +1804,15 @@ function MainApp() {
 
   useEffect(() => {
     if (terminalPanelMounted) return;
-    if (!anchorSettings.ui.layout.terminalOpen && !terminalLaunchRequest) return;
+    if (!maruSettings.ui.layout.terminalOpen && !terminalLaunchRequest) return;
     markStartup("terminal:full-mount-request", {
-      open: anchorSettings.ui.layout.terminalOpen,
+      open: maruSettings.ui.layout.terminalOpen,
       launch: terminalLaunchRequest?.kind ?? null,
     });
     setTerminalPanelMounted(true);
     preloadTerminalPanel();
   }, [
-    anchorSettings.ui.layout.terminalOpen,
+    maruSettings.ui.layout.terminalOpen,
     terminalLaunchRequest,
     terminalPanelMounted,
   ]);
@@ -1868,20 +1868,20 @@ function MainApp() {
   }, []);
 
   const attachActiveItemToTerminal = useCallback(() => {
-    if (!anchorSettings.ui.layout.terminalOpen) {
+    if (!maruSettings.ui.layout.terminalOpen) {
       updateLayoutSettings({ terminalOpen: true });
     }
     return terminalPanelRef.current?.attachActiveItem() ?? false;
-  }, [anchorSettings.ui.layout.terminalOpen, updateLayoutSettings]);
+  }, [maruSettings.ui.layout.terminalOpen, updateLayoutSettings]);
 
   const attachPathToTerminal = useCallback(
     (relPath: string | null, absPath: string | null) => {
-      if (!anchorSettings.ui.layout.terminalOpen) {
+      if (!maruSettings.ui.layout.terminalOpen) {
         updateLayoutSettings({ terminalOpen: true });
       }
       return terminalPanelRef.current?.attachPath(relPath, absPath) ?? false;
     },
-    [anchorSettings.ui.layout.terminalOpen, updateLayoutSettings],
+    [maruSettings.ui.layout.terminalOpen, updateLayoutSettings],
   );
 
   const toggleAgentStatusHooks = useCallback(async () => {
@@ -2047,8 +2047,8 @@ function MainApp() {
     const key = settingsWorkPath;
     if (restoredWindowKeyRef.current === key) return;
     restoredWindowKeyRef.current = key;
-    void restoreMainWindowLayout(anchorSettings.ui.layout).catch(() => {});
-  }, [anchorSettings.ui.layout, settingsLoaded, settingsWorkPath]);
+    void restoreMainWindowLayout(maruSettings.ui.layout).catch(() => {});
+  }, [maruSettings.ui.layout, settingsLoaded, settingsWorkPath]);
 
   useEffect(() => {
     if (!settingsLoaded || !settingsWritable) return;
@@ -2071,18 +2071,18 @@ function MainApp() {
     collapsedTreeHydratedRef.current = true;
     setCollapsedTreeFoldersByVisibility((current) => ({
       ...current,
-      private: anchorSettings.ui.documentTreeStateInitialized
-        ? anchorSettings.ui.collapsedTreeFolders
+      private: maruSettings.ui.documentTreeStateInitialized
+        ? maruSettings.ui.collapsedTreeFolders
         : current.private,
     }));
   }, [
-    anchorSettings.ui.collapsedTreeFolders,
-    anchorSettings.ui.documentTreeStateInitialized,
+    maruSettings.ui.collapsedTreeFolders,
+    maruSettings.ui.documentTreeStateInitialized,
     settingsLoaded,
   ]);
 
   useEffect(() => {
-    if (!settingsLoaded || anchorSettings.ui.activeWorkspaceVisibility === explorerVisibility) {
+    if (!settingsLoaded || maruSettings.ui.activeWorkspaceVisibility === explorerVisibility) {
       return;
     }
     updateSettings((current) => ({
@@ -2093,7 +2093,7 @@ function MainApp() {
       },
     }));
   }, [
-    anchorSettings.ui.activeWorkspaceVisibility,
+    maruSettings.ui.activeWorkspaceVisibility,
     explorerVisibility,
     settingsLoaded,
     updateSettings,
@@ -2104,13 +2104,13 @@ function MainApp() {
     collapsedFileHydratedRef.current = true;
     setCollapsedFileFoldersByVisibility((current) => ({
       ...current,
-      private: anchorSettings.ui.fileTreeStateInitialized
-        ? anchorSettings.ui.collapsedFileFolders
+      private: maruSettings.ui.fileTreeStateInitialized
+        ? maruSettings.ui.collapsedFileFolders
         : current.private,
     }));
   }, [
-    anchorSettings.ui.collapsedFileFolders,
-    anchorSettings.ui.fileTreeStateInitialized,
+    maruSettings.ui.collapsedFileFolders,
+    maruSettings.ui.fileTreeStateInitialized,
     settingsLoaded,
   ]);
 
@@ -2120,7 +2120,7 @@ function MainApp() {
     EMPTY_WORKSPACE_STATE;
 
   useEffect(() => {
-    if (!settingsLoaded || anchorSettings.ui.documentTreeStateInitialized) return;
+    if (!settingsLoaded || maruSettings.ui.documentTreeStateInitialized) return;
     if (!privateWorkspacePath || !privateWorkspaceState.startupIoReady) return;
     const collapsedFolders: string[] = [];
     setCollapsedTreeFoldersByVisibility((current) => ({
@@ -2136,7 +2136,7 @@ function MainApp() {
       },
     }));
   }, [
-    anchorSettings.ui.documentTreeStateInitialized,
+    maruSettings.ui.documentTreeStateInitialized,
     privateWorkspacePath,
     privateWorkspaceState.startupIoReady,
     settingsLoaded,
@@ -2144,7 +2144,7 @@ function MainApp() {
   ]);
 
   useEffect(() => {
-    if (!settingsLoaded || anchorSettings.ui.fileTreeStateInitialized) return;
+    if (!settingsLoaded || maruSettings.ui.fileTreeStateInitialized) return;
     if (!privateWorkspacePath || explorerVisibility !== "private") return;
     if (explorerWorkspaceFilesState.loading || explorerWorkspaceFilesState.entries.length === 0) return;
     const collapsedFolders: string[] = [];
@@ -2161,7 +2161,7 @@ function MainApp() {
       },
     }));
   }, [
-    anchorSettings.ui.fileTreeStateInitialized,
+    maruSettings.ui.fileTreeStateInitialized,
     explorerVisibility,
     explorerWorkspaceFilesState.entries,
     explorerWorkspaceFilesState.loading,
@@ -2342,11 +2342,11 @@ function MainApp() {
     [updateSettings],
   );
 
-  // Best-effort persistence of the chosen mode into .anchor/workspace.json.
+  // Best-effort persistence of the chosen mode into .maru/workspace.json.
   // Failures are silent — this is a UX nicety, not a correctness concern.
   useEffect(() => {
     if (!systemWorkPath) return;
-    void updateAnchorWorkspace(systemWorkPath, { lastActiveMode: appMode }).catch(() => {});
+    void updateMaruWorkspace(systemWorkPath, { lastActiveMode: appMode }).catch(() => {});
   }, [appMode, systemWorkPath]);
 
   useEffect(() => {
@@ -2807,10 +2807,10 @@ function MainApp() {
         kind: decision === "accepted" ? "gmail.accept" : "gmail.reject",
         summary:
           decision === "accepted"
-            ? "Apply the Anchor accepted label and archive this Gmail message."
-            : "Apply the Anchor rejected label to this Gmail message.",
+            ? "Apply the Maru accepted label and archive this Gmail message."
+            : "Apply the Maru rejected label to this Gmail message.",
         target: id,
-        payloadPreview: decision === "accepted" ? "add anchor-accepted; remove INBOX" : "add anchor-rejected",
+        payloadPreview: decision === "accepted" ? "add maru-accepted; remove INBOX" : "add maru-rejected",
       });
       if (!approvalId) return;
       setInboxActionBusy(true);
@@ -2839,10 +2839,10 @@ function MainApp() {
         kind: decision === "accepted" ? "outlook.accept" : "outlook.reject",
         summary:
           decision === "accepted"
-            ? "Apply the Anchor accepted category to this Outlook message."
-            : "Apply the Anchor rejected category to this Outlook message.",
+            ? "Apply the Maru accepted category to this Outlook message."
+            : "Apply the Maru rejected category to this Outlook message.",
         target: id,
-        payloadPreview: decision === "accepted" ? "add anchor-accepted" : "add anchor-rejected",
+        payloadPreview: decision === "accepted" ? "add maru-accepted" : "add maru-rejected",
       });
       if (!approvalId) return;
       setOutlookError(null);
@@ -3118,7 +3118,7 @@ function MainApp() {
       setInboxActionBusy(true);
       setError(null);
       try {
-        const runtime: SkillDispatchRuntime = anchorSettings.ai.defaultRuntime;
+        const runtime: SkillDispatchRuntime = maruSettings.ai.defaultRuntime;
         const commandOverride = aiRuntimeCommands[runtime] ?? null;
         const runtimeStatus = await skillsRuntimeStatus({ runtime, commandOverride });
         if (!runtimeStatus.available) {
@@ -3148,7 +3148,7 @@ function MainApp() {
           cwd: inboxWorkspacePath,
           context,
           commandOverride,
-          permissionMode: anchorSettings.ai.permissionMode,
+          permissionMode: maruSettings.ai.permissionMode,
           metadata: {
             origin: "inboxProcess",
             channel: channels[0] ?? "incoming",
@@ -3179,8 +3179,8 @@ function MainApp() {
       inboxWorkspacePath,
       refreshProcessingMissions,
       aiRuntimeCommands,
-      anchorSettings.ai.defaultRuntime,
-      anchorSettings.ai.permissionMode,
+      maruSettings.ai.defaultRuntime,
+      maruSettings.ai.permissionMode,
       skills,
     ],
   );
@@ -3381,8 +3381,8 @@ function MainApp() {
       if (!target) return;
       updateInboxCarry(id, { classifying: true, classifyError: null });
       try {
-        const runtime = resolveClassifierRuntime(anchorSettings.ai);
-        const contextEnv = buildAnchorBackgroundContextEnv(
+        const runtime = resolveClassifierRuntime(maruSettings.ai);
+        const contextEnv = buildMaruBackgroundContextEnv(
           {
             workspaceRoot: inboxWorkspacePath,
             workspaceVisibility: explorerVisibility,
@@ -3392,14 +3392,14 @@ function MainApp() {
             docTitle: null,
             docType: null,
           },
-          anchorSettings.terminal.injectActiveContext,
+          maruSettings.terminal.injectActiveContext,
         );
         const classification = await classifyInboxItem(
           target,
           runtime,
           inboxWorkspacePath,
-          anchorSettings.ai.commandOverrides[runtime],
-          anchorSettings.ai.permissionMode,
+          maruSettings.ai.commandOverrides[runtime],
+          maruSettings.ai.permissionMode,
           contextEnv,
         );
         updateInboxCarry(id, { classifying: false, classification });
@@ -3411,8 +3411,8 @@ function MainApp() {
       }
     },
     [
-      anchorSettings.ai,
-      anchorSettings.terminal.injectActiveContext,
+      maruSettings.ai,
+      maruSettings.terminal.injectActiveContext,
       explorerVisibility,
       inboxDrops,
       inboxWorkspacePath,
@@ -3611,7 +3611,7 @@ function MainApp() {
         // Surface a soft notice but keep polling functional.
         if (!cancelled) {
           // eslint-disable-next-line no-console
-          console.info("[anchor] inbox watcher not started:", err);
+          console.info("[maru] inbox watcher not started:", err);
         }
         return;
       }
@@ -3629,7 +3629,7 @@ function MainApp() {
       } catch (err) {
         // Browser dev shell — `@tauri-apps/api/event` may not be wired.
         // eslint-disable-next-line no-console
-        console.info("[anchor] inbox event listener unavailable:", err);
+        console.info("[maru] inbox event listener unavailable:", err);
       }
     })();
 
@@ -3917,14 +3917,14 @@ function MainApp() {
           return;
         }
         setWorkspaceRegistry(registry);
-        let bootSettings: AnchorSettings | null = null;
+        let bootSettings: MaruSettings | null = null;
         const bootSettingsPath = startupSettingsPath(registry);
         if (bootSettingsPath) {
           try {
             bootSettings = await measureStartup("settings:startup-read", () =>
-              readAnchorSettings(bootSettingsPath),
+              readMaruSettings(bootSettingsPath),
             );
-            setAnchorSettings(bootSettings);
+            setMaruSettings(bootSettings);
             setAppMode(bootSettings.ui.activeAppMode);
             setEditorViewMode(bootSettings.ui.editorViewMode);
             setRightPaneTab(bootSettings.ui.rightPaneTab);
@@ -4068,7 +4068,7 @@ function MainApp() {
       return;
     }
     const seededDocType =
-      docType ?? documentFilterDefaultDocType(documentFilter, anchorSettings.ui.documentViews);
+      docType ?? documentFilterDefaultDocType(documentFilter, maruSettings.ui.documentViews);
     const fromLibrary = options?.fromLibrary === true;
     setNewDocumentSeed(
       seededDocType || fromLibrary
@@ -4079,7 +4079,7 @@ function MainApp() {
   }, [
     activeDocumentWorkspace,
     activeWorkspaceCanCreate,
-    anchorSettings.ui.documentViews,
+    maruSettings.ui.documentViews,
     documentFilter,
     t,
   ]);
@@ -4348,7 +4348,7 @@ function MainApp() {
     (
       sources: FileQueueSourceInfo[],
       targetDir: string,
-      operation: FileStoreOperation = anchorSettings.ui.fileQueueDefaultOperation,
+      operation: FileStoreOperation = maruSettings.ui.fileQueueDefaultOperation,
     ) => {
       if (sources.length === 0) return;
       const addedIds: string[] = [];
@@ -4376,7 +4376,7 @@ function MainApp() {
       setPersistedRightPaneTab("files");
     },
     [
-      anchorSettings.ui.fileQueueDefaultOperation,
+      maruSettings.ui.fileQueueDefaultOperation,
       outlineOpen,
       setPersistedAppMode,
       setPersistedRightPaneTab,
@@ -5026,7 +5026,7 @@ function MainApp() {
       if (manual) {
         setUpdateToast({ kind: "error", message });
       } else {
-        console.info("[anchor] update check failed:", message);
+        console.info("[maru] update check failed:", message);
       }
     }
   }, [installUpdate, t]);
@@ -5059,7 +5059,7 @@ function MainApp() {
         }
       })
       .catch((err) => {
-        console.info("[anchor] update menu listener unavailable:", err);
+        console.info("[maru] update menu listener unavailable:", err);
       });
     return () => {
       disposed = true;
@@ -5245,13 +5245,13 @@ function MainApp() {
       void refreshProcessingMissions();
     } else if (appMode === "tasks") {
       void refreshProcessingMissions();
-    } else if (anchorSettings.ui.explorerPaneMode === "files" && explorerWorkspacePath) {
+    } else if (maruSettings.ui.explorerPaneMode === "files" && explorerWorkspacePath) {
       void refreshWorkspaceFiles(explorerWorkspacePath);
     } else {
       void refreshCurrent();
     }
   }, [
-    anchorSettings.ui.explorerPaneMode,
+    maruSettings.ui.explorerPaneMode,
     appMode,
     explorerWorkspacePath,
     refreshCurrent,
@@ -5566,11 +5566,11 @@ function MainApp() {
           draft: dirtyClosing.draftContent,
         });
       }
-      const anchorId =
+      const maruId =
         resolvedActiveTabId && closeSet.has(resolvedActiveTabId)
           ? resolvedActiveTabId
           : tabIds[0];
-      const fallbackId = nextFallbackTabIdAfterClose(orderedAnyTabs, closeSet, anchorId);
+      const fallbackId = nextFallbackTabIdAfterClose(orderedAnyTabs, closeSet, maruId);
       setTabs((prev) => prev.filter((tab) => !closeSet.has(tab.id)));
       setBinaryTabs((prev) => prev.filter((tab) => !closeSet.has(tab.id)));
       setTabOrder((prev) => prev.filter((id) => !closeSet.has(id)));
@@ -5631,7 +5631,7 @@ function MainApp() {
       const docTab = tabs.find((item) => item.id === tabId);
       if (docTab) {
         copyTextToClipboard(
-          documentDisplayName(docTab.document, anchorSettings.ui.documentLabelMode),
+          documentDisplayName(docTab.document, maruSettings.ui.documentLabelMode),
         );
         return;
       }
@@ -5639,7 +5639,7 @@ function MainApp() {
       if (binaryTab) copyTextToClipboard(binaryTab.fileEntry.name);
     },
     [
-      anchorSettings.ui.documentLabelMode,
+      maruSettings.ui.documentLabelMode,
       binaryTabs,
       copyTextToClipboard,
       tabs,
@@ -5819,10 +5819,10 @@ function MainApp() {
       const workspacePath = docTab?.workspacePath ?? binaryTab!.workspacePath;
       const relPath = docTab?.entry.relPath ?? binaryTab!.fileEntry.relPath;
       const targetPath = docTab?.document.path ?? binaryTab!.fileEntry.path;
-      const activePane = binaryTab ? "files" : anchorSettings.ui.explorerPaneMode;
+      const activePane = binaryTab ? "files" : maruSettings.ui.explorerPaneMode;
       setPersistedAppMode("pkm");
       if (!documentsPaneOpen) updateLayoutSettings({ documentsPaneOpen: true });
-      if (binaryTab && anchorSettings.ui.explorerPaneMode !== "files") {
+      if (binaryTab && maruSettings.ui.explorerPaneMode !== "files") {
         setExplorerPaneMode("files");
       }
       setExplorerVisibility(visibility);
@@ -5857,7 +5857,7 @@ function MainApp() {
       setPendingExplorerReveal({ pane: activePane, targetPath });
     },
     [
-      anchorSettings.ui.explorerPaneMode,
+      maruSettings.ui.explorerPaneMode,
       binaryTabs,
       documentsPaneOpen,
       refreshWorkspaceFiles,
@@ -6399,7 +6399,7 @@ function MainApp() {
         else unlisten = off;
       })
       .catch((err) => {
-        console.info("[anchor] menu listener unavailable:", err);
+        console.info("[maru] menu listener unavailable:", err);
       });
     return () => {
       disposed = true;
@@ -6458,7 +6458,7 @@ function MainApp() {
     commitDialog !== null ||
     approvalGate.open;
   const terminalMaximizedClass =
-    anchorSettings.ui.layout.terminalOpen && anchorSettings.ui.layout.terminalMaximized
+    maruSettings.ui.layout.terminalOpen && maruSettings.ui.layout.terminalMaximized
       ? " terminal-maximized"
       : "";
   const terminalDockClass =
@@ -6468,7 +6468,7 @@ function MainApp() {
   const shellClass = `app-shell${modeClass}${outlineOpen ? "" : " outline-closed"}${
     documentsPaneOpen ? "" : " documents-closed"
   }${terminalMaximizedClass}${terminalDockClass}`;
-  const themeVars = useMemo(() => buildThemeVars(anchorSettings), [anchorSettings]);
+  const themeVars = useMemo(() => buildThemeVars(maruSettings), [maruSettings]);
   const shellStyle = useMemo(
     () =>
       ({
@@ -6667,7 +6667,7 @@ function MainApp() {
         activeWorkspaceLabel={workspace?.label ?? null}
         documentLabel={
           docTab
-            ? documentDisplayName(docTab.document, anchorSettings.ui.documentLabelMode)
+            ? documentDisplayName(docTab.document, maruSettings.ui.documentLabelMode)
             : binaryTab?.fileEntry.name ?? null
         }
         readOnly={!caps.canModify || Boolean(binaryTab)}
@@ -7014,7 +7014,7 @@ function MainApp() {
             onCreateDocument={createDocumentAndOpen}
             onApplyBody={applyStudioBody}
             onFreezePackage={freezeStudioPackage}
-            lintDismissalsByDoc={anchorSettings.composer.lintDismissals}
+            lintDismissalsByDoc={maruSettings.composer.lintDismissals}
             onLintDismissalsChange={(docId, dismissedIds) => {
               updateSettings((current) => ({
                 ...current,
@@ -7148,12 +7148,12 @@ function MainApp() {
         ) : visibleAppMode === "meetings" ? (
           <MeetingsPane
             workPath={inboxWorkspacePath}
-            settings={anchorSettings.meetings}
+            settings={maruSettings.meetings}
             effectiveSettings={effectiveMeetingsSettings}
-            labelMode={anchorSettings.ui.documentLabelMode}
+            labelMode={maruSettings.ui.documentLabelMode}
             skills={skills}
             runtimeCommands={aiRuntimeCommands}
-            permissionMode={anchorSettings.ai.permissionMode}
+            permissionMode={maruSettings.ai.permissionMode}
             processingMissions={activeMeetingsMissions(processingMissions)}
             processingLogLines={processingLogLines}
             onRefreshMissions={refreshProcessingMissions}
@@ -7175,11 +7175,11 @@ function MainApp() {
           <TasksPane
             workPath={inboxWorkspacePath}
             effectiveSettings={effectiveTasksSettings}
-            labelMode={anchorSettings.ui.documentLabelMode}
+            labelMode={maruSettings.ui.documentLabelMode}
             skills={skills}
             runtimeCommands={aiRuntimeCommands}
-            permissionMode={anchorSettings.ai.permissionMode}
-            defaultRuntime={anchorSettings.ai.defaultRuntime}
+            permissionMode={maruSettings.ai.permissionMode}
+            defaultRuntime={maruSettings.ai.defaultRuntime}
             processingMissions={activeTasksMissions(processingMissions)}
             processingLogLines={processingLogLines}
             onRefreshMissions={refreshProcessingMissions}
@@ -7197,14 +7197,14 @@ function MainApp() {
           />
         ) : (
           <>
-            {documentsPaneOpen && anchorSettings.ui.explorerPaneMode === "documents" ? (
+            {documentsPaneOpen && maruSettings.ui.explorerPaneMode === "documents" ? (
               <DocumentList
                 documentIndex={documentIndex}
                 selectedPath={selectedPath}
                 query={query}
                 loading={(booting || explorerWorkspaceState.loading) && entries.length === 0}
                 documentFilter={documentFilter}
-                documentViews={anchorSettings.ui.documentViews}
+                documentViews={maruSettings.ui.documentViews}
                 workspaceVisibility={explorerVisibility}
                 publicWorkspaceAvailable={publicWorkspaceAvailable}
                 activeWorkspaceLabel={explorerWorkspaceCaption}
@@ -7216,8 +7216,8 @@ function MainApp() {
                   }
                 }}
                 onAddPublicWorkspace={() => openAddWorkspaceDialog("public")}
-                browserMode={anchorSettings.ui.documentBrowserMode}
-                documentLabelMode={anchorSettings.ui.documentLabelMode}
+                browserMode={maruSettings.ui.documentBrowserMode}
+                documentLabelMode={maruSettings.ui.documentLabelMode}
                 collapsedTreeFolders={collapsedTreeFolders}
                 onQueryChange={setExplorerQuery}
                 onBrowserModeChange={setDocumentBrowserMode}
@@ -7230,7 +7230,7 @@ function MainApp() {
                 searchInputRef={searchInputRef}
                 paneRef={documentsPaneRef}
                 vaultPath={explorerWorkspacePath}
-                paneMode={anchorSettings.ui.explorerPaneMode}
+                paneMode={maruSettings.ui.explorerPaneMode}
                 onPaneModeChange={setExplorerPaneMode}
                 pendingRevealTargetPath={
                   pendingExplorerReveal?.pane === "documents"
@@ -7257,7 +7257,7 @@ function MainApp() {
                 }}
               />
             ) : null}
-            {documentsPaneOpen && anchorSettings.ui.explorerPaneMode === "files" ? (
+            {documentsPaneOpen && maruSettings.ui.explorerPaneMode === "files" ? (
               <WorkspaceFilesPane
                 entries={fileEntries}
                 selectedPaths={selectedFilePaths}
@@ -7272,14 +7272,14 @@ function MainApp() {
                 workspaceVisibility={explorerVisibility}
                 publicWorkspaceAvailable={publicWorkspaceAvailable}
                 activeWorkspaceLabel={explorerWorkspaceCaption}
-                paneMode={anchorSettings.ui.explorerPaneMode}
-                filter={anchorSettings.ui.workspaceFileFilter}
-                browserMode={anchorSettings.ui.filesBrowserMode}
-                sortKey={anchorSettings.ui.filesSortKey}
-                filesListAttributes={anchorSettings.ui.filesListAttributes}
+                paneMode={maruSettings.ui.explorerPaneMode}
+                filter={maruSettings.ui.workspaceFileFilter}
+                browserMode={maruSettings.ui.filesBrowserMode}
+                sortKey={maruSettings.ui.filesSortKey}
+                filesListAttributes={maruSettings.ui.filesListAttributes}
                 paneFilters={filesPaneFilters}
                 queuedSourcePaths={queuedSourcePaths}
-                binaryIncludePatterns={anchorSettings.ui.binaryFileIncludePatterns}
+                binaryIncludePatterns={maruSettings.ui.binaryFileIncludePatterns}
                 collapsedFileFolders={collapsedFileFolders}
                 workspacePath={explorerWorkspacePath}
                 onWorkspaceVisibilityChange={(visibility) => {
@@ -7423,7 +7423,7 @@ function MainApp() {
             selectedWorkspaceFileEntries={selectedWorkspaceFileEntries}
             filesPaneFilters={filesPaneFilters}
             onFilesPaneFiltersChange={setFilesPaneFilters}
-            explorerPaneMode={anchorSettings.ui.explorerPaneMode}
+            explorerPaneMode={maruSettings.ui.explorerPaneMode}
             onRevealFileInFinder={revealTargetInFinder}
             activeTab={rightPaneTab}
             onTabChange={setPersistedRightPaneTab}
@@ -7434,7 +7434,7 @@ function MainApp() {
             appMode={visibleAppMode}
             contentCount={documentIndex.contentCount}
             typeCounts={documentIndex.typeCounts}
-            documentViews={anchorSettings.ui.documentViews}
+            documentViews={maruSettings.ui.documentViews}
             viewCounts={builtInDocumentViewCounts}
             customViewCounts={customDocumentViewCounts}
             recentEntries={recentEntries}
@@ -7453,7 +7453,7 @@ function MainApp() {
                   missions={activeTrackedAgentMissions(processingMissions)}
                   logLines={processingLogLines}
                   runtimeCommands={aiRuntimeCommands}
-                  permissionMode={anchorSettings.ai.permissionMode}
+                  permissionMode={maruSettings.ai.permissionMode}
                   onRefresh={refreshProcessingMissions}
                   onStopMission={(id) => void stopProcessingMission(id)}
                   onMissionStarted={handleMeetingsMissionStarted}
@@ -7492,8 +7492,8 @@ function MainApp() {
             fallback={
               <TerminalDockPlaceholder
                 cwd={activeDocumentWorkspacePath}
-                dock={anchorSettings.ui.layout.terminalDock}
-                settings={anchorSettings}
+                dock={maruSettings.ui.layout.terminalDock}
+                settings={maruSettings}
                 t={t}
                 onOpen={() => updateLayoutSettings({ terminalOpen: true }, { flush: true })}
                 onLaunch={requestTerminalLaunch}
@@ -7504,15 +7504,15 @@ function MainApp() {
               ref={terminalPanelRef}
               cwd={activeDocumentWorkspacePath}
               activeContext={activeTerminalContext}
-              settings={anchorSettings}
+              settings={maruSettings}
               launchRequest={terminalLaunchRequest}
-              open={anchorSettings.ui.layout.terminalOpen}
-              height={anchorSettings.ui.layout.terminalHeight}
-              dock={anchorSettings.ui.layout.terminalDock}
-              width={anchorSettings.ui.layout.terminalWidth}
-              splitOpen={anchorSettings.ui.layout.terminalSplitOpen}
-              splitRatio={anchorSettings.ui.layout.terminalSplitRatio}
-              maximized={anchorSettings.ui.layout.terminalMaximized}
+              open={maruSettings.ui.layout.terminalOpen}
+              height={maruSettings.ui.layout.terminalHeight}
+              dock={maruSettings.ui.layout.terminalDock}
+              width={maruSettings.ui.layout.terminalWidth}
+              splitOpen={maruSettings.ui.layout.terminalSplitOpen}
+              splitRatio={maruSettings.ui.layout.terminalSplitRatio}
+              maximized={maruSettings.ui.layout.terminalMaximized}
               onOpenChange={(terminalOpen) =>
                 updateLayoutSettings({ terminalOpen }, { flush: true })
               }
@@ -7533,8 +7533,8 @@ function MainApp() {
         ) : (
           <TerminalDockPlaceholder
             cwd={activeDocumentWorkspacePath}
-            dock={anchorSettings.ui.layout.terminalDock}
-            settings={anchorSettings}
+            dock={maruSettings.ui.layout.terminalDock}
+            settings={maruSettings}
             t={t}
             onOpen={() => updateLayoutSettings({ terminalOpen: true }, { flush: true })}
             onLaunch={requestTerminalLaunch}
@@ -7696,8 +7696,8 @@ function MainApp() {
           }}
           terminalRuntimeCommands={terminalRuntimeCommands}
           aiRuntimeCommands={aiRuntimeCommands}
-          defaultRuntime={anchorSettings.ai.defaultRuntime}
-          permissionMode={anchorSettings.ai.permissionMode}
+          defaultRuntime={maruSettings.ai.defaultRuntime}
+          permissionMode={maruSettings.ai.permissionMode}
           meetingsWorkspacePath={inboxWorkspacePath}
           onOpenMeetingsWorkbench={openMeetingsWorkbench}
           onError={setError}
@@ -7708,7 +7708,7 @@ function MainApp() {
           onClose={closeCommandPalette}
           onSelectEntry={selectEntry}
           onRunCommand={runCommand}
-          documentLabelMode={anchorSettings.ui.documentLabelMode}
+          documentLabelMode={maruSettings.ui.documentLabelMode}
           skillActions={commandPaletteSkillActions}
           diagramEnabled={diagramEnabled}
         />
@@ -7716,8 +7716,8 @@ function MainApp() {
           open={commitDialog !== null}
           vaultPath={commitDialog?.path ?? null}
           status={commitDialog?.status ?? null}
-          aiRuntime={anchorSettings.ai.defaultRuntime}
-          aiCommandOverride={aiRuntimeCommands[anchorSettings.ai.defaultRuntime] ?? null}
+          aiRuntime={maruSettings.ai.defaultRuntime}
+          aiCommandOverride={aiRuntimeCommands[maruSettings.ai.defaultRuntime] ?? null}
           onConfirmApproval={approvalGate.confirmApproval}
           onClose={() => setCommitDialog(null)}
           onCommitted={() => setGitRefreshTick((n) => n + 1)}

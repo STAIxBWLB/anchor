@@ -36,11 +36,11 @@ export function telegramLoginCommand(settings: CommsSettings["telegram"]): {
   command: string | null;
   args: string[];
 } {
-  const python = settings.pythonPath?.trim() || "$HOME/.anchor/env/.venv/bin/python";
+  const python = settings.pythonPath?.trim() || "$HOME/.maru/env/.venv/bin/python";
   const script = settings.scriptPath?.trim()
     ? settings.scriptPath.replace(/telegram_monitor\.py$/, "auth.py")
-    : "$HOME/.anchor/skills/_builtin/skills/io-telegram/scripts/auth.py";
-  const session = settings.sessionFile?.trim() || "$HOME/.anchor/telegram/monitor.session";
+    : "$HOME/.maru/skills/_builtin/skills/io-telegram/scripts/auth.py";
+  const session = settings.sessionFile?.trim() || "$HOME/.maru/telegram/monitor.session";
   const configArg = settings.monitorConfigPath?.trim()
     ? ` --config-file ${quoteShell(settings.monitorConfigPath.trim())}`
     : "";
@@ -75,14 +75,14 @@ export function m365LoginCommand(m365Path?: string | null): {
   };
 }
 
-export function isTelegramMonitorConfigOutsideAnchor(
+export function isTelegramMonitorConfigOutsideMaru(
   path: string | null | undefined,
 ): boolean {
   const trimmed = path?.trim();
   if (!trimmed) return false;
-  if (trimmed === "~/.anchor" || trimmed.startsWith("~/.anchor/")) return false;
-  if (trimmed === "$HOME/.anchor" || trimmed.startsWith("$HOME/.anchor/")) return false;
-  if (trimmed.endsWith("/.anchor") || trimmed.includes("/.anchor/")) return false;
+  if (trimmed === "~/.maru" || trimmed.startsWith("~/.maru/")) return false;
+  if (trimmed === "$HOME/.maru" || trimmed.startsWith("$HOME/.maru/")) return false;
+  if (trimmed.endsWith("/.maru") || trimmed.includes("/.maru/")) return false;
   return true;
 }
 

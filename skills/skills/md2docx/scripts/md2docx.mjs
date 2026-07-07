@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // md2docx.mjs — convert markdown docs to refined .docx using docx-js (docx@9.6.x).
 // Self-contained parser tuned to a pragmatic markdown subset (no external md parser).
-// Managed by the Anchor `md2docx` skill — invoke via the `md2docx` wrapper, which
-// resolves the bundled Node runtime + NODE_PATH=~/.anchor/env/node_modules.
+// Managed by the Maru `md2docx` skill — invoke via the `md2docx` wrapper, which
+// resolves the bundled Node runtime + NODE_PATH=~/.maru/env/node_modules.
 //
 // Usage (via wrapper):
 //   md2docx <file1.md> [file2.md ...]
@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { createRequire } from "node:module";
-// docx resolves from the Anchor env (NODE_PATH=~/.anchor/env/node_modules) via CJS
+// docx resolves from the Maru env (NODE_PATH=~/.maru/env/node_modules) via CJS
 // require — ESM static `import` does NOT honor NODE_PATH for bare specifiers.
 const require = createRequire(import.meta.url);
 const {
@@ -541,7 +541,7 @@ function makeDoc(blocks, { title, headerText }) {
 
   return new Document({
     title: title || undefined,
-    creator: "md2docx (Anchor docx-js skill)",
+    creator: "md2docx (Maru docx-js skill)",
     styles: {
       default: { document: { run: { font: FONT, size: 21, color: T.body }, paragraph: { spacing: { line: 276 } } } },
       paragraphStyles: [

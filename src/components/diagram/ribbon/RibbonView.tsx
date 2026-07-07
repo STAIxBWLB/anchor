@@ -63,7 +63,7 @@ export function RibbonView({
           onClick={() => store.setState(toggleSmartGuides())}
           active={smartGuideOn}
         >🎯</RibbonButton>
-        <label className="anchor-diagram-snap-input" title={t("diagram.toolbar.snapSize")}>
+        <label className="maru-diagram-snap-input" title={t("diagram.toolbar.snapSize")}>
           <span>{t("diagram.toolbar.snapSize")}</span>
           <input
             type="number"
@@ -78,7 +78,7 @@ export function RibbonView({
       <RibbonSeparator />
       <RibbonGroup labelKey="diagram.ribbon.group.zoom">
         <RibbonButton labelKey="diagram.toolbar.zoomOut" onClick={onZoomOut} icon={<ZoomOut size={14} />} />
-        <span className="anchor-diagram-zoom-label">{zoomPercent}%</span>
+        <span className="maru-diagram-zoom-label">{zoomPercent}%</span>
         <RibbonButton labelKey="diagram.toolbar.zoomIn" onClick={onZoomIn} icon={<ZoomIn size={14} />} />
         <RibbonButton labelKey="diagram.toolbar.fitView" onClick={onFitView} icon={<Maximize2 size={14} />} />
       </RibbonGroup>

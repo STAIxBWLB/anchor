@@ -212,7 +212,7 @@ function NodeLabel({ node }: { node: DiagramNode }) {
       pointerEvents="none"
     >
       <div
-        className="anchor-diagram-node-label"
+        className="maru-diagram-node-label"
         style={{
           color: s.fc,
           fontSize: s.fs,
@@ -231,7 +231,7 @@ function SectionHeader({ node }: { node: DiagramNode }) {
   return (
     <foreignObject x={0} y={0} width={node.w} height={26} pointerEvents="none">
       <div
-        className="anchor-diagram-node-header"
+        className="maru-diagram-node-header"
         style={{
           color: node.style?.fc ?? "#ffffff",
           fontSize: (node.style?.fs ?? 12) + 1,
@@ -276,7 +276,7 @@ function NodeViewBase({
   return (
     <g
       transform={`translate(${node.x},${node.y})`}
-      className={`anchor-diagram-node${selected ? " is-selected" : ""}${pendingConnectActive ? " is-connect-target" : ""}`}
+      className={`maru-diagram-node${selected ? " is-selected" : ""}${pendingConnectActive ? " is-connect-target" : ""}`}
       data-node-id={node.id}
       onPointerDown={handlePointerDown}
     >
@@ -347,7 +347,7 @@ function NodeViewBase({
       ) : null}
       {memo ? (
         <g
-          className="anchor-diagram-memo-badge"
+          className="maru-diagram-memo-badge"
           transform={`translate(${node.w - 6}, -10)`}
           onPointerDown={(event) => {
             event.stopPropagation();
@@ -369,7 +369,7 @@ function NodeViewBase({
             return (
               <circle
                 key={port}
-                className="anchor-diagram-port"
+                className="maru-diagram-port"
                 data-port={port}
                 data-node-id={node.id}
                 cx={pt.x - node.x}

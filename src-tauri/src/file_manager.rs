@@ -157,7 +157,7 @@ mod tests {
     fn file_manager_target_expands_tilde_inside_vault() {
         let home = dirs::home_dir().expect("home directory should be available for tilde tests");
         let tmp = tempfile::Builder::new()
-            .prefix("anchor-file-manager-")
+            .prefix("maru-file-manager-")
             .tempdir_in(&home)
             .unwrap();
         let target = tmp.path().join("inbox");

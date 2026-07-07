@@ -5,15 +5,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const releaseRepo = process.env.ANCHOR_RELEASE_REPO ?? "STAIxBWLB/anchor";
-const expectedBundleId = process.env.ANCHOR_MACOS_BUNDLE_ID ?? "kr.anchor.desktop";
+const releaseRepo = process.env.MARU_RELEASE_REPO ?? "STAIxBWLB/maru";
+const expectedBundleId = process.env.MARU_MACOS_BUNDLE_ID ?? "kr.maru.desktop";
 const args = new Set(process.argv.slice(2));
 const allowedArgs = new Set(["--github-secrets", "--require-local-identity", "--help"]);
 
 if (args.has("--help")) {
   console.log(`usage: node scripts/check-macos-direct-distribution.mjs [--github-secrets] [--require-local-identity]
 
-Checks Anchor's minimum macOS direct-distribution setup.
+Checks Maru's minimum macOS direct-distribution setup.
 
 Options:
   --github-secrets          require all GitHub Actions secrets used for signed/notarized releases
@@ -96,10 +96,10 @@ if (packageJson && tauriConfig) {
     fail(`bundle identifier is ${tauriConfig.identifier ?? "missing"}; expected ${expectedBundleId}`);
   }
 
-  if (tauriConfig.productName === "Anchor") {
-    ok("productName is Anchor");
+  if (tauriConfig.productName === "Maru") {
+    ok("productName is Maru");
   } else {
-    warn(`productName is ${tauriConfig.productName ?? "missing"}; expected Anchor for release assets`);
+    warn(`productName is ${tauriConfig.productName ?? "missing"}; expected Maru for release assets`);
   }
 
   if (tauriConfig.bundle?.active === true) {

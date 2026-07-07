@@ -83,7 +83,7 @@ export function LeftPanel() {
   const handleDragStart = useCallback(
     (event: DragEvent<HTMLLIElement>, id: NodeId) => {
       event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/anchor-diagram-layer", id);
+      event.dataTransfer.setData("text/maru-diagram-layer", id);
       setDragId(id);
     },
     [],
@@ -103,7 +103,7 @@ export function LeftPanel() {
   const handleDrop = useCallback(
     (event: DragEvent<HTMLLIElement>, targetId: NodeId) => {
       event.preventDefault();
-      const sourceId = event.dataTransfer.getData("text/anchor-diagram-layer");
+      const sourceId = event.dataTransfer.getData("text/maru-diagram-layer");
       if (!sourceId || sourceId === targetId) {
         setDragId(null);
         setDropTarget(null);
@@ -131,9 +131,9 @@ export function LeftPanel() {
 
   if (nodes.length === 0) {
     return (
-      <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.layers")}>
+      <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.layers")}>
         <h2>{t("diagram.panel.layers")}</h2>
-        <p className="anchor-diagram-side-panel-empty">{t("diagram.panel.layers.empty")}</p>
+        <p className="maru-diagram-side-panel-empty">{t("diagram.panel.layers.empty")}</p>
       </aside>
     );
   }
@@ -141,9 +141,9 @@ export function LeftPanel() {
   const visualOrder = [...nodes].reverse();
 
   return (
-    <aside className="anchor-diagram-side-panel" aria-label={t("diagram.panel.layers")}>
+    <aside className="maru-diagram-side-panel" aria-label={t("diagram.panel.layers")}>
       <h2>{t("diagram.panel.layers")}</h2>
-      <ul className="anchor-diagram-layers">
+      <ul className="maru-diagram-layers">
         {visualOrder.map((node) => {
           const isSelected = selection.has(node.id);
           const isDragging = dragId === node.id;
@@ -152,7 +152,7 @@ export function LeftPanel() {
           return (
             <li
               key={node.id}
-              className={`anchor-diagram-layer${isSelected ? " is-selected" : ""}${
+              className={`maru-diagram-layer${isSelected ? " is-selected" : ""}${
                 isDragging ? " is-dragging" : ""
               }${dropHint ? ` is-${dropHint}` : ""}`}
               draggable
@@ -162,11 +162,11 @@ export function LeftPanel() {
               onDragEnd={handleDragEnd}
               onClick={(e) => handleClick(e, node.id)}
             >
-              <span className="anchor-diagram-layer-grip" aria-hidden="true">
+              <span className="maru-diagram-layer-grip" aria-hidden="true">
                 <GripVertical size={12} />
               </span>
               <input
-                className="anchor-diagram-layer-name"
+                className="maru-diagram-layer-name"
                 value={node.title ?? ""}
                 placeholder={defaultLabelFor(node, t)}
                 onChange={(e) => handleRename(node.id, e.target.value)}
@@ -174,7 +174,7 @@ export function LeftPanel() {
               />
               <button
                 type="button"
-                className="anchor-diagram-layer-button"
+                className="maru-diagram-layer-button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleVisible(node);
@@ -186,7 +186,7 @@ export function LeftPanel() {
               </button>
               <button
                 type="button"
-                className="anchor-diagram-layer-button"
+                className="maru-diagram-layer-button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleToggleLocked(node);

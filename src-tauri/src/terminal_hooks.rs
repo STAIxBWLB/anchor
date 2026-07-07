@@ -1,12 +1,12 @@
 // Agent status hooks (Phase D): a file-based event channel that lets external
-// CLI agents (Claude Code, Codex) report lifecycle transitions back to Anchor
+// CLI agents (Claude Code, Codex) report lifecycle transitions back to Maru
 // so the terminal sidebar can show precise running / needs-input / done status
 // and capture a native session id for resume.
 //
 // Flow:
 //   agent lifecycle event
-//     → hook runs `anchor-cli terminal-hook --event <token> --agent <a>`
-//     → appends one JSON line to ~/.anchor/runtime/terminal/<sessionId>/events.jsonl
+//     → hook runs `maru-cli terminal-hook --event <token> --agent <a>`
+//     → appends one JSON line to ~/.maru/runtime/terminal/<sessionId>/events.jsonl
 //     → a `notify` watcher in the app picks up the new line
 //     → emits `terminal://status` to the webview.
 //
@@ -32,21 +32,21 @@ const CLAUDE_HOOK_EVENTS: &[(&str, &str)] = &[
     ("Stop", "done"),
 ];
 
-/// Substring marking an Anchor-managed hook command (for idempotency + removal).
+/// Substring marking an Maru-managed hook command (for idempotency + removal).
 const HOOK_MARKER: &str = "terminal-hook";
 
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
 
-fn anchor_home() -> Result<PathBuf, String> {
+fn maru_home() -> Result<PathBuf, String> {
     dirs::home_dir()
-        .map(|home| home.join(".anchor"))
+        .map(|home| home.join(".maru"))
         .ok_or_else(|| "Could not determine home directory".to_string())
 }
 
 fn runtime_terminal_dir() -> Result<PathBuf, String> {
-    Ok(anchor_home()?.join("runtime").join("terminal"))
+    Ok(maru_home()?.join("runtime").join("terminal"))
 }
 
 /// Accept only a safe leaf id (`term-<uuid>` shape). Rejects traversal.
@@ -67,7 +67,7 @@ fn sanitize_session_id(raw: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// CLI: `anchor-cli terminal-hook --event <token> [--agent x] [--session-id id]`
+// CLI: `maru-cli terminal-hook --event <token> [--agent x] [--session-id id]`
 // ---------------------------------------------------------------------------
 
 /// Best-effort hook sink. Always returns 0 so a failure never blocks the agent.
@@ -87,7 +87,7 @@ pub fn run_terminal_hook(args: &[String]) -> i32 {
     let Some(event) = event else {
         return 0;
     };
-    let Some(session_id) = std::env::var("ANCHOR_SESSION_ID")
+    let Some(session_id) = std::env::var("MARU_SESSION_ID")
         .ok()
         .and_then(|raw| sanitize_session_id(&raw))
     else {
@@ -166,7 +166,7 @@ struct TerminalStatusEvent {
 #[derive(Default)]
 pub struct TerminalHookWatcherState(pub Mutex<Option<RecommendedWatcher>>);
 
-/// Start watching `~/.anchor/runtime/terminal/` for hook events. Idempotent:
+/// Start watching `~/.maru/runtime/terminal/` for hook events. Idempotent:
 /// replacing the watcher drops the previous one.
 pub fn start_terminal_hook_watcher(app: &AppHandle) -> Result<(), String> {
     let dir = runtime_terminal_dir()?;
@@ -266,29 +266,29 @@ fn emit_new_events(app: &AppHandle, offsets: &Arc<Mutex<HashMap<PathBuf, u64>>>,
 // Installer: Claude Code settings.json hooks (project or global scope)
 // ---------------------------------------------------------------------------
 
-/// Resolve an absolute path to the bundled `anchor-cli`, falling back to the
+/// Resolve an absolute path to the bundled `maru-cli`, falling back to the
 /// bare name (relying on PATH) when the sibling binary cannot be located.
-fn resolve_anchor_cli() -> String {
+fn resolve_maru_cli() -> String {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            let candidate = dir.join("anchor-cli");
+            let candidate = dir.join("maru-cli");
             if candidate.exists() {
                 return candidate.to_string_lossy().to_string();
             }
         }
     }
-    "anchor-cli".to_string()
+    "maru-cli".to_string()
 }
 
 fn claude_command(cli: &str, token: &str) -> String {
     format!("{cli} terminal-hook --event {token} --agent claude")
 }
 
-fn is_anchor_hook_command(command: &str) -> bool {
+fn is_maru_hook_command(command: &str) -> bool {
     command.contains(HOOK_MARKER) && command.contains("--agent claude")
 }
 
-/// Merge Anchor hook entries into a Claude settings document. Returns whether
+/// Merge Maru hook entries into a Claude settings document. Returns whether
 /// anything changed (idempotent — re-running is a no-op).
 fn merge_claude_hooks(root: &mut Value, cli: &str) -> bool {
     if !root.is_object() {
@@ -310,7 +310,7 @@ fn merge_claude_hooks(root: &mut Value, cli: &str) -> bool {
             *entry = json!([]);
         }
         let array = entry.as_array_mut().expect("event array");
-        let already = array.iter().any(|group| group_has_anchor_command(group));
+        let already = array.iter().any(|group| group_has_maru_command(group));
         if !already {
             array.push(json!({
                 "hooks": [ { "type": "command", "command": command } ]
@@ -321,7 +321,7 @@ fn merge_claude_hooks(root: &mut Value, cli: &str) -> bool {
     changed
 }
 
-fn group_has_anchor_command(group: &Value) -> bool {
+fn group_has_maru_command(group: &Value) -> bool {
     group
         .get("hooks")
         .and_then(Value::as_array)
@@ -329,14 +329,14 @@ fn group_has_anchor_command(group: &Value) -> bool {
             hooks.iter().any(|hook| {
                 hook.get("command")
                     .and_then(Value::as_str)
-                    .map(is_anchor_hook_command)
+                    .map(is_maru_hook_command)
                     .unwrap_or(false)
             })
         })
         .unwrap_or(false)
 }
 
-/// Remove all Anchor-managed hook entries. Returns whether anything changed.
+/// Remove all Maru-managed hook entries. Returns whether anything changed.
 fn remove_claude_hooks(root: &mut Value) -> bool {
     let Some(hooks) = root.get_mut("hooks").and_then(Value::as_object_mut) else {
         return false;
@@ -345,7 +345,7 @@ fn remove_claude_hooks(root: &mut Value) -> bool {
     for (_event, entry) in hooks.iter_mut() {
         if let Some(array) = entry.as_array_mut() {
             let before = array.len();
-            array.retain(|group| !group_has_anchor_command(group));
+            array.retain(|group| !group_has_maru_command(group));
             if array.len() != before {
                 changed = true;
             }
@@ -395,7 +395,7 @@ pub struct TerminalHooksStatus {
 }
 
 fn codex_hint() -> String {
-    let cli = resolve_anchor_cli();
+    let cli = resolve_maru_cli();
     format!(
         "Add to ~/.codex/config.toml: notify = [\"{cli}\", \"terminal-hook\", \"--event\", \"done\", \"--agent\", \"codex\"]"
     )
@@ -415,7 +415,7 @@ pub fn terminal_hooks_status(
             hooks
                 .values()
                 .filter_map(Value::as_array)
-                .any(|array| array.iter().any(group_has_anchor_command))
+                .any(|array| array.iter().any(group_has_maru_command))
         })
         .unwrap_or(false);
     Ok(TerminalHooksStatus {
@@ -433,7 +433,7 @@ pub fn terminal_hooks_install(
 ) -> Result<TerminalHooksStatus, String> {
     let path = claude_settings_path(work_path.as_deref(), &scope)?;
     let mut root = read_json_object(&path);
-    let cli = resolve_anchor_cli();
+    let cli = resolve_maru_cli();
     if merge_claude_hooks(&mut root, &cli) {
         write_json_pretty(&path, &root)?;
     }
@@ -459,22 +459,22 @@ pub fn terminal_hooks_uninstall(
 // Phase E: CLAUDE.md / AGENTS.md context-hint writer (opt-in, reversible)
 // ---------------------------------------------------------------------------
 
-const HINT_START: &str = "<!-- anchor:context-hint v1 start -->";
-const HINT_END: &str = "<!-- anchor:context-hint v1 end -->";
+const HINT_START: &str = "<!-- maru:context-hint v1 start -->";
+const HINT_END: &str = "<!-- maru:context-hint v1 end -->";
 
 fn agent_context_hint_block() -> String {
     format!(
         "{HINT_START}\n\
-## Anchor active context (auto-managed — edit outside these markers)\n\n\
-When a session is launched from Anchor's integrated terminal, these environment \
+## Maru active context (auto-managed — edit outside these markers)\n\n\
+When a session is launched from Maru's integrated terminal, these environment \
 variables describe the user's currently-active window/item:\n\n\
-- `ANCHOR_WORKSPACE` — current workspace root (also granted via `--add-dir`)\n\
-- `ANCHOR_WORKSPACE_VISIBILITY` — `private` or `public`\n\
-- `ANCHOR_APP_MODE` — active view (`pkm`, `inbox`, `meetings`, …)\n\
-- `ANCHOR_ACTIVE_DOC` / `ANCHOR_ACTIVE_DOC_REL` — absolute / workspace-relative path of the open document\n\
-- `ANCHOR_ACTIVE_DOC_TITLE` / `ANCHOR_ACTIVE_DOC_TYPE` — its title and frontmatter type\n\n\
+- `MARU_WORKSPACE` — current workspace root (also granted via `--add-dir`)\n\
+- `MARU_WORKSPACE_VISIBILITY` — `private` or `public`\n\
+- `MARU_APP_MODE` — active view (`pkm`, `inbox`, `meetings`, …)\n\
+- `MARU_ACTIVE_DOC` / `MARU_ACTIVE_DOC_REL` — absolute / workspace-relative path of the open document\n\
+- `MARU_ACTIVE_DOC_TITLE` / `MARU_ACTIVE_DOC_TYPE` — its title and frontmatter type\n\n\
 An unset variable means there is no active item of that kind. When the user says \
-\"this note\" or \"the current document\", prefer `$ANCHOR_ACTIVE_DOC`.\n\
+\"this note\" or \"the current document\", prefer `$MARU_ACTIVE_DOC`.\n\
 {HINT_END}\n"
     )
 }
@@ -621,9 +621,9 @@ mod tests {
     #[test]
     fn merge_claude_hooks_is_idempotent() {
         let mut root = json!({});
-        assert!(merge_claude_hooks(&mut root, "/bin/anchor-cli"));
+        assert!(merge_claude_hooks(&mut root, "/bin/maru-cli"));
         // Second merge changes nothing.
-        assert!(!merge_claude_hooks(&mut root, "/bin/anchor-cli"));
+        assert!(!merge_claude_hooks(&mut root, "/bin/maru-cli"));
         let stop = root
             .pointer("/hooks/Stop")
             .and_then(Value::as_array)
@@ -644,7 +644,7 @@ mod tests {
                 "Stop": [ { "hooks": [ { "type": "command", "command": "echo mine" } ] } ]
             }
         });
-        merge_claude_hooks(&mut root, "/bin/anchor-cli");
+        merge_claude_hooks(&mut root, "/bin/maru-cli");
         let stop = root
             .pointer("/hooks/Stop")
             .and_then(Value::as_array)
@@ -653,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn remove_claude_hooks_only_drops_anchor_entries() {
+    fn remove_claude_hooks_only_drops_maru_entries() {
         let mut root = json!({
             "hooks": {
                 "Stop": [
@@ -661,7 +661,7 @@ mod tests {
                 ]
             }
         });
-        merge_claude_hooks(&mut root, "/bin/anchor-cli");
+        merge_claude_hooks(&mut root, "/bin/maru-cli");
         assert!(remove_claude_hooks(&mut root));
         let stop = root
             .pointer("/hooks/Stop")
@@ -683,7 +683,7 @@ mod tests {
         let once = upsert_marked_block(original, &block);
         assert!(once.starts_with("# My Project"));
         assert!(once.contains(HINT_START));
-        assert!(once.contains("ANCHOR_ACTIVE_DOC"));
+        assert!(once.contains("MARU_ACTIVE_DOC"));
         // Re-applying replaces in place (no duplicate markers).
         let twice = upsert_marked_block(&once, &block);
         assert_eq!(once.matches(HINT_START).count(), 1);

@@ -263,7 +263,7 @@ export function buildTaskManagementSchedulePrompt(
     `- Use timezone ${timezone} unless the text states another timezone.`,
     `- Use default Google Tasks list ${defaultTaskList} for read-only conflict lookup during review; create/update/delete only after user approval through task-management's execution path.`,
     `- Use default calendar ${defaultCalendar} for read-only availability/conflict lookup during review; create/update/delete only after user approval through task-management's execution path.`,
-    "- Anchor itself must not call Google APIs; the skill may perform read-only Google Tasks/Calendar lookup in review mode.",
+    "- Maru itself must not call Google APIs; the skill may perform read-only Google Tasks/Calendar lookup in review mode.",
     "- Do not write directly to any vault; create only a local vault-promotion proposal if needed.",
     "- Before dispatching writes, show the proposed markdown path and frontmatter.",
     "",
@@ -277,19 +277,19 @@ export function buildTaskManagementSchedulePrompt(
 }
 
 /**
- * Shared Anchor run contract injected into tracked task-management prompts so a
- * run reliably emits the `anchor_skill_proposal_v1` + `anchor_task_review_v1`
+ * Shared Maru run contract injected into tracked task-management prompts so a
+ * run reliably emits the `maru_skill_proposal_v1` + `maru_task_review_v1`
  * blocks the review panel parses (mirrors meeting-notes' run contract).
  */
 export function taskManagementRunContract(): string[] {
   return [
-    "Anchor run contract (background/review mode — proposals only):",
+    "Maru run contract (background/review mode — proposals only):",
     "- Do not write files or mutate Google Tasks/Calendar during this run; emit proposals only.",
     "- Read-only Google Tasks/Calendar lookup is allowed for conflict checks, existing ID reconciliation, and sync preview quality.",
     "- All Google create/update/delete operations happen only after user approval through task-management's approved execution path.",
     "- Prefix progress logs with phase markers: [phase:source], [phase:normalize], [phase:draft], [phase:proposal], [phase:review].",
-    "- Final output must include exactly one JSON object with schemaVersion \"anchor_skill_proposal_v1\" (the local markdown file writes).",
-    "- Final output must include exactly one JSON object with schemaVersion \"anchor_task_review_v1\".",
+    "- Final output must include exactly one JSON object with schemaVersion \"maru_skill_proposal_v1\" (the local markdown file writes).",
+    "- Final output must include exactly one JSON object with schemaVersion \"maru_task_review_v1\".",
     "- The review JSON must include summary, taskDetails, fields, schedule, conflicts, uncertainties, and followups.",
     "- Followups may include only vault-extract, vault-connect, and meeting-notes.",
   ];
@@ -313,7 +313,7 @@ export function buildTaskManagementSyncPrompt(
     "- Do not add create-only backref fields in a sync proposal.",
     `- Use timezone ${timezone} unless a task states another timezone.`,
     `- Reconcile against Google Tasks list ${defaultTaskList} and calendar ${defaultCalendar} with read-only lookup during review.`,
-    "- Anchor itself must not call Google APIs; in the review summary, name which Google Tasks/Calendar mutations will run only after approval.",
+    "- Maru itself must not call Google APIs; in the review summary, name which Google Tasks/Calendar mutations will run only after approval.",
     "",
     ...taskManagementRunContract(),
   ].join("\n");

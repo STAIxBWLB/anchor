@@ -49,7 +49,7 @@ export function RibbonTable() {
       </RibbonGroup>
       <RibbonSeparator />
       <RibbonGroup labelKey="diagram.ribbon.group.tableMeta">
-        <span className="anchor-diagram-ribbon-hint">
+        <span className="maru-diagram-ribbon-hint">
           {disabled
             ? t("diagram.table.selectHint")
             : t("diagram.table.count", { rows: String(rows), cols: String(cols) })}

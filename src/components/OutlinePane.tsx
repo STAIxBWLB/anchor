@@ -57,7 +57,7 @@ import { extractOutline } from "../lib/markdown";
 import { useTranslation } from "../lib/i18n";
 import { useContextMenuKeyboard } from "../lib/useContextMenuKeyboard";
 import type {
-  AnchorAppMode,
+  MaruAppMode,
   DocumentViewDefinition,
   ExplorerPaneMode,
   RightPaneTab,
@@ -134,7 +134,7 @@ interface OutlinePaneProps {
   shareDocumentDirty: boolean;
   /** Shareable absolute file paths reported by the Inbox selection. */
   inboxShareablePaths: string[];
-  appMode: AnchorAppMode;
+  appMode: MaruAppMode;
   contentCount: number;
   typeCounts: Array<[string, number]>;
   documentViews: DocumentViewDefinition[];
@@ -616,7 +616,7 @@ export function OutlinePane({
                     suggestions={observedTypes}
                     onCommit={(next) => onUpdateField("type", next || null)}
                     placeholder={t("inspector.empty")}
-                    datalistId="anchor-type-list"
+                    datalistId="maru-type-list"
                     readOnly={readOnly}
                   />
                 </InspectorRow>
@@ -628,7 +628,7 @@ export function OutlinePane({
                   suggestions={STANDARD_STATUSES}
                   onCommit={(next) => onUpdateField("status", next || null)}
                   placeholder={t("inspector.empty")}
-                  datalistId="anchor-status-list"
+                  datalistId="maru-status-list"
                   readOnly={readOnly}
                 />
               </InspectorRow>
@@ -1595,7 +1595,7 @@ function TopicsInput({ value, suggestions, readOnly = false, onCommit }: TopicsI
       <input
         className="tag-chip-input"
         value={draft}
-        list="anchor-topics-moc-list"
+        list="maru-topics-moc-list"
         onChange={(event) => setDraft(event.target.value)}
         disabled={readOnly}
         onKeyDown={(event) => {
@@ -1610,7 +1610,7 @@ function TopicsInput({ value, suggestions, readOnly = false, onCommit }: TopicsI
         onBlur={pushTopic}
         placeholder={topics.length === 0 ? "[[moc]]" : "+"}
       />
-      <datalist id="anchor-topics-moc-list">
+      <datalist id="maru-topics-moc-list">
         {suggestions.map((stem) => (
           <option key={stem} value={stem} />
         ))}

@@ -45,14 +45,14 @@ CODE_EXTENSIONS = {
 
 # ── Workspace (--work-root) constants — DR-023 ─────────────────────────
 # Keep aligned with migrate_tree.py SKIP_DIRS (work repo, _meta/scripts/).
-# Cross-repo import is impossible (this file ships in the anchor app bundle),
+# Cross-repo import is impossible (this file ships in the maru app bundle),
 # so the set is replicated literally. If migrate_tree.py SKIP_DIRS changes,
 # update this too. Additions beyond that set (DR-023 §2): inbox/sites/dev
 # (submodules + runtime), shared (share-outbox staging), _templates/templates
 # (scaffold dirs). Files whose frontmatter contains "{{" are template stubs
 # and are skipped separately (avoids minting bu:{{bu}} hubs).
 WORK_SKIP_DIRS = {
-    ".git", "node_modules", ".venv", ".sync-conflicts", "temp", ".anchor",
+    ".git", "node_modules", ".venv", ".sync-conflicts", "temp", ".maru",
     ".pnpm-store", ".conductor", ".dotfiles", ".omx", ".omc", ".gstack",
     ".frontend-slides", ".claude", ".archive", "archive", "vault",
     "inbox", "sites", "dev", "shared", "_templates", "templates",
@@ -273,8 +273,8 @@ _CFG_SKIP = {".git", "node_modules", ".venv", ".sync-conflicts", "archive",
 def _load_bu_slugs(work_root: Path) -> set:
     """Valid bu_id slugs from bu-config.yaml files (DR-023 §7).
 
-    bu-config.yaml lives under `.anchor/` (or 00-readme/), so the full
-    WORK_SKIP_DIRS (which skips `.anchor`) is NOT applied here — only truly
+    bu-config.yaml lives under `.maru/` (or 00-readme/), so the full
+    WORK_SKIP_DIRS (which skips `.maru`) is NOT applied here — only truly
     irrelevant trees are pruned.
     """
     slugs = set()

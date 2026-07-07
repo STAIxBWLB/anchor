@@ -16,7 +16,7 @@ Core guarantees (the hard-won HWPX rules):
   * deepcopy reference-paragraph cloning — preserves run/charPr/paraPr structure.
   * mimetype-first STORED repackaging — HWPX/EPUB zip rule.
 
-Only dependency is lxml (already in the Anchor env). No python-hwpx.
+Only dependency is lxml (already in the Maru env). No python-hwpx.
 """
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def replace_in_paragraph(p: etree._Element, old: str, new: str,
                          *, limit: int | None = None) -> int:
     """Replace `old`→`new` across the paragraph's <hp:t> nodes, even when `old`
     spans multiple runs. Text outside the matched span keeps its run/formatting;
-    the replacement inherits the style of the run owning the anchor's start.
+    the replacement inherits the style of the run owning the maru's start.
 
     Deletes the paragraph's linesegarray on any change. Returns # replaced.
     """
@@ -181,10 +181,10 @@ def replace_in_paragraph(p: etree._Element, old: str, new: str,
 
 def edit_text(src: Path, dst: Path, replacements: dict[str, str],
               *, limit: int | None = None) -> dict[str, int]:
-    """Apply {anchor: value} replacements across all section/header XML entries
+    """Apply {maru: value} replacements across all section/header XML entries
     using run-aware, linesegarray-safe tree editing. Repackages mimetype-first.
 
-    Returns per-anchor replacement counts.
+    Returns per-maru replacement counts.
     """
     counts = {k: 0 for k in replacements}
     remaining = limit

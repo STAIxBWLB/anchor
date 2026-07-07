@@ -42,8 +42,8 @@ describe("isDiagramEnabled (Phase 7 default-on)", () => {
     expect(isDiagramEnabled()).toBe(false);
   });
 
-  it("returns false when ?anchor-diagram=0", async () => {
-    setWindow("?anchor-diagram=0", null);
+  it("returns false when ?maru-diagram=0", async () => {
+    setWindow("?maru-diagram=0", null);
     const { isDiagramEnabled } = await import("./diagramFlag");
     expect(isDiagramEnabled()).toBe(false);
   });

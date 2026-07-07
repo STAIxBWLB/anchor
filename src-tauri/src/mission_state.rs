@@ -407,13 +407,13 @@ fn emit_update(app: &AppHandle, record: &MissionRecord) {
 }
 
 fn mission_dir() -> Result<PathBuf, String> {
-    if let Ok(dir) = std::env::var("ANCHOR_MISSION_STATE_DIR") {
+    if let Ok(dir) = std::env::var("MARU_MISSION_STATE_DIR") {
         if !dir.trim().is_empty() {
             return Ok(PathBuf::from(dir));
         }
     }
     let home = dirs::home_dir().ok_or_else(|| "Cannot resolve home directory".to_string())?;
-    Ok(home.join(".anchor").join("state").join("missions"))
+    Ok(home.join(".maru").join("state").join("missions"))
 }
 
 fn mission_json_path(id: &str) -> Result<PathBuf, String> {
@@ -533,7 +533,7 @@ mod tests {
     fn idle_transition_marks_stale_running_record() {
         let _guard = test_env_lock().lock().unwrap();
         let tmp = TempDir::new().unwrap();
-        std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
+        std::env::set_var("MARU_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         let id = "ai-test-idle";
         state.start(id, "test", 999_999, None).unwrap();
@@ -545,14 +545,14 @@ mod tests {
         let changed = state.mark_idle_if_stale(id, Utc::now()).unwrap().unwrap();
         assert_eq!(changed.status, MissionStatus::Idle);
         state.pids.lock().unwrap().clear();
-        std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
+        std::env::remove_var("MARU_MISSION_STATE_DIR");
     }
 
     #[test]
     fn finish_keeps_stopped_status() {
         let _guard = test_env_lock().lock().unwrap();
         let tmp = TempDir::new().unwrap();
-        std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
+        std::env::set_var("MARU_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         let id = "ai-test-stopped";
         state.start(id, "test", 999_999, None).unwrap();
@@ -564,28 +564,28 @@ mod tests {
         assert_eq!(done.status, MissionStatus::Stopped);
         assert_eq!(done.exit_code, Some(143));
         state.pids.lock().unwrap().clear();
-        std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
+        std::env::remove_var("MARU_MISSION_STATE_DIR");
     }
 
     #[test]
     fn list_sorts_newest_first() {
         let _guard = test_env_lock().lock().unwrap();
         let tmp = TempDir::new().unwrap();
-        std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
+        std::env::set_var("MARU_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         state.start("ai-old", "test", 999_998, None).unwrap();
         state.start("ai-new", "test", 999_999, None).unwrap();
         let records = state.list().unwrap();
         assert_eq!(records[0].id, "ai-new");
         state.pids.lock().unwrap().clear();
-        std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
+        std::env::remove_var("MARU_MISSION_STATE_DIR");
     }
 
     #[test]
     fn metadata_persists_and_log_tail_reads_recent_lines() {
         let _guard = test_env_lock().lock().unwrap();
         let tmp = TempDir::new().unwrap();
-        std::env::set_var("ANCHOR_MISSION_STATE_DIR", tmp.path());
+        std::env::set_var("MARU_MISSION_STATE_DIR", tmp.path());
         let state = MissionState::default();
         let id = "ai-test-meta";
         state
@@ -610,6 +610,6 @@ mod tests {
         let tail = read_mission_log_tail(id, 1).unwrap();
         assert_eq!(tail.lines, vec!["[stdout] two"]);
         state.pids.lock().unwrap().clear();
-        std::env::remove_var("ANCHOR_MISSION_STATE_DIR");
+        std::env::remove_var("MARU_MISSION_STATE_DIR");
     }
 }

@@ -1,6 +1,6 @@
 use crate::kordoc_lite::{self, KordocLiteCheck, LiteField};
 use crate::vault::resolve_inside_vault;
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -221,7 +221,7 @@ pub fn template_fill_hwpx(
     } else {
         WorkspaceWriteAction::Create
     };
-    assert_anchor_can_write(&work_path, write_action)?;
+    assert_maru_can_write(&work_path, write_action)?;
     if let Some(parent) = output_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create output directory: {err}"))?;
@@ -420,7 +420,7 @@ fn resolve_output_path(
         .unwrap_or_else(|| "filled-template".to_string());
     resolve_inside_vault(
         work_path,
-        &format!(".anchor/studio/filled/{stem}-filled.hwpx"),
+        &format!(".maru/studio/filled/{stem}-filled.hwpx"),
     )
 }
 
@@ -461,7 +461,7 @@ fn write_temp_values(values: &BTreeMap<String, String>) -> Result<NamedTempFile,
     let body =
         serde_json::to_string(values).map_err(|err| format!("Cannot serialize values: {err}"))?;
     let mut file = tempfile::Builder::new()
-        .prefix("anchor-hwpx-values-")
+        .prefix("maru-hwpx-values-")
         .suffix(".json")
         .tempfile()
         .map_err(|err| format!("Cannot create temporary values file: {err}"))?;
@@ -513,7 +513,7 @@ fn command_label(program: &Path, args: &[OsString]) -> String {
 }
 
 fn find_hwpx_tool() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("ANCHOR_HWPX_BIN").map(PathBuf::from) {
+    if let Some(path) = std::env::var_os("MARU_HWPX_BIN").map(PathBuf::from) {
         if is_executable(&path) {
             return Some(path);
         }
@@ -521,8 +521,8 @@ fn find_hwpx_tool() -> Option<PathBuf> {
     find_program("hwpx").or_else(|| {
         let mut candidates = Vec::new();
         if let Some(home) = dirs::home_dir() {
-            candidates.push(home.join(".anchor/skills/hwpx/hwpx"));
-            candidates.push(home.join(".anchor/skills/_builtin/skills/hwpx/hwpx"));
+            candidates.push(home.join(".maru/skills/hwpx/hwpx"));
+            candidates.push(home.join(".maru/skills/_builtin/skills/hwpx/hwpx"));
         }
         candidates
             .push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../skills/skills/hwpx/hwpx"));

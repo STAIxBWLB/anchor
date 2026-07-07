@@ -16,18 +16,18 @@ import {
 
 const rows: TaskNoteRow[] = [
   {
-    path: "/work/tasks/active/260514-anchor-tasks.md",
-    relPath: "tasks/active/260514-anchor-tasks.md",
-    fileName: "260514-anchor-tasks.md",
+    path: "/work/tasks/active/260514-maru-tasks.md",
+    relPath: "tasks/active/260514-maru-tasks.md",
+    fileName: "260514-maru-tasks.md",
     bucket: "active",
     sizeBytes: 100,
     updatedAt: "2026-05-14T10:00:00+09:00",
     frontmatter: {
-      title: "Anchor tasks mode",
+      title: "Maru tasks mode",
       status: "in_progress",
       priority: "P1",
       due: "2026-05-14",
-      project: "Anchor",
+      project: "Maru",
       topics: ["tasks"],
     },
   },
@@ -68,7 +68,7 @@ describe("task entry helpers", () => {
     expect(first.status).toBe("in-progress");
     expect(first.priority).toBe("high");
     expect(first.due).toBe("2026-05-14");
-    expect(first.project).toBe("Anchor");
+    expect(first.project).toBe("Maru");
     expect(first.topics).toEqual(["tasks"]);
     expect(backlog.status).toBe("backlog");
     expect(backlog.priority).toBe("medium");
@@ -78,8 +78,8 @@ describe("task entry helpers", () => {
   it("filters by query, status, project, priority, and due scope", () => {
     const entries = rowsToTaskEntries(rows);
 
-    expect(filterTasksByQuery(entries, "anchor").map((entry) => entry.title)).toEqual([
-      "Anchor tasks mode",
+    expect(filterTasksByQuery(entries, "maru").map((entry) => entry.title)).toEqual([
+      "Maru tasks mode",
     ]);
     expect(
       filterTasksByQuery(entries, "", {
@@ -95,11 +95,11 @@ describe("task entry helpers", () => {
     ).toEqual([]);
     expect(
       filterTasksByQuery(entries, "", { due: "today", today: "2026-05-14" }).map((entry) => entry.title),
-    ).toEqual(["Anchor tasks mode"]);
+    ).toEqual(["Maru tasks mode"]);
   });
 
   it("detects overdue tasks with done and cancelled excluded", () => {
-    const active = rowsToTaskEntries(rows).find((entry) => entry.title === "Anchor tasks mode")!;
+    const active = rowsToTaskEntries(rows).find((entry) => entry.title === "Maru tasks mode")!;
     const done = rowsToTaskEntries(rows).find((entry) => entry.title === "Done task")!;
 
     expect(isOverdue({ ...active, due: "2026-05-13" }, "2026-05-14")).toBe(true);
@@ -124,7 +124,7 @@ describe("task entry helpers", () => {
     const events = tasksToCalendarEvents(rowsToTaskEntries([rows[0], rows[1], timed]));
 
     expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ title: "Anchor tasks mode", allDay: true });
+    expect(events[0]).toMatchObject({ title: "Maru tasks mode", allDay: true });
     expect(events[0].start.getFullYear()).toBe(2026);
     expect(events[0].start.getMonth()).toBe(4);
     expect(events[0].start.getDate()).toBe(14);
@@ -175,7 +175,7 @@ describe("task entry helpers", () => {
     const visible = rowsToTaskEntries(rows).filter((entry) => entry.bucket === "active");
 
     expect(selectVisibleTask(visible, "tasks/archive/done.md")?.relPath).toBe(
-      "tasks/active/260514-anchor-tasks.md",
+      "tasks/active/260514-maru-tasks.md",
     );
     expect(selectVisibleTask([], "tasks/archive/done.md")).toBeNull();
   });
@@ -222,7 +222,7 @@ describe("buildTaskManagementSchedulePrompt", () => {
     expect(prompt).toContain("Asia/Seoul");
     expect(prompt).toContain("approved execution path");
     expect(prompt).toContain("read-only availability/conflict lookup");
-    expect(prompt).toContain("Anchor itself must not call Google APIs");
+    expect(prompt).toContain("Maru itself must not call Google APIs");
     expect(prompt).toContain("Do not write files or mutate Google Tasks/Calendar");
     expect(prompt).toContain("Read-only Google Tasks/Calendar lookup is allowed");
     expect(prompt).toContain("All Google create/update/delete operations happen only after user approval");
@@ -240,7 +240,7 @@ describe("buildTaskManagementSyncPrompt", () => {
     });
 
     expect(prompt).toContain("read-only lookup during review");
-    expect(prompt).toContain("Anchor itself must not call Google APIs");
+    expect(prompt).toContain("Maru itself must not call Google APIs");
     expect(prompt).toContain("mutations will run only after approval");
     expect(prompt).toContain("Do not write files or mutate Google Tasks/Calendar");
     expect(prompt).toContain("Read-only Google Tasks/Calendar lookup is allowed");

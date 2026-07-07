@@ -1,8 +1,8 @@
-# 문서 처리 환경 (envs/default → ~/.anchor/env)
+# 문서 처리 환경 (envs/default → ~/.maru/env)
 
 HWP/HWPX/PDF 파일 처리를 위한 공유 Python 가상환경 + 번들 Node 런타임.
-이 디렉토리(`envs/default`)는 source scaffold 이며, `setup.sh --target ~/.anchor/env`
-로 정규 런타임 `~/.anchor/env`(`.venv` + `node` + `node_modules`)에 프로비저닝된다.
+이 디렉토리(`envs/default`)는 source scaffold 이며, `setup.sh --target ~/.maru/env`
+로 정규 런타임 `~/.maru/env`(`.venv` + `node` + `node_modules`)에 프로비저닝된다.
 번들 Node(`node/`)는 md2docx(docx-js) 변환기를 시스템 node 의존 없이 실행한다.
 Claude Code SessionStart hook(`init-env.sh`)이 세션에서 이 환경을 자동 활성화한다.
 
@@ -50,10 +50,10 @@ env/
 
 ```bash
 # 정규 env 프로비저닝 / 복구 (venv + node_modules)
-bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env
+bash ~/.maru/skills/_builtin/envs/default/setup.sh --target ~/.maru/env
 
 # 헬스체크 (venv/node — 변경 없음)
-bash ~/.anchor/skills/_builtin/envs/default/setup.sh --verify --target ~/.anchor/env
+bash ~/.maru/skills/_builtin/envs/default/setup.sh --verify --target ~/.maru/env
 
 # (dev-in-tree) 이 소스 디렉토리에서 직접
 cd <this-dir> && make setup    # = setup.sh (기본 target = 이 디렉토리)
@@ -72,8 +72,8 @@ make sync
 ## SessionStart Hook
 
 `init-env.sh`가 Claude Code 세션 시작 시 자동 실행:
-1. `$ANCHOR_SKILLS_ENV` → `~/.anchor/env` → 상위 탐색 순으로 env 해소
-2. `CLAUDE_ENV_FILE`에 `ANCHOR_SKILLS_ENV`·`VIRTUAL_ENV`·`PATH`·`NODE_PATH` 주입
+1. `$MARU_SKILLS_ENV` → `~/.maru/env` → 상위 탐색 순으로 env 해소
+2. `CLAUDE_ENV_FILE`에 `MARU_SKILLS_ENV`·`VIRTUAL_ENV`·`PATH`·`NODE_PATH` 주입
    (Rust 호스트 `env_vars_for_runs` 와 동일 세트)
 3. 이후 `python3`(venv 패키지), `node`(node_modules `require`) 가 공유 환경 사용
 
@@ -97,6 +97,6 @@ make sync
 ## 연관 도구
 
 - **hwp-cli**: `~/.cargo/bin/hwp` (Rust 단일 바이너리, 외부 의존성 0) — `.hwp`/`.hwpx` 읽기·변환·렌더·편집. `extract_all.py`가 1순위 추출 엔진으로 사용 (구 hwp-toolkit 대체)
-- **hwpx 스킬**: `~/.anchor/skills/hwpx` — HWPX 작성·편집 + `.hwp` 읽기 자동 위임(hwp-cli) + `render-pdf`/`to-html`
-- **md2docx 스킬**: `~/.anchor/skills/md2docx` — markdown → 세련된 `.docx`(docx-js). 번들 `node/` 런타임 + `node_modules/docx` 사용 (pandoc 미사용)
-- **skills**: `~/.anchor/skills/` (federation; inbox-process 등이 이 환경에 의존)
+- **hwpx 스킬**: `~/.maru/skills/hwpx` — HWPX 작성·편집 + `.hwp` 읽기 자동 위임(hwp-cli) + `render-pdf`/`to-html`
+- **md2docx 스킬**: `~/.maru/skills/md2docx` — markdown → 세련된 `.docx`(docx-js). 번들 `node/` 런타임 + `node_modules/docx` 사용 (pandoc 미사용)
+- **skills**: `~/.maru/skills/` (federation; inbox-process 등이 이 환경에 의존)

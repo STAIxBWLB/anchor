@@ -29,7 +29,7 @@ import {
 } from "../../lib/diagram/actions";
 import { isInEditable, matchesShortcut } from "../../lib/diagram/shortcuts";
 import { fitView } from "../../lib/diagram/geometry";
-import { readAnchorSettings, saveAnchorSettings } from "../../lib/anchorDir";
+import { readMaruSettings, saveMaruSettings } from "../../lib/maruDir";
 import type { MkNodeOpts } from "../../lib/diagram/nodeKinds";
 import {
   deleteDiagram,
@@ -82,9 +82,9 @@ export interface DiagramModeProps {
 const ZOOM_STEP = 1.25;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3;
-const SNAP_STORAGE_KEY = "anchor:diagram:snap-size";
-const PANEL_STORAGE_KEY = "anchor:diagram:panels-v1";
-const LAST_DOCUMENT_STORAGE_KEY = "anchor:diagram:last-document";
+const SNAP_STORAGE_KEY = "maru:diagram:snap-size";
+const PANEL_STORAGE_KEY = "maru:diagram:panels-v1";
+const LAST_DOCUMENT_STORAGE_KEY = "maru:diagram:last-document";
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 interface PersistedPanelState {
@@ -233,7 +233,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     writePanelState(panels);
   }, [panels]);
 
-  // Mirror Anchor's data-theme onto our root so chrome can opt in to dark mode
+  // Mirror Maru's data-theme onto our root so chrome can opt in to dark mode
   // while the canvas stays light (source rule: canvas always light).
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -256,7 +256,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
 
   // Auto-snapshot scheduler — runs whenever the doc is dirty and a workspace
   // is attached. Each fire bypasses the human-facing save and stores a
-  // versioned copy under .anchor/diagrams/history/<docId>/.
+  // versioned copy under .maru/diagrams/history/<docId>/.
   useEffect(() => {
     if (!workPath) return;
     const sched = createAutoSnapshotScheduler({
@@ -280,7 +280,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     async (lastDocument: string | null) => {
       if (!workPath) return;
       try {
-        const base = await readAnchorSettings(workPath);
+        const base = await readMaruSettings(workPath);
         const next = {
           ...base,
           diagram: {
@@ -288,7 +288,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
             lastDocument,
           },
         };
-        await saveAnchorSettings(workPath, next, base);
+        await saveMaruSettings(workPath, next, base);
       } catch {
         /* Last-document restore is helpful state, not a save blocker. */
       }
@@ -302,7 +302,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     let cancelled = false;
     void (async () => {
       try {
-        const settings = await readAnchorSettings(workPath);
+        const settings = await readMaruSettings(workPath);
         const lastDocument = settings.diagram.lastDocument ?? readLastDocumentFallback(workPath);
         if (!lastDocument || cancelled) return;
         if (getDiagramSession(sessionKey).activeName) return;
@@ -683,7 +683,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
 
   return (
     <div
-      className={`anchor-diagram${theme === "dark" ? " is-dark" : ""}${focusMode ? " is-focus-mode" : ""}`}
+      className={`maru-diagram${theme === "dark" ? " is-dark" : ""}${focusMode ? " is-focus-mode" : ""}`}
       data-testid="diagram-mode"
       role="region"
       aria-label={t("mode.diagram")}
@@ -691,19 +691,19 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
       {focusMode ? (
         <button
           type="button"
-          className="anchor-diagram-focus-exit"
+          className="maru-diagram-focus-exit"
           onClick={() => store.setState(toggleFocusMode(false))}
           title={t("diagram.focusMode.exit")}
         >
           {t("diagram.focusMode.exit")}
         </button>
       ) : null}
-      <header className="anchor-diagram-header">
-        <div className="anchor-diagram-title">
+      <header className="maru-diagram-header">
+        <div className="maru-diagram-title">
           <Network size={20} strokeWidth={1.9} aria-hidden="true" />
           <input
             ref={titleInputRef}
-            className="anchor-diagram-title-input"
+            className="maru-diagram-title-input"
             value={docTitle}
             placeholder={t("diagram.title.placeholder")}
             onChange={(e) =>
@@ -717,7 +717,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           />
           <button
             type="button"
-            className="anchor-diagram-focus-btn"
+            className="maru-diagram-focus-btn"
             onClick={() => store.setState(toggleFocusMode())}
             title={t("diagram.focusMode.toggle")}
             aria-label={t("diagram.focusMode.toggle")}
@@ -726,13 +726,13 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
             <Eye size={14} />
           </button>
           {statusLabel ? (
-            <span className={`anchor-diagram-status anchor-diagram-status-${dirty ? "dirty" : "saved"}`}>
+            <span className={`maru-diagram-status maru-diagram-status-${dirty ? "dirty" : "saved"}`}>
               {statusLabel}
             </span>
           ) : null}
         </div>
-        <div className="anchor-diagram-meta">
-          <span className="anchor-diagram-meta-label">{t("diagram.scaffold.workspace")}</span>
+        <div className="maru-diagram-meta">
+          <span className="maru-diagram-meta-label">{t("diagram.scaffold.workspace")}</span>
           <code>{workPath ?? "—"}</code>
         </div>
       </header>
@@ -772,14 +772,14 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onToggleFocus: () => store.setState(toggleFocusMode()),
         }}
       />
-      <div className="anchor-diagram-workspace">
+      <div className="maru-diagram-workspace">
         {panels.left ? (
           <>
             <div style={{ width: panels.leftWidth, flexShrink: 0 }}>
               <LeftPanel />
             </div>
             <div
-              className="anchor-diagram-panel-resizer"
+              className="maru-diagram-panel-resizer"
               role="separator"
               aria-orientation="vertical"
               aria-label={t("diagram.panel.left.hide")}
@@ -788,32 +788,32 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
             />
           </>
         ) : null}
-        <div className="anchor-diagram-viewport" ref={viewportRef}>
+        <div className="maru-diagram-viewport" ref={viewportRef}>
           <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
           <CanvasSurface onMemoOpen={(nodeId) => setMemoOpen(nodeId)} />
           {listOpen ? (
-            <aside className="anchor-diagram-list" aria-label={t("diagram.list.heading")}>
-              <div className="anchor-diagram-list-head">
+            <aside className="maru-diagram-list" aria-label={t("diagram.list.heading")}>
+              <div className="maru-diagram-list-head">
                 <h2>{t("diagram.list.heading")}</h2>
                 <button type="button" onClick={() => setListOpen(false)}>
                   {t("diagram.list.close")}
                 </button>
               </div>
               {files.length === 0 ? (
-                <p className="anchor-diagram-list-empty">{t("diagram.list.empty")}</p>
+                <p className="maru-diagram-list-empty">{t("diagram.list.empty")}</p>
               ) : (
                 <ul>
                   {files.map((file) => (
                     <li key={file.name}>
                       <button type="button" onClick={() => void handleOpen(file.name)}>
-                        <span className="anchor-diagram-list-name">{file.docTitle || file.name}</span>
-                        <span className="anchor-diagram-list-meta">
+                        <span className="maru-diagram-list-name">{file.docTitle || file.name}</span>
+                        <span className="maru-diagram-list-meta">
                           {new Date(file.modifiedAt).toLocaleString()}
                         </span>
                       </button>
                       <button
                         type="button"
-                        className="anchor-diagram-list-delete"
+                        className="maru-diagram-list-delete"
                         onClick={() => void handleDeleteFile(file.name)}
                         title={t("diagram.toolbar.delete")}
                         aria-label={t("diagram.toolbar.delete")}
@@ -830,7 +830,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         {panels.right ? (
           <>
             <div
-              className="anchor-diagram-panel-resizer"
+              className="maru-diagram-panel-resizer"
               role="separator"
               aria-orientation="vertical"
               aria-label={t("diagram.panel.right.hide")}
@@ -875,7 +875,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         doc={store.getState().doc}
         workspace={workPath}
         getSvg={() =>
-          viewportRef.current?.querySelector<SVGSVGElement>(".anchor-diagram-canvas") ?? null
+          viewportRef.current?.querySelector<SVGSVGElement>(".maru-diagram-canvas") ?? null
         }
         onClose={() => setExportOpen(false)}
       />

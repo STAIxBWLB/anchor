@@ -36,7 +36,7 @@ const event = (type: string, payload: unknown): AgentRunEvent => ({
   type,
   actor: "test",
   payload,
-  schemaVersion: "anchor_agent_run_event_v1",
+  schemaVersion: "maru_agent_run_event_v1",
 });
 
 describe("skill run helpers", () => {

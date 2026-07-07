@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 
-const ANCHOR_SECRETS_REL: &str = ".anchor/secrets";
+const MARU_SECRETS_REL: &str = ".maru/secrets";
 const LEGACY_SECRETS_REL: &str = ".secrets";
 
 const GENERATED_DIRS: &[&str] = &[
@@ -129,7 +129,7 @@ impl SecretsPaths {
     fn new(work: &Path) -> Self {
         Self {
             work: work.to_path_buf(),
-            primary: work.join(ANCHOR_SECRETS_REL),
+            primary: work.join(MARU_SECRETS_REL),
             legacy: work.join(LEGACY_SECRETS_REL),
         }
     }
@@ -186,7 +186,7 @@ pub fn secrets_delete_text(
 }
 
 pub fn primary_root(work: &Path) -> PathBuf {
-    work.join(ANCHOR_SECRETS_REL)
+    work.join(MARU_SECRETS_REL)
 }
 
 pub fn legacy_root(work: &Path) -> PathBuf {
@@ -243,7 +243,7 @@ fn migrate_at(
         ));
         if !dry_run {
             fs::create_dir_all(&paths.primary)
-                .map_err(|err| format!("Cannot create .anchor/secrets: {err}"))?;
+                .map_err(|err| format!("Cannot create .maru/secrets: {err}"))?;
             set_dir_private(&paths.primary)?;
             mark_action_applied(&mut actions);
         }
@@ -263,15 +263,15 @@ fn migrate_at(
                 if !dry_run {
                     if paths.primary.exists() {
                         fs::remove_dir(&paths.primary).map_err(|err| {
-                            format!("Cannot replace empty .anchor/secrets: {err}")
+                            format!("Cannot replace empty .maru/secrets: {err}")
                         })?;
                     } else if let Some(parent) = paths.primary.parent() {
                         fs::create_dir_all(parent).map_err(|err| {
-                            format!("Cannot create .anchor directory for secrets: {err}")
+                            format!("Cannot create .maru directory for secrets: {err}")
                         })?;
                     }
                     fs::rename(&paths.legacy, &paths.primary)
-                        .map_err(|err| format!("Cannot move .secrets to .anchor/secrets: {err}"))?;
+                        .map_err(|err| format!("Cannot move .secrets to .maru/secrets: {err}"))?;
                     set_dir_private(&paths.primary)?;
                     mark_action_applied(&mut actions);
                 }
@@ -715,12 +715,12 @@ fn should_prune(paths: &SecretsPaths, path: &Path) -> bool {
     }
     if rel == Path::new("vault")
         || rel == Path::new(LEGACY_SECRETS_REL)
-        || rel == Path::new(ANCHOR_SECRETS_REL)
+        || rel == Path::new(MARU_SECRETS_REL)
     {
         return true;
     }
     let rel_text = rel.to_string_lossy().replace('\\', "/");
-    if rel_text.starts_with(".anchor/secrets/") || rel_text.starts_with(".secrets/") {
+    if rel_text.starts_with(".maru/secrets/") || rel_text.starts_with(".secrets/") {
         return true;
     }
     rel.components().any(|component| match component {
@@ -951,8 +951,8 @@ fn collect_legacy_config_refs(value: &YamlValue, path: String, issues: &mut Vec<
 
 fn collect_ignore_issues(work: &Path, issues: &mut Vec<SecretIssue>) {
     for (path, required) in [
-        (work.join(".gitignore"), ".anchor/secrets/"),
-        (work.join(".anchorignore"), ".anchor/secrets"),
+        (work.join(".gitignore"), ".maru/secrets/"),
+        (work.join(".maruignore"), ".maru/secrets"),
     ] {
         let Ok(raw) = fs::read_to_string(&path) else {
             issues.push(issue(
@@ -968,7 +968,7 @@ fn collect_ignore_issues(work: &Path, issues: &mut Vec<SecretIssue>) {
                 "warn",
                 "secret_ignore_missing",
                 Some(&path),
-                "Ignore file does not include .anchor/secrets",
+                "Ignore file does not include .maru/secrets",
             ));
         }
     }
@@ -1231,8 +1231,8 @@ mod tests {
             "version: 1\npaths:\n  primary: .\n",
         )
         .unwrap();
-        fs::write(work.join(".gitignore"), ".anchor/secrets/\n").unwrap();
-        fs::write(work.join(".anchorignore"), ".anchor/secrets\n").unwrap();
+        fs::write(work.join(".gitignore"), ".maru/secrets/\n").unwrap();
+        fs::write(work.join(".maruignore"), ".maru/secrets\n").unwrap();
 
         let report = scan_at(work).unwrap();
 
@@ -1250,7 +1250,7 @@ mod tests {
         let work = tmp.path();
         assert!(is_managed_secret_path(
             work,
-            &work.join(".anchor/secrets/services/config.yaml")
+            &work.join(".maru/secrets/services/config.yaml")
         ));
         assert!(is_managed_secret_path(
             work,
@@ -1266,7 +1266,7 @@ mod tests {
     fn scan_ignores_generated_managed_secret_files() {
         let tmp = TempDir::new().unwrap();
         let work = tmp.path();
-        let secrets = work.join(".anchor/secrets");
+        let secrets = work.join(".maru/secrets");
         fs::create_dir_all(secrets.join("services")).unwrap();
         fs::write(secrets.join(".DS_Store"), "finder metadata\n").unwrap();
         fs::write(secrets.join("._token"), "appledouble metadata\n").unwrap();
@@ -1295,13 +1295,13 @@ mod tests {
             "version: 1\npaths:\n  primary: .\n",
         )
         .unwrap();
-        fs::write(work.join(".gitignore"), ".anchor/secrets/\n").unwrap();
-        fs::write(work.join(".anchorignore"), ".anchor/secrets\n").unwrap();
+        fs::write(work.join(".gitignore"), ".maru/secrets/\n").unwrap();
+        fs::write(work.join(".maruignore"), ".maru/secrets\n").unwrap();
 
         let report = migrate_at(work, false, None).unwrap();
 
         assert!(report.applied);
-        assert!(work.join(".anchor/secrets/sites/demo/local.env").is_file());
+        assert!(work.join(".maru/secrets/sites/demo/local.env").is_file());
         assert!(fs::symlink_metadata(work.join("sites/demo/.env.local"))
             .unwrap()
             .file_type()
@@ -1325,15 +1325,15 @@ mod tests {
             "version: 1\npaths:\n  primary: .\n",
         )
         .unwrap();
-        fs::write(work.join(".gitignore"), ".anchor/secrets/\n").unwrap();
-        fs::write(work.join(".anchorignore"), ".anchor/secrets\n").unwrap();
+        fs::write(work.join(".gitignore"), ".maru/secrets/\n").unwrap();
+        fs::write(work.join(".maruignore"), ".maru/secrets\n").unwrap();
 
         let report =
             migrate_at(work, false, Some(vec!["sites/demo/.env.local".to_string()])).unwrap();
 
         assert!(report.applied);
-        assert!(work.join(".anchor/secrets/sites/demo/local.env").is_file());
-        assert!(!work.join(".anchor/secrets/sites/other/local.env").exists());
+        assert!(work.join(".maru/secrets/sites/demo/local.env").is_file());
+        assert!(!work.join(".maru/secrets/sites/other/local.env").exists());
         assert!(work.join("sites/other/.env.local").is_file());
     }
 
@@ -1365,7 +1365,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(work.join(".anchor/secrets/services/demo.env"))
+            let mode = fs::metadata(work.join(".maru/secrets/services/demo.env"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -1378,9 +1378,9 @@ mod tests {
     fn text_secret_rejects_binary_and_certificate_like_files() {
         let tmp = TempDir::new().unwrap();
         let work = tmp.path();
-        fs::create_dir_all(work.join(".anchor/secrets/apple")).unwrap();
+        fs::create_dir_all(work.join(".maru/secrets/apple")).unwrap();
         fs::write(
-            work.join(".anchor/secrets/apple/certificate-password"),
+            work.join(".maru/secrets/apple/certificate-password"),
             b"a\0b",
         )
         .unwrap();
@@ -1401,11 +1401,11 @@ mod tests {
     fn text_secret_rejects_symlink_targets() {
         let tmp = TempDir::new().unwrap();
         let work = tmp.path();
-        fs::create_dir_all(work.join(".anchor/secrets/services")).unwrap();
+        fs::create_dir_all(work.join(".maru/secrets/services")).unwrap();
         fs::write(work.join("outside.env"), "TOKEN=outside\n").unwrap();
         std::os::unix::fs::symlink(
             "../../outside.env",
-            work.join(".anchor/secrets/services/demo.env"),
+            work.join(".maru/secrets/services/demo.env"),
         )
         .unwrap();
 

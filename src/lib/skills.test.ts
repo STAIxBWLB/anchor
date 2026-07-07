@@ -23,9 +23,9 @@ describe("skills invoke wrappers", () => {
 
   it("threads the install mode through to skills_install_skill", async () => {
     enterTauri();
-    await skillsInstallSkill("anchor-managed::x", "claude", "x", "copy");
+    await skillsInstallSkill("maru-managed::x", "claude", "x", "copy");
     expect(invoke).toHaveBeenCalledWith("skills_install_skill", {
-      skillId: "anchor-managed::x",
+      skillId: "maru-managed::x",
       target: "claude",
       installedAs: "x",
       mode: "copy",
@@ -34,9 +34,9 @@ describe("skills invoke wrappers", () => {
 
   it("defaults the install mode to symlink", async () => {
     enterTauri();
-    await skillsInstallSkill("anchor-managed::x", "codex");
+    await skillsInstallSkill("maru-managed::x", "codex");
     expect(invoke).toHaveBeenCalledWith("skills_install_skill", {
-      skillId: "anchor-managed::x",
+      skillId: "maru-managed::x",
       target: "codex",
       installedAs: null,
       mode: "symlink",

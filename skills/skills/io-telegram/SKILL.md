@@ -25,12 +25,12 @@ Provide Telegram primitives and normalized inbox export.
 - bot notification when configured
 - session-backed read when configured
 
-## Anchor Runtime
+## Maru Runtime
 
-These scripts import `telethon`, which is installed only in the Anchor venv
-(`~/.anchor/env/.venv`). Always launch them through `scripts/run.sh`, which
-resolves that interpreter (honoring `$ANCHOR_SKILLS_ENV`, then canonical
-`~/.anchor/env/.venv`). Do not invoke the `.py` files directly.
+These scripts import `telethon`, which is installed only in the Maru venv
+(`~/.maru/env/.venv`). Always launch them through `scripts/run.sh`, which
+resolves that interpreter (honoring `$MARU_SKILLS_ENV`, then canonical
+`~/.maru/env/.venv`). Do not invoke the `.py` files directly.
 
 - `scripts/run.sh scripts/telegram_monitor.py --output-json --once --session-file <absolute>`
   prints normalized recent messages to stdout and does not write to the inbox.

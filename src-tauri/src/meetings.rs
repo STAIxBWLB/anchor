@@ -175,7 +175,7 @@ pub fn read_meeting_guides(work_path: String) -> Result<MeetingGuides, String> {
 #[tauri::command]
 pub fn append_meetings_log(work_path: String, line: String) -> Result<(), String> {
     let work = normalize_existing_dir(&work_path)?;
-    let log_path = work.join(".anchor").join("meetings-log.md");
+    let log_path = work.join(".maru").join("meetings-log.md");
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create meetings log dir: {err}"))?;
@@ -196,7 +196,7 @@ pub fn read_meetings_log(
     event_filter: Option<Vec<String>>,
 ) -> Result<Vec<MeetingsLogLine>, String> {
     let work = normalize_existing_dir(&work_path)?;
-    let log_path = work.join(".anchor").join("meetings-log.md");
+    let log_path = work.join(".maru").join("meetings-log.md");
     if !log_path.exists() {
         return Ok(Vec::new());
     }
@@ -438,7 +438,7 @@ fn read_guide_paths(work: &Path) -> BTreeMap<String, String> {
 }
 
 fn read_global_settings_json() -> Option<JsonValue> {
-    let path = dirs::home_dir()?.join(".anchor").join("settings.json");
+    let path = dirs::home_dir()?.join(".maru").join("settings.json");
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str::<JsonValue>(&raw).ok()
 }
@@ -531,11 +531,11 @@ mod tests {
         let root = tmp.path().join("meetings/2026/2026-04");
         fs::create_dir_all(&root).unwrap();
         fs::write(
-            root.join("04-20 회의 - Anchor - KPI.md"),
-            "---\ntitle: Anchor KPI 점검\n---\n# A",
+            root.join("04-20 회의 - Maru - KPI.md"),
+            "---\ntitle: Maru KPI 점검\n---\n# A",
         )
         .unwrap();
-        fs::write(root.join("04-20 회의 - Anchor - KPI.txt"), "no").unwrap();
+        fs::write(root.join("04-20 회의 - Maru - KPI.txt"), "no").unwrap();
         let excluded = tmp
             .path()
             .join("meetings/2026/2026-04/_raw/uiac-meeting-records");
@@ -547,9 +547,9 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(
             rows[0].rel_path,
-            "meetings/2026/2026-04/04-20 회의 - Anchor - KPI.md"
+            "meetings/2026/2026-04/04-20 회의 - Maru - KPI.md"
         );
-        assert_eq!(rows[0].frontmatter["title"], "Anchor KPI 점검");
+        assert_eq!(rows[0].frontmatter["title"], "Maru KPI 점검");
     }
 
     #[test]
@@ -571,7 +571,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let note = tmp
             .path()
-            .join("meetings/2026/2026-04/04-20 회의 - Anchor - KPI.md");
+            .join("meetings/2026/2026-04/04-20 회의 - Maru - KPI.md");
         fs::create_dir_all(note.parent().unwrap()).unwrap();
         fs::write(
             &note,
@@ -581,7 +581,7 @@ mod tests {
 
         let metadata = read_meeting_metadata(
             tmp.path().to_string_lossy().to_string(),
-            "meetings/2026/2026-04/04-20 회의 - Anchor - KPI.md".to_string(),
+            "meetings/2026/2026-04/04-20 회의 - Maru - KPI.md".to_string(),
         )
         .unwrap();
 
@@ -597,13 +597,13 @@ mod tests {
         let tmp = tempdir().unwrap();
         let note = tmp
             .path()
-            .join("meetings/2026/2026-04/04-20 회의 - Anchor - KPI.md");
+            .join("meetings/2026/2026-04/04-20 회의 - Maru - KPI.md");
         fs::create_dir_all(note.parent().unwrap()).unwrap();
         fs::write(&note, "---\n- invalid\n---\n# Body").unwrap();
 
         let metadata = read_meeting_metadata(
             tmp.path().to_string_lossy().to_string(),
-            "meetings/2026/2026-04/04-20 회의 - Anchor - KPI.md".to_string(),
+            "meetings/2026/2026-04/04-20 회의 - Maru - KPI.md".to_string(),
         )
         .unwrap();
 
@@ -645,7 +645,7 @@ mod tests {
         )
         .unwrap();
 
-        let log = fs::read_to_string(tmp.path().join(".anchor/meetings-log.md")).unwrap();
+        let log = fs::read_to_string(tmp.path().join(".maru/meetings-log.md")).unwrap();
         assert_eq!(log, "- entry\n");
     }
 

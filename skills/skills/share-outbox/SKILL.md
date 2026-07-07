@@ -58,10 +58,10 @@ writing.
 Typical usage:
 
 ```bash
-~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "한글 제목"
-~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "English Title" --allow-english
-~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --inbox-item inbox/items/done/item-id
-~/.anchor/env/.venv/bin/python ~/.anchor/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --dry-run
+~/.maru/env/.venv/bin/python ~/.maru/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "한글 제목"
+~/.maru/env/.venv/bin/python ~/.maru/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --title "English Title" --allow-english
+~/.maru/env/.venv/bin/python ~/.maru/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --inbox-item inbox/items/done/item-id
+~/.maru/env/.venv/bin/python ~/.maru/skills/share-outbox/scripts/prepare_share_file.py /path/to/source.ext --dry-run
 ```
 
 Rules:

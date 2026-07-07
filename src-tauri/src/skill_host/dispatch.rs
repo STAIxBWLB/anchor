@@ -125,7 +125,7 @@ pub fn skills_dispatch_terminal(
         }
         "codex" => {
             let mut command = format!(
-                "printf '%s' \"$ANCHOR_SKILL_PROMPT\" | {} exec --cd {}",
+                "printf '%s' \"$MARU_SKILL_PROMPT\" | {} exec --cd {}",
                 shell_quote(command_override.as_deref().unwrap_or("codex")),
                 shell_quote(&composition.cwd)
             );
@@ -135,7 +135,7 @@ pub fn skills_dispatch_terminal(
             }
             command.push_str(" -");
             let mut extra_env = composition.extra_env;
-            extra_env.insert("ANCHOR_SKILL_PROMPT".to_string(), composition.prompt);
+            extra_env.insert("MARU_SKILL_PROMPT".to_string(), composition.prompt);
             Ok(TerminalDispatchSpec {
                 kind: "codex".to_string(),
                 cwd: composition.cwd,
@@ -254,7 +254,7 @@ fn build_prompt(
     prompt: &str,
 ) -> String {
     let mut out = String::new();
-    out.push_str("You are running an Anchor-managed skill.\n\n");
+    out.push_str("You are running an Maru-managed skill.\n\n");
     out.push_str("<skill name=\"");
     out.push_str(skill_name);
     out.push_str("\">\n");
@@ -375,7 +375,7 @@ fn spawn_background(
         &cwd,
         &invocation_id,
         "run.started",
-        "anchor.skill_host",
+        "maru.skill_host",
         serde_json::json!({
             "request": run_request,
             "dispatch": retry_payload,
@@ -401,7 +401,7 @@ fn spawn_background(
                 &cwd,
                 &invocation_id,
                 "run.failed",
-                "anchor.skill_host",
+                "maru.skill_host",
                 serde_json::json!({ "error": message }),
             );
             return Err(message);
@@ -469,7 +469,7 @@ fn spawn_background(
                     &cwd_done,
                     &id_done,
                     "run.failed",
-                    "anchor.skill_host",
+                    "maru.skill_host",
                     serde_json::json!({
                         "errorKind": error_kind,
                         "message": message,
@@ -492,7 +492,7 @@ fn spawn_background(
                             &cwd_done,
                             &id_done,
                             "proposal.created",
-                            "anchor.skill_host",
+                            "maru.skill_host",
                             serde_json::json!({ "proposal": proposal }),
                         );
                     }
@@ -502,7 +502,7 @@ fn spawn_background(
                 &cwd_done,
                 &id_done,
                 "run.completed",
-                "anchor.skill_host",
+                "maru.skill_host",
                 serde_json::json!({
                     "exitCode": status.code(),
                     "success": status.success(),
@@ -523,7 +523,7 @@ fn spawn_background(
                 &cwd_done,
                 &id_done,
                 "run.failed",
-                "anchor.skill_host",
+                "maru.skill_host",
                 serde_json::json!({ "error": err.to_string() }),
             );
             mission_state::fail_mission(&app_done, &id_done, &err.to_string());
@@ -680,20 +680,20 @@ fn classify_runtime_error(text: &str, fallback: &str) -> &'static str {
 fn append_background_contract(prompt: &str, approved_execution: bool) -> String {
     let rules = if approved_execution {
         vec![
-            "- This run starts after explicit Anchor approval; follow only the approved execution contract above.",
+            "- This run starts after explicit Maru approval; follow only the approved execution contract above.",
             "- Emit concise progress logs and a final human-readable completion summary.",
         ]
     } else {
         vec![
             "- Do not directly write, delete, rename, or move files.",
-            "- If changes are needed, emit exactly one anchor_skill_proposal_v1 JSON block.",
+            "- If changes are needed, emit exactly one maru_skill_proposal_v1 JSON block.",
             "- Keep progress logs concise and human-readable.",
-            "- Actual file writes must happen only through Anchor approval and Apply.",
+            "- Actual file writes must happen only through Maru approval and Apply.",
         ]
     };
-    let mut lines = vec![prompt.trim(), "", "<anchor_background_run_contract>"];
+    let mut lines = vec![prompt.trim(), "", "<maru_background_run_contract>"];
     lines.extend(rules);
-    lines.push("</anchor_background_run_contract>");
+    lines.push("</maru_background_run_contract>");
     lines.join("\n")
 }
 
@@ -817,14 +817,14 @@ mod tests {
     #[test]
     fn background_contract_is_proposal_only_by_default() {
         let prompt = append_background_contract("Do the work", false);
-        assert!(prompt.contains("anchor_skill_proposal_v1"));
+        assert!(prompt.contains("maru_skill_proposal_v1"));
         assert!(prompt.contains("Do not directly write"));
     }
 
     #[test]
     fn approved_background_contract_preserves_execution_flow() {
         let prompt = append_background_contract("Approved MCP Obsidian work", true);
-        assert!(prompt.contains("explicit Anchor approval"));
+        assert!(prompt.contains("explicit Maru approval"));
         assert!(!prompt.contains("Do not directly write"));
     }
 

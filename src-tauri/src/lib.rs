@@ -1,6 +1,6 @@
 pub mod agent_host;
 mod ai_router;
-mod anchor_dir;
+mod maru_dir;
 mod app_menu;
 mod approval;
 mod binary_viewer;
@@ -27,6 +27,7 @@ mod kordoc_lite;
 mod korean_date;
 mod launchd_migration;
 mod linter;
+mod maru_migration;
 mod meetings;
 mod mission_state;
 mod ops_catalog;
@@ -59,13 +60,13 @@ use agent_host::{
     agent_validate_marketplace_manifest, agent_write_redacted_run_summary,
 };
 use ai_router::{start_agent_cli_invocation, start_claude_cli_invocation};
-use anchor_dir::{
-    bootstrap_anchor_dir, delete_anchor_rule, delete_anchor_template, list_anchor_rules,
-    list_anchor_templates, list_workspace_projects, read_anchor_imports, read_anchor_mcp,
-    read_anchor_projects, read_anchor_rule, read_anchor_settings, read_anchor_skills,
-    read_anchor_template, read_anchor_workspace, save_anchor_mcp, save_anchor_projects,
-    save_anchor_rule, save_anchor_settings, save_anchor_skills, save_anchor_template,
-    update_anchor_workspace,
+use maru_dir::{
+    bootstrap_maru_dir, delete_maru_rule, delete_maru_template, list_maru_rules,
+    list_maru_templates, list_workspace_projects, read_maru_imports, read_maru_mcp,
+    read_maru_projects, read_maru_rule, read_maru_settings, read_maru_skills,
+    read_maru_template, read_maru_workspace, save_maru_mcp, save_maru_projects,
+    save_maru_rule, save_maru_settings, save_maru_skills, save_maru_template,
+    update_maru_workspace,
 };
 use approval::{prepare_approval, record_approval, ApprovalState};
 use binary_viewer::{
@@ -83,7 +84,7 @@ use document::{
     create_document, create_version, duplicate_document, move_document, read_document,
     save_document, trash_document, update_frontmatter_field,
 };
-use e2e_flow::{anchor_e2e_read, anchor_e2e_run};
+use e2e_flow::{maru_e2e_read, maru_e2e_run};
 use evidence_binder::{evidence_binder_read, evidence_binder_save};
 use export::{
     export_dispatch, export_manifest_load, export_plan, export_record_failure,
@@ -212,6 +213,10 @@ pub fn run() {
         .manage(MissionState::default())
         .manage(CatalogWatcherState::default())
         .setup(|app| {
+            // M0 Anchor→Maru one-time on-disk migration (~/.anchor → ~/.maru,
+            // com.anchor.app → com.maru.app) — idempotent, before anything
+            // touches the home runtime (DR-024).
+            maru_migration::migrate_home();
             // Start the agent-hook status watcher (best-effort; absent hooks
             // simply produce no events).
             let _ = start_terminal_hook_watcher(&app.handle().clone());
@@ -340,7 +345,7 @@ pub fn run() {
             unload_legacy_telegram_launchd,
             prepare_approval,
             record_approval,
-            // workspace pairing + .anchor/ system mode
+            // workspace pairing + .maru/ system mode
             detect_workspace,
             read_workspace_config,
             register_workspace_roots,
@@ -355,27 +360,27 @@ pub fn run() {
             binary_viewer_extract_hwpx,
             binary_viewer_open_external,
             binary_viewer_preview_external,
-            bootstrap_anchor_dir,
-            read_anchor_workspace,
-            update_anchor_workspace,
-            list_anchor_rules,
-            read_anchor_rule,
-            save_anchor_rule,
-            delete_anchor_rule,
-            list_anchor_templates,
-            read_anchor_template,
-            save_anchor_template,
-            delete_anchor_template,
-            read_anchor_mcp,
-            save_anchor_mcp,
-            read_anchor_projects,
+            bootstrap_maru_dir,
+            read_maru_workspace,
+            update_maru_workspace,
+            list_maru_rules,
+            read_maru_rule,
+            save_maru_rule,
+            delete_maru_rule,
+            list_maru_templates,
+            read_maru_template,
+            save_maru_template,
+            delete_maru_template,
+            read_maru_mcp,
+            save_maru_mcp,
+            read_maru_projects,
             list_workspace_projects,
-            save_anchor_projects,
-            read_anchor_skills,
-            save_anchor_skills,
-            read_anchor_settings,
-            save_anchor_settings,
-            read_anchor_imports,
+            save_maru_projects,
+            read_maru_skills,
+            save_maru_skills,
+            read_maru_settings,
+            save_maru_settings,
+            read_maru_imports,
             secrets_scan,
             secrets_doctor,
             secrets_migrate,
@@ -422,8 +427,8 @@ pub fn run() {
             agent_parse_skill_proposal,
             agent_apply_skill_proposal,
             agent_validate_marketplace_manifest,
-            anchor_e2e_run,
-            anchor_e2e_read,
+            maru_e2e_run,
+            maru_e2e_read,
             evidence_binder_read,
             evidence_binder_save,
             // M1 Operations Catalog (Phase 3)
@@ -482,7 +487,7 @@ pub fn run() {
             scan_work_sites,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building Anchor")
+        .expect("error while building Maru")
         .run(|app_handle, event| {
             if matches!(
                 event,

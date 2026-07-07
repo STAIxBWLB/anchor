@@ -186,7 +186,7 @@ fn write_state(work: &Path, state: &EvidenceBinderState) -> Result<(), String> {
 fn state_path(work: &Path, doc_id: &str) -> Result<PathBuf, String> {
     let doc_id = sanitize_doc_id(doc_id)?;
     Ok(work
-        .join(".anchor")
+        .join(".maru")
         .join("binder")
         .join(format!("{doc_id}.json")))
 }
@@ -607,7 +607,7 @@ fn is_excluded_dir(path: &Path) -> bool {
         .is_some_and(|name| {
             matches!(
                 name,
-                ".git" | "node_modules" | "target" | "dist" | ".anchor"
+                ".git" | "node_modules" | "target" | "dist" | ".maru"
             )
         })
 }
@@ -633,7 +633,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn state_round_trips_under_anchor_binder() {
+    fn state_round_trips_under_maru_binder() {
         let tmp = tempfile::tempdir().unwrap();
         let mut state =
             read_or_create_state(tmp.path(), "doc-1", Some("a.md".to_string())).unwrap();
@@ -646,7 +646,7 @@ mod tests {
         write_state(tmp.path(), &state).unwrap();
         let read = read_or_create_state(tmp.path(), "doc-1", None).unwrap();
         assert_eq!(read.bindings.len(), 1);
-        assert!(tmp.path().join(".anchor/binder/doc-1.json").exists());
+        assert!(tmp.path().join(".maru/binder/doc-1.json").exists());
     }
 
     #[test]

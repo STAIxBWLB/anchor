@@ -25,11 +25,11 @@ export function MemoDialog({ open, initial, nodeTitle, onSave, onDelete, onClose
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-memo-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-memo-dialog">
           <div className="dialog-header">
             <Dialog.Title>
               {t("diagram.memo.dialog.title")}
-              {nodeTitle ? <span className="anchor-diagram-memo-target"> · {nodeTitle}</span> : null}
+              {nodeTitle ? <span className="maru-diagram-memo-target"> · {nodeTitle}</span> : null}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button
@@ -43,18 +43,18 @@ export function MemoDialog({ open, initial, nodeTitle, onSave, onDelete, onClose
             </Dialog.Close>
           </div>
           <textarea
-            className="anchor-diagram-memo-text"
+            className="maru-diagram-memo-text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={t("diagram.memo.placeholder")}
             rows={8}
             aria-label={t("diagram.memo.dialog.title")}
           />
-          <div className="anchor-diagram-memo-actions">
+          <div className="maru-diagram-memo-actions">
             <button
               type="button"
               onClick={onDelete}
-              className="anchor-diagram-memo-delete"
+              className="maru-diagram-memo-delete"
               disabled={initial.length === 0}
               title={t("diagram.memo.delete")}
             >
@@ -64,7 +64,7 @@ export function MemoDialog({ open, initial, nodeTitle, onSave, onDelete, onClose
               <button type="button" onClick={onClose}>{t("diagram.memo.cancel")}</button>
               <button
                 type="button"
-                className="anchor-diagram-toolbar-primary"
+                className="maru-diagram-toolbar-primary"
                 onClick={() => onSave(value.trim())}
               >
                 {t("diagram.memo.save")}

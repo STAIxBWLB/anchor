@@ -1,6 +1,6 @@
 // M7 Hub Connector (Phase 3 read, Phase 6 write)
 //
-// Anchor → Anchor Hub (read-mirror) 통신.
+// Maru → Maru Hub (read-mirror) 통신.
 // 본문/원본 binary/개인정보 업로드 금지.
 //
 // Spec: ~/workspace/work/_sys/rules/hub-sync.md + plan §M7
@@ -254,7 +254,7 @@ fn load_hub_config(workspace_root: &std::path::Path) -> std::io::Result<HubConfi
             .map(|s| s.trim().to_string())
     });
 
-    let cache_root = workspace_root.join(".anchor").join("cache").join("hub");
+    let cache_root = workspace_root.join(".maru").join("cache").join("hub");
 
     Ok(HubConfig {
         endpoint,

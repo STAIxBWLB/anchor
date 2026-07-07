@@ -106,7 +106,7 @@ export function VersionHistoryDialog({
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-history-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-history-dialog">
           <div className="dialog-header">
             <Dialog.Title>{t("diagram.dialog.history.title")}</Dialog.Title>
             <Dialog.Close asChild>
@@ -120,31 +120,31 @@ export function VersionHistoryDialog({
               </button>
             </Dialog.Close>
           </div>
-          <div className="anchor-diagram-history-toolbar">
+          <div className="maru-diagram-history-toolbar">
             <button
               type="button"
               onClick={() => void handleSaveNow()}
               disabled={busy || !workspace}
-              className="anchor-diagram-toolbar-primary"
+              className="maru-diagram-toolbar-primary"
             >
               {t("diagram.dialog.history.saveNow")}
             </button>
           </div>
           {snapshots.length === 0 ? (
-            <p className="anchor-diagram-history-empty">{t("diagram.dialog.history.empty")}</p>
+            <p className="maru-diagram-history-empty">{t("diagram.dialog.history.empty")}</p>
           ) : (
-            <ul className="anchor-diagram-history-list">
+            <ul className="maru-diagram-history-list">
               {snapshots.map((snap) => {
                 const date = parseSnapshotTs(snap.snapshotTs);
                 const valid = !Number.isNaN(date.getTime());
                 const kb = (snap.size / 1024).toFixed(1);
                 return (
                   <li key={snap.snapshotTs}>
-                    <div className="anchor-diagram-history-meta">
-                      <span className="anchor-diagram-history-ts">
+                    <div className="maru-diagram-history-meta">
+                      <span className="maru-diagram-history-ts">
                         {valid ? date.toLocaleString() : snap.snapshotTs}
                       </span>
-                      <span className="anchor-diagram-history-size">
+                      <span className="maru-diagram-history-size">
                         {t("diagram.dialog.history.size", { kb })}
                       </span>
                     </div>
@@ -168,7 +168,7 @@ export function VersionHistoryDialog({
           >
             <Dialog.Portal>
               <Dialog.Overlay className="dialog-overlay" />
-              <Dialog.Content className="dialog-content anchor-diagram-confirm-dialog">
+              <Dialog.Content className="dialog-content maru-diagram-confirm-dialog">
                 <Dialog.Title>{t("diagram.dialog.history.confirmTitle")}</Dialog.Title>
                 <p>{t("diagram.dialog.history.confirmRestore")}</p>
                 <div className="dialog-actions">
@@ -177,7 +177,7 @@ export function VersionHistoryDialog({
                   </Dialog.Close>
                   <button
                     type="button"
-                    className="anchor-diagram-toolbar-primary"
+                    className="maru-diagram-toolbar-primary"
                     disabled={busy}
                     onClick={() => void confirmRestore()}
                   >

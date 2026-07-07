@@ -1,10 +1,10 @@
 {
-  "name": "@anchor/anchor-mcp",
+  "name": "@maru/maru-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "anchor-mcp": "index.mjs"
+    "maru-mcp": "index.mjs"
   },
   "engines": {
     "node": ">=20.19"

@@ -22,7 +22,7 @@ function TemplatePreview({ template, t }: { template: TemplateDefinition; t: (k:
   const box = useMemo(() => bbox(bundle.nodes), [bundle]);
   if (!box || bundle.nodes.length === 0) {
     return (
-      <div className="anchor-diagram-template-preview is-empty">
+      <div className="maru-diagram-template-preview is-empty">
         <span>—</span>
       </div>
     );
@@ -30,7 +30,7 @@ function TemplatePreview({ template, t }: { template: TemplateDefinition; t: (k:
   const pad = 20;
   const viewBox = `${box.x - pad} ${box.y - pad} ${box.w + pad * 2} ${box.h + pad * 2}`;
   return (
-    <svg className="anchor-diagram-template-preview" viewBox={viewBox} aria-hidden="true">
+    <svg className="maru-diagram-template-preview" viewBox={viewBox} aria-hidden="true">
       {bundle.nodes.map((n) => (
         <rect
           key={n.id}
@@ -100,7 +100,7 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-template-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-template-dialog">
           <div className="dialog-header">
             <Dialog.Title>{t("diagram.dialog.template.title")}</Dialog.Title>
             <Dialog.Close asChild>
@@ -114,7 +114,7 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
               </button>
             </Dialog.Close>
           </div>
-          <div className="anchor-diagram-template-search">
+          <div className="maru-diagram-template-search">
             <input
               type="search"
               value={query}
@@ -122,12 +122,12 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
               placeholder={t("diagram.dialog.template.search")}
             />
           </div>
-          <div className="anchor-diagram-template-grid">
+          <div className="maru-diagram-template-grid">
             {filtered.map((tpl) => (
               <button
                 key={tpl.id}
                 type="button"
-                className={`anchor-diagram-template-card${selectedId === tpl.id ? " is-selected" : ""}`}
+                className={`maru-diagram-template-card${selectedId === tpl.id ? " is-selected" : ""}`}
                 onClick={() => setSelectedId(tpl.id)}
                 onDoubleClick={() => {
                   setSelectedId(tpl.id);
@@ -135,18 +135,18 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
                 }}
               >
                 <TemplatePreview template={tpl} t={t} />
-                <div className="anchor-diagram-template-meta">
+                <div className="maru-diagram-template-meta">
                   <h3>{t(tpl.labelKey)}</h3>
                   <p>{t(tpl.descriptionKey)}</p>
                 </div>
               </button>
             ))}
           </div>
-          <div className="anchor-diagram-template-actions">
+          <div className="maru-diagram-template-actions">
             <button type="button" onClick={onCancel}>{t("diagram.dialog.template.cancel")}</button>
             <button
               type="button"
-              className="anchor-diagram-toolbar-primary"
+              className="maru-diagram-toolbar-primary"
               onClick={handleApply}
               disabled={!selected}
             >
@@ -161,7 +161,7 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
           >
             <Dialog.Portal>
               <Dialog.Overlay className="dialog-overlay" />
-              <Dialog.Content className="dialog-content anchor-diagram-confirm-dialog">
+              <Dialog.Content className="dialog-content maru-diagram-confirm-dialog">
                 <Dialog.Title>{t("diagram.dialog.template.confirmTitle")}</Dialog.Title>
                 <p>{t("diagram.dialog.template.confirmReplace")}</p>
                 <div className="dialog-actions">
@@ -170,7 +170,7 @@ export function TemplatePickerDialog({ open, dirty, onApply, onCancel }: Templat
                   </Dialog.Close>
                   <button
                     type="button"
-                    className="anchor-diagram-toolbar-primary"
+                    className="maru-diagram-toolbar-primary"
                     onClick={() => {
                       const template = pendingApply;
                       setPendingApply(null);

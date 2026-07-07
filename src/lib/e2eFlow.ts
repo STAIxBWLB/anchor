@@ -6,10 +6,10 @@ declare global {
   }
 }
 
-export const E2E_FLOW_SCHEMA_VERSION = "anchor_e2e_development_plan_v1";
-export const E2E_FLOW_SAMPLE_RUN_ID = "anchor-e2e-sample-20260518";
+export const E2E_FLOW_SCHEMA_VERSION = "maru_e2e_development_plan_v1";
+export const E2E_FLOW_SAMPLE_RUN_ID = "maru-e2e-sample-20260518";
 export const E2E_FLOW_BASELINE_AVERAGE_MS = 4019.88;
-export const E2E_FLOW_ENABLE_STORAGE_KEY = "anchor:e2e:enabled";
+export const E2E_FLOW_ENABLE_STORAGE_KEY = "maru:e2e:enabled";
 
 export type E2ECoreTrack =
   | "existing-feature-optimization"
@@ -158,7 +158,7 @@ const TODO_LEDGER: E2EFlowTodo[] = [
   {
     id: "hub-connector-deferred-local-first",
     content:
-      "Anchor Hub remains a separate service; this flow verifies local MCP/local storage only.",
+      "Maru Hub remains a separate service; this flow verifies local MCP/local storage only.",
     status: "todo",
   },
   {
@@ -181,12 +181,12 @@ function isTauri(): boolean {
 
 export function isE2EFlowEnabled(): boolean {
   const env = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env;
-  const envValue = env?.VITE_ANCHOR_E2E_FLOW;
+  const envValue = env?.VITE_MARU_E2E_FLOW;
   if (envValue === "1" || envValue === "true" || envValue === true) return true;
   if (typeof window === "undefined") return false;
 
   const params = new URLSearchParams(window.location.search);
-  const queryValue = params.get("anchor-e2e");
+  const queryValue = params.get("maru-e2e");
   if (queryValue === "1" || queryValue === "true") return true;
 
   try {
@@ -237,13 +237,13 @@ export function buildE2EFlowFixture(input: {
     sourceOfTruth: "README.md",
     coreTracks: CORE_TRACKS,
     sampleInput: {
-      id: "anchor-weekly-meeting",
-      title: "Anchor 사업 주간 점검 회의",
-      path: "anchor-weekly-meeting.md",
+      id: "maru-weekly-meeting",
+      title: "Maru 사업 주간 점검 회의",
+      path: "maru-weekly-meeting.md",
       kind: "meeting-notes/requirements",
     },
     skillLifecycle: {
-      skillName: "anchor-e2e-sample",
+      skillName: "maru-e2e-sample",
       registered: true,
       edited: true,
       executed: true,
@@ -251,22 +251,22 @@ export function buildE2EFlowFixture(input: {
     },
     reportArtifact: {
       format: "markdown",
-      path: `.anchor/e2e-runs/${id}/report.md`,
-      title: "Anchor E2E Development Report",
+      path: `.maru/e2e-runs/${id}/report.md`,
+      title: "Maru E2E Development Report",
       previewText: "README-driven E2E flow with deterministic report output.",
     },
     slideArtifact: {
       format: "html",
-      path: `.anchor/e2e-runs/${id}/slides.html`,
-      title: "Anchor E2E Flow",
+      path: `.maru/e2e-runs/${id}/slides.html`,
+      title: "Maru E2E Flow",
       style: "anti-gravity",
       previewText: "Single-screen flow from sample input to saved lookup.",
     },
     localStorageResult: {
       id,
       status: "saved",
-      directory: `.anchor/e2e-runs/${id}`,
-      metadataPath: `.anchor/e2e-runs/${id}/metadata.json`,
+      directory: `.maru/e2e-runs/${id}`,
+      metadataPath: `.maru/e2e-runs/${id}/metadata.json`,
     },
     uiFlow: UI_FLOW,
     verificationEvidence: [
@@ -319,7 +319,7 @@ export async function runE2EFlow(input: {
   if (!isTauri()) {
     return buildE2EFlowFixture(input);
   }
-  return invoke<E2EFlowArtifacts>("anchor_e2e_run", {
+  return invoke<E2EFlowArtifacts>("maru_e2e_run", {
     workPath: input.workPath,
     baselineAverageMs: input.baselineAverageMs ?? E2E_FLOW_BASELINE_AVERAGE_MS,
   });
@@ -332,7 +332,7 @@ export async function readE2EFlow(input: {
   if (!isTauri()) {
     return buildE2EFlowFixture({ workPath: input.workPath });
   }
-  return invoke<E2EFlowArtifacts>("anchor_e2e_read", {
+  return invoke<E2EFlowArtifacts>("maru_e2e_read", {
     workPath: input.workPath,
     runId: input.runId,
   });
@@ -374,18 +374,18 @@ function normalizeTimings(input: Partial<E2EFlowTimings>): E2EFlowTimings {
 }
 
 function buildReportMarkdown(): string {
-  return `# Anchor E2E Development Report
+  return `# Maru E2E Development Report
 
 ## 추진 개요
 - Source of truth: README.md
-- Sample input: Anchor 사업 주간 점검 회의
+- Sample input: Maru 사업 주간 점검 회의
 - Goal: single-screen user-facing E2E flow
 
 ## 주요 추진 실적
-- Skill lifecycle: registered, edited, executed through Anchor-managed paths
+- Skill lifecycle: registered, edited, executed through Maru-managed paths
 - Report artifact: deterministic Markdown
 - Slide artifact: deterministic HTML
-- Local storage: queryable .anchor/e2e-runs metadata
+- Local storage: queryable .maru/e2e-runs metadata
 
 ## 향후 계획
 - Preserve README conflicts in TODO ledger
@@ -398,7 +398,7 @@ function buildSlidesHtml(): string {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Anchor E2E Flow</title>
+  <title>Maru E2E Flow</title>
   <style>
     body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #0f172a; color: #f8fafc; }
     main { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; min-height: 100vh; padding: 48px; box-sizing: border-box; }
@@ -410,9 +410,9 @@ function buildSlidesHtml(): string {
 </head>
 <body>
   <main>
-    <h1>Anchor E2E Flow</h1>
+    <h1>Maru E2E Flow</h1>
     <section><h2>1. Sample</h2><p>Meeting-notes requirements input is confirmed in one screen.</p></section>
-    <section><h2>2. Skills</h2><p>Registration, editing, and execution use Anchor-managed paths.</p></section>
+    <section><h2>2. Skills</h2><p>Registration, editing, and execution use Maru-managed paths.</p></section>
     <section><h2>3. Artifacts</h2><p>Report and slides are saved locally and re-queried as JSON metadata.</p></section>
   </main>
 </body>

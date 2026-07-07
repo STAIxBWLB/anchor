@@ -150,11 +150,11 @@ def ensure_bold_charpr(head_root: etree._Element, base_id: str, cache: dict) -> 
     clone = deepcopy(base)
     clone.set("id", _next_id(clist))
     bold = clone.makeelement(f"{HH}bold", {})
-    anchor = next(
+    maru = next(
         (c for c in clone if hx.localname(c) in ("underline", "strikeout")), None
     )
-    if anchor is not None:
-        anchor.addprevious(bold)
+    if maru is not None:
+        maru.addprevious(bold)
     else:
         clone.append(bold)
     clist.append(clone)
@@ -230,11 +230,11 @@ def ensure_title_charpr(head_root: etree._Element, base_id: str, cache: dict) ->
     clone.set("height", str(TITLE_HEIGHT))
     if not _has_child(clone, "bold"):
         bold = clone.makeelement(f"{HH}bold", {})
-        anchor = next(
+        maru = next(
             (c for c in clone if hx.localname(c) in ("underline", "strikeout")), None
         )
-        if anchor is not None:
-            anchor.addprevious(bold)
+        if maru is not None:
+            maru.addprevious(bold)
         else:
             clone.append(bold)
     clist.append(clone)

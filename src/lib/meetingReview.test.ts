@@ -24,7 +24,7 @@ logs
   "summary": "ready",
   "terms": [{"label": "AI", "normalized": "Artificial Intelligence"}],
   "people": ["Lee"],
-  "properNouns": [{"source": "Anchor", "required": false}],
+  "properNouns": [{"source": "Maru", "required": false}],
   "uncertainties": [{"label": "date?", "note": "missing"}],
   "followups": [{"skill": "vault-extract", "title": "Extract", "prompt": "Extract", "selected": true}]
 }
@@ -131,7 +131,7 @@ describe("meeting run event extraction", () => {
       commands: [],
       risks: [],
       requiresApproval: true,
-      schemaVersion: "anchor_skill_proposal_v1",
+      schemaVersion: "maru_skill_proposal_v1",
     };
     const events: AgentRunEvent[] = [
       event("provider.output", { line: "line 1" }),
@@ -152,7 +152,7 @@ describe("proposal rebuild", () => {
       commands: [],
       risks: [],
       requiresApproval: true,
-      schemaVersion: "anchor_skill_proposal_v1",
+      schemaVersion: "maru_skill_proposal_v1",
     };
     const drafts: MeetingProposalFileDraft[] = [
       {
@@ -303,7 +303,7 @@ function event(type: string, payload: unknown): AgentRunEvent {
     type,
     actor: "test",
     payload,
-    schemaVersion: "anchor_agent_run_event_v1",
+    schemaVersion: "maru_agent_run_event_v1",
   };
 }
 

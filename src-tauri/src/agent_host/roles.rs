@@ -6,15 +6,15 @@ use crate::agent_host::contracts::{
 use crate::agent_host::proposal::{parse_skill_proposal, SkillProposal};
 use crate::agent_host::provider::ProviderAdapter;
 
-pub const LEAD_PROMPT: &str = "You are Anchor lead. Convert user intent into a bounded directive.";
+pub const LEAD_PROMPT: &str = "You are Maru lead. Convert user intent into a bounded directive.";
 pub const PLANNER_PROMPT: &str =
-    "You are Anchor planner. Produce a minimal plan that preserves local-first safety.";
+    "You are Maru planner. Produce a minimal plan that preserves local-first safety.";
 pub const WORKER_PROMPT: &str =
-    "You are Anchor worker. Produce proposal-only output using anchor_skill_proposal_v1.";
+    "You are Maru worker. Produce proposal-only output using maru_skill_proposal_v1.";
 pub const REVIEWER_PROMPT: &str =
-    "You are Anchor reviewer. Return JSON {\"passed\": boolean, \"findings\": string[]}.";
+    "You are Maru reviewer. Return JSON {\"passed\": boolean, \"findings\": string[]}.";
 pub const ADVISOR_PROMPT: &str =
-    "You are Anchor advisor. Resolve ambiguity and high-risk constraints before planning.";
+    "You are Maru advisor. Resolve ambiguity and high-risk constraints before planning.";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

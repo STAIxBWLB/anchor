@@ -16,7 +16,7 @@ export type TerminalLauncherId = "claude" | "codex" | "shell";
 export type TerminalDock = "bottom" | "right";
 export type TerminalAttachMentionStyle = "mention" | "path" | "read";
 export type ThemeMode = "system" | "light" | "dark";
-export type AnchorAppMode =
+export type MaruAppMode =
   | "pkm"
   | "inbox"
   | "comms"
@@ -138,10 +138,10 @@ export interface TerminalLauncherSettings {
   args?: string[];
 }
 
-export interface AnchorSettings {
+export interface MaruSettings {
   version: 1;
   ui: {
-    activeAppMode: AnchorAppMode;
+    activeAppMode: MaruAppMode;
     activeWorkspaceVisibility: WorkspaceVisibilitySetting;
     editorViewMode: EditorViewModeSetting;
     rightPaneTab: RightPaneTab;
@@ -173,7 +173,7 @@ export interface AnchorSettings {
     launchers: Record<TerminalLauncherId, TerminalLauncherSettings>;
     copyOnSelect: boolean;
     shortcuts: TerminalShortcutMap;
-    /** Inject ANCHOR_* env + --add-dir from the active item into agent sessions. */
+    /** Inject MARU_* env + --add-dir from the active item into agent sessions. */
     injectActiveContext: boolean;
     /** How "attach active item" inserts a file reference into a focused agent. */
     attachMentionStyle: TerminalAttachMentionStyle;
@@ -274,7 +274,7 @@ export const MEETINGS_CALENDAR_START_HOUR_MAX = 23;
 export const TASKS_CALENDAR_START_HOUR_MIN = 0;
 export const TASKS_CALENDAR_START_HOUR_MAX = 23;
 
-export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
+export const DEFAULT_MARU_SETTINGS: MaruSettings = {
   version: 1,
   ui: {
     activeAppMode: "pkm",
@@ -411,7 +411,7 @@ export const DEFAULT_ANCHOR_SETTINGS: AnchorSettings = {
   connectors: {},
 };
 
-export function normalizeAnchorSettings(value: unknown): AnchorSettings {
+export function normalizeMaruSettings(value: unknown): MaruSettings {
   if (!isRecord(value)) return cloneDefaultSettings();
   const ui = isRecord(value.ui) ? value.ui : {};
   const terminal = isRecord(value.terminal) ? value.terminal : {};
@@ -423,7 +423,7 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
   return {
     version: 1,
     ui: {
-      activeAppMode: parseAnchorAppMode(ui.activeAppMode) ?? "pkm",
+      activeAppMode: parseMaruAppMode(ui.activeAppMode) ?? "pkm",
       activeWorkspaceVisibility:
         parseWorkspaceVisibilitySetting(ui.activeWorkspaceVisibility) ?? "private",
       editorViewMode: parseEditorViewModeSetting(ui.editorViewMode) ?? "source",
@@ -449,8 +449,8 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
         : false,
       fileQueueDefaultOperation:
         parseFileQueueDefaultOperation(ui.fileQueueDefaultOperation) ?? "copy",
-      themeMode: parseThemeMode(ui.themeMode) ?? DEFAULT_ANCHOR_SETTINGS.ui.themeMode,
-      accentColor: normalizeHexColor(ui.accentColor, DEFAULT_ANCHOR_SETTINGS.ui.accentColor),
+      themeMode: parseThemeMode(ui.themeMode) ?? DEFAULT_MARU_SETTINGS.ui.themeMode,
+      accentColor: normalizeHexColor(ui.accentColor, DEFAULT_MARU_SETTINGS.ui.accentColor),
       layout,
     },
     scan: {
@@ -463,25 +463,25 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
       launchers: {
         claude: normalizeLauncher(
           launchers.claude ?? legacyRuntimes["claude-code"],
-          DEFAULT_ANCHOR_SETTINGS.terminal.launchers.claude,
+          DEFAULT_MARU_SETTINGS.terminal.launchers.claude,
         ),
         codex: normalizeLauncher(
           launchers.codex ?? legacyRuntimes.codex,
-          DEFAULT_ANCHOR_SETTINGS.terminal.launchers.codex,
+          DEFAULT_MARU_SETTINGS.terminal.launchers.codex,
         ),
         shell: normalizeLauncher(
           launchers.shell,
-          DEFAULT_ANCHOR_SETTINGS.terminal.launchers.shell,
+          DEFAULT_MARU_SETTINGS.terminal.launchers.shell,
         ),
       },
       injectActiveContext:
         typeof terminal.injectActiveContext === "boolean"
           ? terminal.injectActiveContext
-          : DEFAULT_ANCHOR_SETTINGS.terminal.injectActiveContext,
+          : DEFAULT_MARU_SETTINGS.terminal.injectActiveContext,
       copyOnSelect:
         typeof terminal.copyOnSelect === "boolean"
           ? terminal.copyOnSelect
-          : DEFAULT_ANCHOR_SETTINGS.terminal.copyOnSelect,
+          : DEFAULT_MARU_SETTINGS.terminal.copyOnSelect,
       shortcuts: normalizeTerminalShortcuts(terminal.shortcuts),
       attachMentionStyle: parseAttachMentionStyle(terminal.attachMentionStyle),
     },
@@ -496,8 +496,8 @@ export function normalizeAnchorSettings(value: unknown): AnchorSettings {
   };
 }
 
-export function serializeAnchorSettings(settings: AnchorSettings): unknown {
-  return normalizeAnchorSettings(settings);
+export function serializeMaruSettings(settings: MaruSettings): unknown {
+  return normalizeMaruSettings(settings);
 }
 
 export function applyWorkspaceCommsOverrides(
@@ -755,55 +755,55 @@ export function applyWorkspaceTasksOverrides(
   };
 }
 
-function cloneDefaultSettings(): AnchorSettings {
+function cloneDefaultSettings(): MaruSettings {
   return {
-    ...DEFAULT_ANCHOR_SETTINGS,
+    ...DEFAULT_MARU_SETTINGS,
     ui: {
-      ...DEFAULT_ANCHOR_SETTINGS.ui,
+      ...DEFAULT_MARU_SETTINGS.ui,
       binaryFileIncludePatterns: [
-        ...DEFAULT_ANCHOR_SETTINGS.ui.binaryFileIncludePatterns,
+        ...DEFAULT_MARU_SETTINGS.ui.binaryFileIncludePatterns,
       ],
-      filesListAttributes: [...DEFAULT_ANCHOR_SETTINGS.ui.filesListAttributes],
-      documentViews: DEFAULT_ANCHOR_SETTINGS.ui.documentViews.map((view) => ({ ...view })),
-      collapsedTreeFolders: [...DEFAULT_ANCHOR_SETTINGS.ui.collapsedTreeFolders],
-      collapsedFileFolders: [...DEFAULT_ANCHOR_SETTINGS.ui.collapsedFileFolders],
-      documentTreeStateInitialized: DEFAULT_ANCHOR_SETTINGS.ui.documentTreeStateInitialized,
-      fileTreeStateInitialized: DEFAULT_ANCHOR_SETTINGS.ui.fileTreeStateInitialized,
-      layout: { ...DEFAULT_ANCHOR_SETTINGS.ui.layout },
+      filesListAttributes: [...DEFAULT_MARU_SETTINGS.ui.filesListAttributes],
+      documentViews: DEFAULT_MARU_SETTINGS.ui.documentViews.map((view) => ({ ...view })),
+      collapsedTreeFolders: [...DEFAULT_MARU_SETTINGS.ui.collapsedTreeFolders],
+      collapsedFileFolders: [...DEFAULT_MARU_SETTINGS.ui.collapsedFileFolders],
+      documentTreeStateInitialized: DEFAULT_MARU_SETTINGS.ui.documentTreeStateInitialized,
+      fileTreeStateInitialized: DEFAULT_MARU_SETTINGS.ui.fileTreeStateInitialized,
+      layout: { ...DEFAULT_MARU_SETTINGS.ui.layout },
     },
     scan: {
-      includeDotFolders: [...DEFAULT_ANCHOR_SETTINGS.scan.includeDotFolders],
+      includeDotFolders: [...DEFAULT_MARU_SETTINGS.scan.includeDotFolders],
     },
     terminal: {
-      ...DEFAULT_ANCHOR_SETTINGS.terminal,
+      ...DEFAULT_MARU_SETTINGS.terminal,
       launchers: {
-        claude: { ...DEFAULT_ANCHOR_SETTINGS.terminal.launchers.claude },
-        codex: { ...DEFAULT_ANCHOR_SETTINGS.terminal.launchers.codex },
-        shell: { ...DEFAULT_ANCHOR_SETTINGS.terminal.launchers.shell },
+        claude: { ...DEFAULT_MARU_SETTINGS.terminal.launchers.claude },
+        codex: { ...DEFAULT_MARU_SETTINGS.terminal.launchers.codex },
+        shell: { ...DEFAULT_MARU_SETTINGS.terminal.launchers.shell },
       },
-      shortcuts: { ...DEFAULT_ANCHOR_SETTINGS.terminal.shortcuts },
+      shortcuts: { ...DEFAULT_MARU_SETTINGS.terminal.shortcuts },
     },
     ai: {
-      ...DEFAULT_ANCHOR_SETTINGS.ai,
-      commandOverrides: { ...DEFAULT_ANCHOR_SETTINGS.ai.commandOverrides },
-      extra: { ...DEFAULT_ANCHOR_SETTINGS.ai.extra },
+      ...DEFAULT_MARU_SETTINGS.ai,
+      commandOverrides: { ...DEFAULT_MARU_SETTINGS.ai.commandOverrides },
+      extra: { ...DEFAULT_MARU_SETTINGS.ai.extra },
     },
     comms: {
-      outlook: { ...DEFAULT_ANCHOR_SETTINGS.comms.outlook },
-      telegram: { ...DEFAULT_ANCHOR_SETTINGS.comms.telegram },
+      outlook: { ...DEFAULT_MARU_SETTINGS.comms.outlook },
+      telegram: { ...DEFAULT_MARU_SETTINGS.comms.telegram },
     },
     meetings: {
-      ...DEFAULT_ANCHOR_SETTINGS.meetings,
-      guides: { ...DEFAULT_ANCHOR_SETTINGS.meetings.guides },
-      hooks: { ...DEFAULT_ANCHOR_SETTINGS.meetings.hooks },
-      defaultTypes: [...DEFAULT_ANCHOR_SETTINGS.meetings.defaultTypes],
+      ...DEFAULT_MARU_SETTINGS.meetings,
+      guides: { ...DEFAULT_MARU_SETTINGS.meetings.guides },
+      hooks: { ...DEFAULT_MARU_SETTINGS.meetings.hooks },
+      defaultTypes: [...DEFAULT_MARU_SETTINGS.meetings.defaultTypes],
     },
     tasks: {
-      ...DEFAULT_ANCHOR_SETTINGS.tasks,
-      hooks: { ...DEFAULT_ANCHOR_SETTINGS.tasks.hooks },
+      ...DEFAULT_MARU_SETTINGS.tasks,
+      hooks: { ...DEFAULT_MARU_SETTINGS.tasks.hooks },
     },
     diagram: {
-      ...DEFAULT_ANCHOR_SETTINGS.diagram,
+      ...DEFAULT_MARU_SETTINGS.diagram,
     },
     inboxChannels: {},
     composer: {
@@ -830,7 +830,7 @@ function normalizeDiagramSettings(value: unknown): DiagramSettings {
     lastDocument: readOptionalString(
       diagram,
       ["lastDocument", "last_document", "activeName", "active_name"],
-      DEFAULT_ANCHOR_SETTINGS.diagram.lastDocument,
+      DEFAULT_MARU_SETTINGS.diagram.lastDocument,
     ),
   };
 }
@@ -843,10 +843,10 @@ function normalizeCommsSettings(value: unknown): CommsSettings {
     outlook: {
       enabled: typeof outlook.enabled === "boolean"
         ? outlook.enabled
-        : DEFAULT_ANCHOR_SETTINGS.comms.outlook.enabled,
+        : DEFAULT_MARU_SETTINGS.comms.outlook.enabled,
       maxResults: normalizeInteger(
         outlook.maxResults,
-        DEFAULT_ANCHOR_SETTINGS.comms.outlook.maxResults,
+        DEFAULT_MARU_SETTINGS.comms.outlook.maxResults,
         COMMS_PROVIDER_RESULTS_MIN,
         COMMS_PROVIDER_RESULTS_MAX,
       ),
@@ -855,19 +855,19 @@ function normalizeCommsSettings(value: unknown): CommsSettings {
     telegram: {
       enabled: typeof telegram.enabled === "boolean"
         ? telegram.enabled
-        : DEFAULT_ANCHOR_SETTINGS.comms.telegram.enabled,
+        : DEFAULT_MARU_SETTINGS.comms.telegram.enabled,
       polling: typeof telegram.polling === "boolean"
         ? telegram.polling
-        : DEFAULT_ANCHOR_SETTINGS.comms.telegram.polling,
+        : DEFAULT_MARU_SETTINGS.comms.telegram.polling,
       intervalSeconds: normalizeInteger(
         telegram.intervalSeconds,
-        DEFAULT_ANCHOR_SETTINGS.comms.telegram.intervalSeconds,
+        DEFAULT_MARU_SETTINGS.comms.telegram.intervalSeconds,
         TELEGRAM_POLL_INTERVAL_MIN_SECONDS,
         TELEGRAM_POLL_INTERVAL_MAX_SECONDS,
       ),
       maxResults: normalizeInteger(
         telegram.maxResults,
-        DEFAULT_ANCHOR_SETTINGS.comms.telegram.maxResults,
+        DEFAULT_MARU_SETTINGS.comms.telegram.maxResults,
         COMMS_PROVIDER_RESULTS_MIN,
         COMMS_PROVIDER_RESULTS_MAX,
       ),
@@ -877,7 +877,7 @@ function normalizeCommsSettings(value: unknown): CommsSettings {
       monitorConfigPath: normalizeOptionalString(telegram.monitorConfigPath),
       legacyAutoDrop: typeof telegram.legacyAutoDrop === "boolean"
         ? telegram.legacyAutoDrop
-        : DEFAULT_ANCHOR_SETTINGS.comms.telegram.legacyAutoDrop,
+        : DEFAULT_MARU_SETTINGS.comms.telegram.legacyAutoDrop,
     },
   };
 }
@@ -890,15 +890,15 @@ function normalizeMeetingsSettings(value: unknown): MeetingsSettings {
     enabled:
       typeof meetings.enabled === "boolean"
         ? meetings.enabled
-        : DEFAULT_ANCHOR_SETTINGS.meetings.enabled,
+        : DEFAULT_MARU_SETTINGS.meetings.enabled,
     root:
       typeof meetings.root === "undefined"
-        ? DEFAULT_ANCHOR_SETTINGS.meetings.root
+        ? DEFAULT_MARU_SETTINGS.meetings.root
         : normalizeOptionalString(meetings.root),
     filenameTemplate:
       typeof meetings.filenameTemplate === "string" && meetings.filenameTemplate.trim()
         ? meetings.filenameTemplate.trim()
-        : DEFAULT_ANCHOR_SETTINGS.meetings.filenameTemplate,
+        : DEFAULT_MARU_SETTINGS.meetings.filenameTemplate,
     guides: {
       quickStart: normalizeOptionalString(guides.quickStart),
       glossary: normalizeOptionalString(guides.glossary),
@@ -910,27 +910,27 @@ function normalizeMeetingsSettings(value: unknown): MeetingsSettings {
       autoTaskExtract:
         typeof hooks.autoTaskExtract === "boolean"
           ? hooks.autoTaskExtract
-          : DEFAULT_ANCHOR_SETTINGS.meetings.hooks.autoTaskExtract,
+          : DEFAULT_MARU_SETTINGS.meetings.hooks.autoTaskExtract,
       autoVaultExtract:
         typeof hooks.autoVaultExtract === "boolean"
           ? hooks.autoVaultExtract
-          : DEFAULT_ANCHOR_SETTINGS.meetings.hooks.autoVaultExtract,
+          : DEFAULT_MARU_SETTINGS.meetings.hooks.autoVaultExtract,
       autoVaultConnect:
         typeof hooks.autoVaultConnect === "boolean"
           ? hooks.autoVaultConnect
-          : DEFAULT_ANCHOR_SETTINGS.meetings.hooks.autoVaultConnect,
+          : DEFAULT_MARU_SETTINGS.meetings.hooks.autoVaultConnect,
       appendVaultLog:
         typeof hooks.appendVaultLog === "boolean"
           ? hooks.appendVaultLog
-          : DEFAULT_ANCHOR_SETTINGS.meetings.hooks.appendVaultLog,
+          : DEFAULT_MARU_SETTINGS.meetings.hooks.appendVaultLog,
     },
     defaultTypes: normalizeStringList(
       meetings.defaultTypes,
-      DEFAULT_ANCHOR_SETTINGS.meetings.defaultTypes,
+      DEFAULT_MARU_SETTINGS.meetings.defaultTypes,
     ),
     calendarStartHour: normalizeInteger(
       meetings.calendarStartHour,
-      DEFAULT_ANCHOR_SETTINGS.meetings.calendarStartHour,
+      DEFAULT_MARU_SETTINGS.meetings.calendarStartHour,
       MEETINGS_CALENDAR_START_HOUR_MIN,
       MEETINGS_CALENDAR_START_HOUR_MAX,
     ),
@@ -944,23 +944,23 @@ function normalizeTasksSettings(value: unknown): TasksSettings {
     enabled:
       typeof tasks.enabled === "boolean"
         ? tasks.enabled
-        : DEFAULT_ANCHOR_SETTINGS.tasks.enabled,
+        : DEFAULT_MARU_SETTINGS.tasks.enabled,
     root:
       typeof tasks.root === "undefined"
-        ? DEFAULT_ANCHOR_SETTINGS.tasks.root
+        ? DEFAULT_MARU_SETTINGS.tasks.root
         : normalizeOptionalString(tasks.root),
     timezone:
       typeof tasks.timezone === "undefined"
-        ? DEFAULT_ANCHOR_SETTINGS.tasks.timezone
+        ? DEFAULT_MARU_SETTINGS.tasks.timezone
         : normalizeOptionalString(tasks.timezone),
     gwsBinary: normalizeOptionalString(tasks.gwsBinary),
     defaultView:
-      parseTasksDefaultView(tasks.defaultView) ?? DEFAULT_ANCHOR_SETTINGS.tasks.defaultView,
+      parseTasksDefaultView(tasks.defaultView) ?? DEFAULT_MARU_SETTINGS.tasks.defaultView,
     weekStartsOn:
-      parseWeekStartsOn(tasks.weekStartsOn) ?? DEFAULT_ANCHOR_SETTINGS.tasks.weekStartsOn,
+      parseWeekStartsOn(tasks.weekStartsOn) ?? DEFAULT_MARU_SETTINGS.tasks.weekStartsOn,
     calendarStartHour: normalizeInteger(
       tasks.calendarStartHour,
-      DEFAULT_ANCHOR_SETTINGS.tasks.calendarStartHour,
+      DEFAULT_MARU_SETTINGS.tasks.calendarStartHour,
       TASKS_CALENDAR_START_HOUR_MIN,
       TASKS_CALENDAR_START_HOUR_MAX,
     ),
@@ -970,11 +970,11 @@ function normalizeTasksSettings(value: unknown): TasksSettings {
       autoVaultExtract:
         typeof hooks.autoVaultExtract === "boolean"
           ? hooks.autoVaultExtract
-          : DEFAULT_ANCHOR_SETTINGS.tasks.hooks.autoVaultExtract,
+          : DEFAULT_MARU_SETTINGS.tasks.hooks.autoVaultExtract,
       appendVaultLog:
         typeof hooks.appendVaultLog === "boolean"
           ? hooks.appendVaultLog
-          : DEFAULT_ANCHOR_SETTINGS.tasks.hooks.appendVaultLog,
+          : DEFAULT_MARU_SETTINGS.tasks.hooks.appendVaultLog,
     },
   };
 }
@@ -1061,7 +1061,7 @@ function parseBrowserMode(value: unknown): DocumentBrowserMode | null {
   return value === "list" || value === "tree" ? value : null;
 }
 
-function parseAnchorAppMode(value: unknown): AnchorAppMode | null {
+function parseMaruAppMode(value: unknown): MaruAppMode | null {
   return value === "pkm" || value === "inbox" || value === "comms" || value === "meetings"
     || value === "tasks" || value === "catalog" || value === "studio" || value === "e2e"
     || value === "diagram" || value === "sites" || value === "graph"
@@ -1146,13 +1146,13 @@ function parseAutoLaunch(value: unknown): TerminalLauncherId | null {
   if (value === null) return null;
   return value === "claude" || value === "codex" || value === "shell"
     ? value
-    : DEFAULT_ANCHOR_SETTINGS.terminal.autoLaunch;
+    : DEFAULT_MARU_SETTINGS.terminal.autoLaunch;
 }
 
 function parseAttachMentionStyle(value: unknown): TerminalAttachMentionStyle {
   return value === "mention" || value === "path" || value === "read"
     ? value
-    : DEFAULT_ANCHOR_SETTINGS.terminal.attachMentionStyle;
+    : DEFAULT_MARU_SETTINGS.terminal.attachMentionStyle;
 }
 
 function parseStringArray(value: unknown): string[] {
@@ -1284,7 +1284,7 @@ function normalizeLayout(value: unknown, legacyTerminal: Record<string, unknown>
       ? layout.terminalOpen
       : typeof legacyTerminal.defaultPanelOpen === "boolean"
         ? legacyTerminal.defaultPanelOpen
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.terminalOpen;
+        : DEFAULT_MARU_SETTINGS.ui.layout.terminalOpen;
   const terminalHeight = normalizeTerminalHeight(
     layout.terminalHeight ?? legacyTerminal.lastHeight,
   );
@@ -1292,20 +1292,20 @@ function normalizeLayout(value: unknown, legacyTerminal: Record<string, unknown>
     documentsPaneOpen:
       typeof layout.documentsPaneOpen === "boolean"
         ? layout.documentsPaneOpen
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.documentsPaneOpen,
+        : DEFAULT_MARU_SETTINGS.ui.layout.documentsPaneOpen,
     documentsPaneWidth: normalizePaneWidth(
       layout.documentsPaneWidth,
-      DEFAULT_ANCHOR_SETTINGS.ui.layout.documentsPaneWidth,
+      DEFAULT_MARU_SETTINGS.ui.layout.documentsPaneWidth,
       260,
       560,
     ),
     outlineOpen:
       typeof layout.outlineOpen === "boolean"
         ? layout.outlineOpen
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.outlineOpen,
+        : DEFAULT_MARU_SETTINGS.ui.layout.outlineOpen,
     outlinePaneWidth: normalizePaneWidth(
       layout.outlinePaneWidth,
-      DEFAULT_ANCHOR_SETTINGS.ui.layout.outlinePaneWidth,
+      DEFAULT_MARU_SETTINGS.ui.layout.outlinePaneWidth,
       240,
       520,
     ),
@@ -1313,21 +1313,21 @@ function normalizeLayout(value: unknown, legacyTerminal: Record<string, unknown>
     terminalHeight,
     terminalDock:
       parseTerminalDock(layout.terminalDock) ??
-      DEFAULT_ANCHOR_SETTINGS.ui.layout.terminalDock,
+      DEFAULT_MARU_SETTINGS.ui.layout.terminalDock,
     terminalWidth: normalizeTerminalWidth(layout.terminalWidth),
     terminalMaximized:
       typeof layout.terminalMaximized === "boolean"
         ? layout.terminalMaximized
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.terminalMaximized,
+        : DEFAULT_MARU_SETTINGS.ui.layout.terminalMaximized,
     editorSplitOpen:
       typeof layout.editorSplitOpen === "boolean"
         ? layout.editorSplitOpen
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.editorSplitOpen,
+        : DEFAULT_MARU_SETTINGS.ui.layout.editorSplitOpen,
     editorSplitRatio: normalizeSplitRatio(layout.editorSplitRatio),
     terminalSplitOpen:
       typeof layout.terminalSplitOpen === "boolean"
         ? layout.terminalSplitOpen
-        : DEFAULT_ANCHOR_SETTINGS.ui.layout.terminalSplitOpen,
+        : DEFAULT_MARU_SETTINGS.ui.layout.terminalSplitOpen,
     terminalSplitRatio: normalizeSplitRatio(layout.terminalSplitRatio),
     windowBounds: normalizeWindowBounds(layout.windowBounds),
     windowMaximized:
@@ -1380,14 +1380,14 @@ function normalizeHexColor(value: unknown, fallback: string): string {
 
 function normalizeTerminalHeight(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_ANCHOR_SETTINGS.terminal.lastHeight;
+    return DEFAULT_MARU_SETTINGS.terminal.lastHeight;
   }
   return Math.min(520, Math.max(160, Math.round(value)));
 }
 
 function normalizeTerminalWidth(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_ANCHOR_SETTINGS.ui.layout.terminalWidth;
+    return DEFAULT_MARU_SETTINGS.ui.layout.terminalWidth;
   }
   return Math.max(320, Math.round(value));
 }
@@ -1416,7 +1416,7 @@ function parseAiRuntime(value: unknown): AiRuntime | null {
  * into `extra` so serialize→normalize never loses data.
  */
 function normalizeAi(value: unknown): AiSettings {
-  const fallback = DEFAULT_ANCHOR_SETTINGS.ai;
+  const fallback = DEFAULT_MARU_SETTINGS.ai;
   if (!isRecord(value)) {
     return {
       ...fallback,

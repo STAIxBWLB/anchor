@@ -9,7 +9,7 @@ vi.mock("dompurify", () => ({
 import { extractOutline, renderMarkdown } from "./markdown";
 
 describe("renderMarkdown", () => {
-  it("strips frontmatter and rewrites wikilinks to anchor links", () => {
+  it("strips frontmatter and rewrites wikilinks to maru links", () => {
     const html = renderMarkdown("---\ntitle: Hidden\n---\n# Title\nSee [[Project Alpha|프로젝트]].");
 
     expect(html).not.toContain("title: Hidden");

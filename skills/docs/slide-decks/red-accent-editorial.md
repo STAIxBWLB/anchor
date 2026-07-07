@@ -45,7 +45,7 @@ Layout Language (high sensibility)
 - Asymmetric, calm-then-sharp rhythm. Wide white margins → sudden oversized headline → small caption block.
 - Strict baseline grid; deliberate negative space; never centered just for safety.
 - Mix scale aggressively: 8pt label next to 220pt headline.
-- Thin black or red rules used to anchor sections.
+- Thin black or red rules used to maru sections.
 
 Slide Patterns (mix across the deck)
 - Cover — Massive sans-serif headline with one red word. Single full-bleed portrait on right 60% (or cut-out on white).

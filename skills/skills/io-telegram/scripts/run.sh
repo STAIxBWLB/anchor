@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# run.sh — Anchor skills python interpreter wrapper (io-telegram)
+# run.sh — Maru skills python interpreter wrapper (io-telegram)
 #
-# telethon 은 ~/.anchor/env/.venv 에만 설치되므로 auth.py/telegram_monitor.py
+# telethon 은 ~/.maru/env/.venv 에만 설치되므로 auth.py/telegram_monitor.py
 # 는 반드시 이 wrapper 를 통해 실행한다.
 #
 # 우선순위:
 #   1. $SKILL_PYTHON (caller override)
-#   2. $ANCHOR_SKILLS_ENV (host 주입) → ~/.anchor/env/.venv (정규)
+#   2. $MARU_SKILLS_ENV (host 주입) → ~/.maru/env/.venv (정규)
 #   3. repo-local env/.venv (dev-in-tree)
 #   4. python3 on PATH (경고 출력)
 #
-# venv 미설치 시: bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env
+# venv 미설치 시: bash ~/.maru/skills/_builtin/envs/default/setup.sh --target ~/.maru/env
 
 set -euo pipefail
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Resolve the Anchor skills python interpreter, most-specific first.
-# Honors $SKILL_PYTHON, then host-injected $ANCHOR_SKILLS_ENV,
-# then the canonical ~/.anchor/env, then a repo-local walk-up (dev-in-tree).
+# Resolve the Maru skills python interpreter, most-specific first.
+# Honors $SKILL_PYTHON, then host-injected $MARU_SKILLS_ENV,
+# then the canonical ~/.maru/env, then a repo-local walk-up (dev-in-tree).
 # Canonical snippet — keep in sync with skills/envs/default/REFERENCE.md.
 find_env_python() {
   local c dir
@@ -25,8 +25,8 @@ find_env_python() {
     printf '%s\n' "$SKILL_PYTHON"; return 0
   fi
   for c in \
-    "${ANCHOR_SKILLS_ENV:+$ANCHOR_SKILLS_ENV/.venv/bin/python3}" \
-    "$HOME/.anchor/env/.venv/bin/python3"; do
+    "${MARU_SKILLS_ENV:+$MARU_SKILLS_ENV/.venv/bin/python3}" \
+    "$HOME/.maru/env/.venv/bin/python3"; do
     [[ -n "$c" && -x "$c" ]] && printf '%s\n' "$c" && return 0
   done
   dir="$SKILL_DIR"
@@ -46,9 +46,9 @@ PYTHON="$(find_env_python || true)"
 if [[ -z "$PYTHON" || ! -x "$PYTHON" ]]; then
   if command -v python3 >/dev/null 2>&1; then
     PYTHON="$(command -v python3)"
-    echo "WARN: ~/.anchor/env/.venv 미발견, system python3 fallback: $PYTHON (telethon 미설치 가능)" >&2
+    echo "WARN: ~/.maru/env/.venv 미발견, system python3 fallback: $PYTHON (telethon 미설치 가능)" >&2
   else
-    echo "ERROR: no python. 'bash ~/.anchor/skills/_builtin/envs/default/setup.sh --target ~/.anchor/env' 실행" >&2
+    echo "ERROR: no python. 'bash ~/.maru/skills/_builtin/envs/default/setup.sh --target ~/.maru/env' 실행" >&2
     exit 1
   fi
 fi

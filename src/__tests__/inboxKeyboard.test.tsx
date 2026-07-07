@@ -123,7 +123,7 @@ describe("inbox keyboard helpers", () => {
     expect(prompt).toContain("/work/inbox/items/pending/a/manifest.yaml");
     expect(prompt).toContain('"summary_file": "summary.md"');
     expect(prompt).toContain("Do not fetch providers");
-    expect(prompt).toContain("anchor_inbox_review_v1");
+    expect(prompt).toContain("maru_inbox_review_v1");
   });
 
   it("leaves the prompt unchanged when processing context is empty", () => {

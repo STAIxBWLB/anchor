@@ -607,7 +607,7 @@ export interface InboxProcessMissionMetadata {
   channel: string;
   /** All distinct channels covered by a bundled review-flow run. */
   channels?: string[];
-  /** When true, Anchor renders the meetings/tasks-style review + confirm flow. */
+  /** When true, Maru renders the meetings/tasks-style review + confirm flow. */
   reviewFlow?: boolean;
   /** Free-text guidance the user typed at Process time, if any. */
   processingContext?: string;
@@ -747,7 +747,7 @@ export interface TasksLogLineRecord {
   legacy: boolean;
 }
 
-/** Per-workspace inbox configuration persisted at `<workspace>/.anchor/inbox.json`. */
+/** Per-workspace inbox configuration persisted at `<workspace>/.maru/inbox.json`. */
 export interface InboxSettings {
   /** Workspace-relative path to the inbox root directory. */
   inboxRoot: string;
@@ -827,7 +827,7 @@ export interface MemoDocument extends MemoEntry {
   content: string;
 }
 
-// === Workspace pairing + .anchor/ system mode ===
+// === Workspace pairing + .maru/ system mode ===
 
 export interface WorkspaceOwner {
   name?: string | null;
@@ -969,7 +969,7 @@ export interface RegisterWorkspaceOutcome {
   publicWorkspacePath: string | null;
 }
 
-export interface AnchorWorkspaceMeta {
+export interface MaruWorkspaceMeta {
   version: number;
   workPath: string;
   pairedVaultPath: string | null;
@@ -981,7 +981,7 @@ export interface AnchorWorkspaceMeta {
   updatedAt: string;
 }
 
-export interface AnchorWorkspaceMetaPatch {
+export interface MaruWorkspaceMetaPatch {
   /** v1 semantics: pass a string to set the field. Omitting (or
    *  passing `null`/`undefined`) leaves the existing value unchanged.
    *  Clearing a field is not yet supported through this patch. */

@@ -34,7 +34,7 @@ pub fn validate_marketplace_manifest(
     manifest: &MarketplaceSourceManifest,
 ) -> MarketplaceValidationReport {
     let mut errors = Vec::new();
-    if manifest.schema_version != "anchor_marketplace_source_v1" {
+    if manifest.schema_version != "maru_marketplace_source_v1" {
         errors.push(format!("unsupported_schema: {}", manifest.schema_version));
     }
     if manifest.source_id.trim().is_empty() {
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn marketplace_manifest_requires_signed_metadata() {
         let report = validate_marketplace_manifest(&MarketplaceSourceManifest {
-            schema_version: "anchor_marketplace_source_v1".to_string(),
+            schema_version: "maru_marketplace_source_v1".to_string(),
             source_id: "demo".to_string(),
             name: "Demo".to_string(),
             version: "1.0.0".to_string(),

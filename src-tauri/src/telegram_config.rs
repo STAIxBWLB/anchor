@@ -10,7 +10,7 @@ use crate::inbox_settings::{expand_tilde, lexical_normalize_path};
 use crate::secrets;
 use crate::vault::resolve_inside_vault;
 
-pub const SECRET_UNCHANGED: &str = "__ANCHOR_KEEP_SECRET__";
+pub const SECRET_UNCHANGED: &str = "__MARU_KEEP_SECRET__";
 const MIN_INTERVAL_SECONDS: u64 = 30;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
@@ -561,7 +561,7 @@ fn set_secret_file_mode(path: &Path) -> Result<(), String> {
 
 fn project_ids_for_work(work: &Path) -> BTreeSet<String> {
     let mut ids = BTreeSet::new();
-    if let Ok(raw) = fs::read_to_string(work.join(".anchor/projects.json")) {
+    if let Ok(raw) = fs::read_to_string(work.join(".maru/projects.json")) {
         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
             collect_project_ids_json(&value, &mut ids);
         }
@@ -779,7 +779,7 @@ notification:
         let tmp = TempDir::new().unwrap();
         let path = tmp
             .path()
-            .join(".anchor/secrets/services/telegram-monitor.config.yaml");
+            .join(".maru/secrets/services/telegram-monitor.config.yaml");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(
             &path,

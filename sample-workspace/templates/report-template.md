@@ -1,7 +1,7 @@
 ---
 type: Template
 status: active
-project: Anchor Project
+project: Maru Project
 tags:
   - 보고서
 created_at: 2026-04-22T11:10:00+09:00

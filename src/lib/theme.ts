@@ -1,9 +1,9 @@
 import type { CSSProperties } from "react";
-import type { AnchorSettings, ThemeMode } from "./settings";
+import type { MaruSettings, ThemeMode } from "./settings";
 
 export type ThemeVars = CSSProperties & Record<`--${string}`, string>;
 
-export function buildThemeVars(settings: AnchorSettings): ThemeVars {
+export function buildThemeVars(settings: MaruSettings): ThemeVars {
   const accent = settings.ui.accentColor;
   const dark =
     settings.ui.themeMode === "dark" ||

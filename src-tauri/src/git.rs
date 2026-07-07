@@ -14,7 +14,7 @@ use std::process::{Command, Stdio};
 use crate::agent_host::contracts::{CompletionRequest, COMPLETION_REQUEST_SCHEMA_VERSION};
 use crate::agent_host::provider::{build_cli_command, CliProviderKind};
 use crate::approval::{require_approval, ApprovalState};
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use crate::win_process::NoWindow;
 
 pub const GIT_SYNC_COMMIT_PUSH_APPROVAL_KIND: &str = "git.sync.commit_push";
@@ -581,13 +581,13 @@ pub fn git_sync_pull_rebase(repo_path: String) -> Result<GitSyncPullResult, Stri
     if !repo.is_dir() {
         return Err(format!("Repository path is not a directory: {repo_path}"));
     }
-    assert_anchor_can_write(&repo_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&repo_path, WorkspaceWriteAction::Modify)?;
 
     let dirty_before = !repo_status(repo)?.paths.is_empty();
     let mut stashed = false;
     if dirty_before {
         let stash = Command::new("git")
-            .args(["stash", "push", "-u", "-m", "anchor-git-sync-before-pull"])
+            .args(["stash", "push", "-u", "-m", "maru-git-sync-before-pull"])
             .current_dir(repo)
             .no_window()
             .output()
@@ -651,7 +651,7 @@ pub fn git_sync_commit_push(
     if !repo.is_dir() {
         return Err(format!("Repository path is not a directory: {repo_path}"));
     }
-    assert_anchor_can_write(&repo_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&repo_path, WorkspaceWriteAction::Modify)?;
     let selected_paths = match paths {
         Some(paths) if !paths.is_empty() => Some(validate_git_paths(paths)?),
         _ => None,
@@ -987,8 +987,8 @@ fn is_sensitive_git_path(path: &str) -> bool {
         .unwrap_or("");
     lower.starts_with(".secrets/")
         || lower.contains("/.secrets/")
-        || lower.starts_with(".anchor/secrets/")
-        || lower.contains("/.anchor/secrets/")
+        || lower.starts_with(".maru/secrets/")
+        || lower.contains("/.maru/secrets/")
         || lower.starts_with(".env")
         || lower.contains("/.env")
         || name == "id_rsa"
@@ -1023,7 +1023,7 @@ pub fn git_commit(
     if !path.is_dir() {
         return Err(format!("Workspace path is not a directory: {vault_path}"));
     }
-    assert_anchor_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&vault_path, WorkspaceWriteAction::Modify)?;
 
     let selected_paths = match paths {
         Some(paths) => {
@@ -1108,13 +1108,13 @@ mod tests {
 
     #[test]
     fn non_directory_path_errors() {
-        let result = git_status("/nonexistent/path/anchor-test".to_string());
+        let result = git_status("/nonexistent/path/maru-test".to_string());
         assert!(result.is_err());
     }
 
     #[test]
-    fn anchor_repo_reports_main_branch() {
-        // The test runs from src-tauri/, which is inside the anchor git
+    fn maru_repo_reports_main_branch() {
+        // The test runs from src-tauri/, which is inside the maru git
         // repo. We don't assert clean/dirty (depends on test-time state),
         // but is_repo + branch should be populated.
         let cwd = std::env::current_dir().unwrap();
@@ -1129,8 +1129,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         run_git(root, &["init"]);
-        run_git(root, &["config", "user.email", "anchor@example.test"]);
-        run_git(root, &["config", "user.name", "Anchor Test"]);
+        run_git(root, &["config", "user.email", "maru@example.test"]);
+        run_git(root, &["config", "user.name", "Maru Test"]);
         fs::write(root.join("tracked.md"), "a\n").unwrap();
         run_git(root, &["add", "."]);
         run_git(root, &["commit", "-m", "initial"]);
@@ -1156,8 +1156,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         run_git(root, &["init"]);
-        run_git(root, &["config", "user.email", "anchor@example.test"]);
-        run_git(root, &["config", "user.name", "Anchor Test"]);
+        run_git(root, &["config", "user.email", "maru@example.test"]);
+        run_git(root, &["config", "user.name", "Maru Test"]);
 
         fs::write(root.join("a.md"), "a\n").unwrap();
         fs::write(root.join("b.md"), "b\n").unwrap();
@@ -1249,12 +1249,12 @@ mod tests {
     }
 
     #[test]
-    fn sensitive_path_check_rejects_anchor_secrets() {
+    fn sensitive_path_check_rejects_maru_secrets() {
         assert!(is_sensitive_git_path(
-            ".anchor/secrets/apple/keychain-password"
+            ".maru/secrets/apple/keychain-password"
         ));
         assert!(is_sensitive_git_path(
-            "nested/.anchor/secrets/workspace.env"
+            "nested/.maru/secrets/workspace.env"
         ));
     }
 
@@ -1336,7 +1336,7 @@ mod tests {
 
     fn init_repo(root: &Path) {
         run_git(root, &["init"]);
-        run_git(root, &["config", "user.email", "anchor@example.test"]);
-        run_git(root, &["config", "user.name", "Anchor Test"]);
+        run_git(root, &["config", "user.email", "maru@example.test"]);
+        run_git(root, &["config", "user.name", "Maru Test"]);
     }
 }

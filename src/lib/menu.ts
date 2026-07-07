@@ -1,4 +1,4 @@
-export const MENU_COMMAND_EVENT = "anchor://menu-command";
+export const MENU_COMMAND_EVENT = "maru://menu-command";
 
 export interface MenuPoint {
   x: number;

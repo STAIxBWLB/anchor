@@ -1,4 +1,4 @@
-// Lightweight, selective Rust port of kordoc ideas used by Anchor Studio.
+// Lightweight, selective Rust port of kordoc ideas used by Maru Studio.
 //
 // Source reference: https://github.com/chrisryugj/kordoc (MIT). This module
 // intentionally keeps the scope small: format sniffing, safe HWPX ZIP/XML

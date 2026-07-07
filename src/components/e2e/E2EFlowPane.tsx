@@ -101,10 +101,10 @@ export function E2EFlowPane({ workPath, onRevealPath, onError }: E2EFlowPaneProp
     const mime = kind === "report" ? "text/markdown" : "text/html";
     const blob = new Blob([content], { type: `${mime};charset=utf-8` });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${result.metadata.localStorageResult.id}-${kind}.${extension}`;
-    anchor.click();
+    const maru = document.createElement("a");
+    maru.href = url;
+    maru.download = `${result.metadata.localStorageResult.id}-${kind}.${extension}`;
+    maru.click();
     URL.revokeObjectURL(url);
   };
 
@@ -147,7 +147,7 @@ export function E2EFlowPane({ workPath, onRevealPath, onError }: E2EFlowPaneProp
           <dl className="e2e-meta-list">
             <div>
               <dt>{t("e2e.sample.path")}</dt>
-              <dd>{result?.metadata.sampleInput.path ?? "anchor-weekly-meeting.md"}</dd>
+              <dd>{result?.metadata.sampleInput.path ?? "maru-weekly-meeting.md"}</dd>
             </div>
             <div>
               <dt>{t("e2e.sample.kind")}</dt>
@@ -179,7 +179,7 @@ export function E2EFlowPane({ workPath, onRevealPath, onError }: E2EFlowPaneProp
           <dl className="e2e-meta-list compact">
             <div>
               <dt>{t("e2e.skill.name")}</dt>
-              <dd>{result?.metadata.skillLifecycle.skillName ?? "anchor-e2e-sample"}</dd>
+              <dd>{result?.metadata.skillLifecycle.skillName ?? "maru-e2e-sample"}</dd>
             </div>
             <div>
               <dt>{t("e2e.skill.status")}</dt>

@@ -44,7 +44,7 @@ export function SaveAsDialog({ open, initialName, workspace, onConfirm, onCancel
     >
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-save-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-save-dialog">
           <form onSubmit={submit}>
             <div className="dialog-header">
               <Dialog.Title>{t("diagram.saveDialog.title")}</Dialog.Title>
@@ -59,7 +59,7 @@ export function SaveAsDialog({ open, initialName, workspace, onConfirm, onCancel
                 </button>
               </Dialog.Close>
             </div>
-            <label className="anchor-diagram-save-field">
+            <label className="maru-diagram-save-field">
               <span>{t("diagram.saveDialog.nameLabel")}</span>
               <input
                 ref={inputRef}
@@ -69,14 +69,14 @@ export function SaveAsDialog({ open, initialName, workspace, onConfirm, onCancel
                 required
               />
             </label>
-            <p className="anchor-diagram-save-hint">
+            <p className="maru-diagram-save-hint">
               {t("diagram.saveDialog.hint", { workspace: workspace ?? "—" })}
             </p>
-            <div className="anchor-diagram-save-actions">
+            <div className="maru-diagram-save-actions">
               <button type="button" onClick={onCancel}>
                 {t("diagram.saveDialog.cancel")}
               </button>
-              <button type="submit" disabled={name.trim().length === 0} className="anchor-diagram-toolbar-primary">
+              <button type="submit" disabled={name.trim().length === 0} className="maru-diagram-toolbar-primary">
                 {t("diagram.saveDialog.confirm")}
               </button>
             </div>

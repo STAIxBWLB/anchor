@@ -24,8 +24,8 @@ describe("buildMeetingNotesPrompt", () => {
       guides: null,
     });
     expect(prompt).toContain("Run contract:");
-    expect(prompt).toContain('schemaVersion "anchor_skill_proposal_v1"');
-    expect(prompt).toContain('schemaVersion "anchor_meeting_review_v1"');
+    expect(prompt).toContain('schemaVersion "maru_skill_proposal_v1"');
+    expect(prompt).toContain('schemaVersion "maru_meeting_review_v1"');
     expect(prompt).toContain("TRANSCRIPT_TEXT:\n녹취록 본문");
     expect(prompt).toContain("Root: meetings");
   });
@@ -49,7 +49,7 @@ describe("appendSourceBlock", () => {
   it("appends exactly one contract and one source block", () => {
     const result = appendSourceBlock("Create a new meeting note.", "녹취록 원문");
     expect(occurrences(result, "Run contract:")).toBe(1);
-    expect(occurrences(result, 'schemaVersion "anchor_meeting_review_v1"')).toBe(1);
+    expect(occurrences(result, 'schemaVersion "maru_meeting_review_v1"')).toBe(1);
     expect(result).toContain("Create a new meeting note.");
     expect(result).toContain("TRANSCRIPT_TEXT:\n녹취록 원문");
   });
@@ -68,7 +68,7 @@ describe("appendSourceBlock", () => {
     const base = [
       "Create a new meeting note.",
       "```json",
-      '{ "schemaVersion": "anchor_meeting_review_v1", "summary": "" }',
+      '{ "schemaVersion": "maru_meeting_review_v1", "summary": "" }',
       "```",
     ].join("\n");
     const result = appendSourceBlock(base, "원문");

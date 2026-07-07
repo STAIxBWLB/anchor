@@ -29,7 +29,7 @@ paths in the skill package.
 Use the bundled script whenever the user asks to create the standard structure:
 
 ```bash
-python3 ~/.anchor/skills/business-unit-lifecycle/scripts/new_business_unit.py <domain> <slug> [--start-year YYYY]
+python3 ~/.maru/skills/business-unit-lifecycle/scripts/new_business_unit.py <domain> <slug> [--start-year YYYY]
 ```
 
 If you are editing the skill from a clone of this repo, run the in-tree
@@ -48,7 +48,7 @@ a project README and prints a registry stub. It does not edit
 ## Add A Year Cycle
 
 ```bash
-python3 ~/.anchor/skills/business-unit-lifecycle/scripts/new_year_cycle.py <slug> <year> [--domain DOMAIN]
+python3 ~/.maru/skills/business-unit-lifecycle/scripts/new_year_cycle.py <slug> <year> [--domain DOMAIN]
 ```
 
 The script finds `projects/*/<slug>` when `--domain` is omitted and only

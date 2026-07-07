@@ -177,10 +177,10 @@ mod tests {
     #[test]
     fn detects_monitor_plist_but_ignores_telegram_app_label() {
         let dir = tempfile::tempdir().unwrap();
-        let monitor = dir.path().join("com.anchor.telegram-monitor.plist");
+        let monitor = dir.path().join("com.maru.telegram-monitor.plist");
         fs::write(
             &monitor,
-            r#"<plist><dict><key>Label</key><string>com.anchor.telegram-monitor</string><key>ProgramArguments</key><array><string>telegram_monitor.py</string></array></dict></plist>"#,
+            r#"<plist><dict><key>Label</key><string>com.maru.telegram-monitor</string><key>ProgramArguments</key><array><string>telegram_monitor.py</string></array></dict></plist>"#,
         )
         .unwrap();
         let app = dir
@@ -193,10 +193,10 @@ mod tests {
         .unwrap();
         let found = detect_legacy_telegram_launchd_in(
             dir.path(),
-            &["com.anchor.telegram-monitor".to_string()],
+            &["com.maru.telegram-monitor".to_string()],
         );
         assert_eq!(found.len(), 1);
-        assert_eq!(found[0].label, "com.anchor.telegram-monitor");
+        assert_eq!(found[0].label, "com.maru.telegram-monitor");
         assert!(found[0].loaded);
     }
 
@@ -205,7 +205,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launch_agents = dir.path().join("LaunchAgents");
         fs::create_dir_all(&launch_agents).unwrap();
-        let outside = dir.path().join("com.anchor.telegram-monitor.plist");
+        let outside = dir.path().join("com.maru.telegram-monitor.plist");
         write_monitor_plist(&outside);
 
         let err =
@@ -223,7 +223,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launch_agents = dir.path().join("LaunchAgents");
         fs::create_dir_all(&launch_agents).unwrap();
-        let monitor = launch_agents.join("com.anchor.telegram-monitor.plist");
+        let monitor = launch_agents.join("com.maru.telegram-monitor.plist");
         write_monitor_plist(&monitor);
 
         let err =
@@ -241,7 +241,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let launch_agents = dir.path().join("LaunchAgents");
         fs::create_dir_all(&launch_agents).unwrap();
-        let monitor = launch_agents.join("com.anchor.telegram-monitor.plist");
+        let monitor = launch_agents.join("com.maru.telegram-monitor.plist");
         write_monitor_plist(&monitor);
 
         let outcome =
@@ -250,14 +250,14 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(outcome.label, "com.anchor.telegram-monitor");
+        assert_eq!(outcome.label, "com.maru.telegram-monitor");
         assert!(!monitor.exists());
     }
 
     fn write_monitor_plist(path: &Path) {
         fs::write(
             path,
-            r#"<plist><dict><key>Label</key><string>com.anchor.telegram-monitor</string><key>ProgramArguments</key><array><string>telegram_monitor.py</string></array></dict></plist>"#,
+            r#"<plist><dict><key>Label</key><string>com.maru.telegram-monitor</string><key>ProgramArguments</key><array><string>telegram_monitor.py</string></array></dict></plist>"#,
         )
         .unwrap();
     }

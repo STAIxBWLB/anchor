@@ -7,8 +7,8 @@ use tauri::{
 use tauri::menu::HELP_SUBMENU_ID;
 
 const CHECK_FOR_UPDATES_MENU_ID: &str = "app.check_for_updates";
-const CHECK_FOR_UPDATES_EVENT: &str = "anchor://check-for-updates";
-const MENU_COMMAND_EVENT: &str = "anchor://menu-command";
+const CHECK_FOR_UPDATES_EVENT: &str = "maru://check-for-updates";
+const MENU_COMMAND_EVENT: &str = "maru://menu-command";
 
 pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::default(app)?;
@@ -20,14 +20,14 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> 
         None::<&str>,
     )?;
 
-    install_anchor_menus(app, &menu)?;
+    install_maru_menus(app, &menu)?;
     insert_check_for_updates_item(app, &menu, &check_for_updates)?;
     Ok(menu)
 }
 
-fn install_anchor_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::Result<()> {
+fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::Result<()> {
     remove_default_submenus(menu, &["File", "Edit", "View"])?;
-    let insert_at = anchor_menu_insert_position(menu)?;
+    let insert_at = maru_menu_insert_position(menu)?;
 
     let file_new = command_item(
         app,
@@ -191,7 +191,7 @@ fn remove_default_submenus<R: Runtime>(menu: &Menu<R>, labels: &[&str]) -> tauri
     Ok(())
 }
 
-fn anchor_menu_insert_position<R: Runtime>(menu: &Menu<R>) -> tauri::Result<usize> {
+fn maru_menu_insert_position<R: Runtime>(menu: &Menu<R>) -> tauri::Result<usize> {
     #[cfg(target_os = "macos")]
     {
         Ok(usize::from(!menu.items()?.is_empty()))

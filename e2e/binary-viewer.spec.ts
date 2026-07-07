@@ -93,22 +93,22 @@ test("keeps mixed document and binary tabs in visible order", async ({ page }) =
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
   await explorer.getByRole("button", { name: /rise-budget-review\.pdf/ }).dblclick();
   await expect(page.locator(".document-tab[title='attachments/rise-budget-review.pdf']")).toBeVisible();
-  await explorer.getByRole("button", { name: /anchor-glossary\.md/ }).dblclick();
+  await explorer.getByRole("button", { name: /maru-glossary\.md/ }).dblclick();
 
   const tabPaths = await page.locator(".document-tab").evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute("title")),
   );
   expect(tabPaths).toEqual([
-    "anchor-weekly-meeting.md",
+    "maru-weekly-meeting.md",
     "attachments/rise-budget-review.pdf",
-    "references/anchor-glossary.md",
+    "references/maru-glossary.md",
   ]);
 
   await page.locator(".document-tab[title='attachments/rise-budget-review.pdf']").click({
     button: "right",
   });
   await page.getByRole("menuitem", { name: "오른쪽 탭 닫기" }).click();
-  await expect(page.locator(".document-tab[title='references/anchor-glossary.md']")).toHaveCount(0);
+  await expect(page.locator(".document-tab[title='references/maru-glossary.md']")).toHaveCount(0);
   await expect(page.locator(".document-tab[title='attachments/rise-budget-review.pdf']")).toBeVisible();
 });
 

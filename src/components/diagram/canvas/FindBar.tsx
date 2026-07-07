@@ -50,7 +50,7 @@ export function FindBar({ open, onClose }: FindBarProps) {
       if (!node) return;
       store.setState(setSelection([node.id]));
       // Center viewport on the node.
-      const svg = document.querySelector<SVGSVGElement>(".anchor-diagram-canvas");
+      const svg = document.querySelector<SVGSVGElement>(".maru-diagram-canvas");
       const rect = svg?.getBoundingClientRect();
       const w = rect?.width ?? 800;
       const h = rect?.height ?? 600;
@@ -93,7 +93,7 @@ export function FindBar({ open, onClose }: FindBarProps) {
 
   return (
     <div
-      className="anchor-diagram-find-bar"
+      className="maru-diagram-find-bar"
       role="search"
       aria-label={t("diagram.findBar.placeholder")}
       data-export-ignore
@@ -107,7 +107,7 @@ export function FindBar({ open, onClose }: FindBarProps) {
         placeholder={t("diagram.findBar.placeholder")}
         aria-label={t("diagram.findBar.placeholder")}
       />
-      <span className="anchor-diagram-find-count">
+      <span className="maru-diagram-find-count">
         {total === 0 ? t("diagram.findBar.none") : t("diagram.findBar.count", { current: String(current), total: String(total) })}
       </span>
       <button
@@ -140,7 +140,7 @@ export function FindBar({ open, onClose }: FindBarProps) {
       </button>
       <button
         type="button"
-        className="anchor-diagram-find-close"
+        className="maru-diagram-find-close"
         onClick={onClose}
         title={t("diagram.findBar.close")}
         aria-label={t("diagram.findBar.close")}

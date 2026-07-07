@@ -68,7 +68,7 @@ def _block_text(blocks: list[Block]) -> str:
 def _rewrite_template_slots(template: Path, output: Path, replacements: dict[str, str]) -> int:
     """Run-aware {{slot}} substitution via the shared lxml engine.
 
-    Delegates to hwpx_xml.edit_text so an anchor split across multiple runs still
+    Delegates to hwpx_xml.edit_text so an maru split across multiple runs still
     matches and stale linesegarray caches are cleaned — identical robustness to
     `hwpx fill`. Returns the total number of replacements (0 → the caller falls
     back to fresh generation).

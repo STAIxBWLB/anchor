@@ -18,8 +18,8 @@ test("keeps the full terminal renderer out of the collapsed startup path", async
   const marks = await page.evaluate(() =>
     (
       (window as Window & {
-        __ANCHOR_STARTUP_PROFILE__?: { marks?: Array<{ name: string }> };
-      }).__ANCHOR_STARTUP_PROFILE__?.marks ?? []
+        __MARU_STARTUP_PROFILE__?: { marks?: Array<{ name: string }> };
+      }).__MARU_STARTUP_PROFILE__?.marks ?? []
     ).map((mark) => mark.name),
   );
   expect(marks).toContain("workspace:first-usable");

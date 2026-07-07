@@ -1,11 +1,11 @@
-// `.anchor/` is anchor's per-workspace home inside a vault root. It
+// `.maru/` is maru's per-workspace home inside a vault root. It
 // already housed `versions` (snapshots created by `create_version`);
 // this module owns workspace-local state and catalogs. User/global
-// preferences live outside workspaces at `~/.anchor/settings.json`.
+// preferences live outside workspaces at `~/.maru/settings.json`.
 //
 // Layout:
-//   <work>/.anchor/
-//     workspace.json       — schema-versioned anchor metadata
+//   <work>/.maru/
+//     workspace.json       — schema-versioned maru metadata
 //     rules/*.md           — operational rules (markdown + frontmatter)
 //     templates/*.md       — note templates (markdown)
 //     mcp.json             — MCP server config edited from System mode
@@ -13,13 +13,13 @@
 //     skills.json          — skills catalog (read-only v1, written by import)
 //     workspace-state.json — workspace-scoped UI state and overrides
 //     settings.json        — legacy read-once migration source
-//     imports.json         — append-only receipts of `_sys/ → .anchor/` imports
+//     imports.json         — append-only receipts of `_sys/ → .maru/` imports
 //     secrets/             — workspace-local secret store (gitignored)
 //     versions/            — (legacy) snapshots
 //
-// The directory is owned by anchor: contents survive `_sys/` import,
+// The directory is owned by maru: contents survive `_sys/` import,
 // scan_vault skips `.` directories, and a stale schema version triggers
-// migration via `ensure_anchor_dir`.
+// migration via `ensure_maru_dir`.
 
 use crate::frontmatter::{build_frontmatter, FrontmatterValue};
 use crate::vault::{lexical_normalize, parse_frontmatter, title_from_content};
@@ -31,7 +31,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const ANCHOR_DIR: &str = ".anchor";
+const MARU_DIR: &str = ".maru";
 const SCHEMA_VERSION: u32 = 1;
 
 const GLOBAL_SETTINGS_PATHS: &[&[&str]] = &[
@@ -70,7 +70,7 @@ const WORKSPACE_STATE_PATHS: &[&[&str]] = &[
     &["diagram"],
 ];
 
-const ANCHORIGNORE_DEFAULTS: &[&str] = &[
+const MARUIGNORE_DEFAULTS: &[&str] = &[
     "node_modules",
     ".venv",
     "dist",
@@ -79,10 +79,10 @@ const ANCHORIGNORE_DEFAULTS: &[&str] = &[
     ".next",
     ".turbo",
     ".cache",
-    ".anchor/secrets",
+    ".maru/secrets",
     ".secrets",
-    ".anchor/cache",
-    ".anchor/studio",
+    ".maru/cache",
+    ".maru/studio",
     "_sys/env",
 ];
 
@@ -104,69 +104,69 @@ fn normalize_work_path(input: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-fn anchor_path(work: &Path) -> PathBuf {
-    work.join(ANCHOR_DIR)
+fn maru_path(work: &Path) -> PathBuf {
+    work.join(MARU_DIR)
 }
 
 fn rules_dir(work: &Path) -> PathBuf {
-    anchor_path(work).join("rules")
+    maru_path(work).join("rules")
 }
 
 fn templates_dir(work: &Path) -> PathBuf {
-    anchor_path(work).join("templates")
+    maru_path(work).join("templates")
 }
 
 fn versions_dir(work: &Path) -> PathBuf {
-    anchor_path(work).join("versions")
+    maru_path(work).join("versions")
 }
 
 fn workspace_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("workspace.json")
+    maru_path(work).join("workspace.json")
 }
 
 fn mcp_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("mcp.json")
+    maru_path(work).join("mcp.json")
 }
 
 fn projects_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("projects.json")
+    maru_path(work).join("projects.json")
 }
 
 fn skills_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("skills.json")
+    maru_path(work).join("skills.json")
 }
 
 fn legacy_settings_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("settings.json")
+    maru_path(work).join("settings.json")
 }
 
 fn workspace_state_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("workspace-state.json")
+    maru_path(work).join("workspace-state.json")
 }
 
 fn imports_json_path(work: &Path) -> PathBuf {
-    anchor_path(work).join("imports.json")
+    maru_path(work).join("imports.json")
 }
 
-fn anchorignore_path(work: &Path) -> PathBuf {
-    work.join(".anchorignore")
+fn maruignore_path(work: &Path) -> PathBuf {
+    work.join(".maruignore")
 }
 
-fn anchor_home_dir() -> Result<PathBuf, String> {
+fn maru_home_dir() -> Result<PathBuf, String> {
     dirs::home_dir()
-        .map(|home| home.join(".anchor"))
-        .ok_or_else(|| "Could not determine home directory for ~/.anchor".to_string())
+        .map(|home| home.join(".maru"))
+        .ok_or_else(|| "Could not determine home directory for ~/.maru".to_string())
 }
 
 fn global_settings_json_path_for_home(home: &Path) -> PathBuf {
-    home.join(".anchor").join("settings.json")
+    home.join(".maru").join("settings.json")
 }
 
 fn global_settings_json_path() -> Result<PathBuf, String> {
-    Ok(anchor_home_dir()?.join("settings.json"))
+    Ok(maru_home_dir()?.join("settings.json"))
 }
 
-/// Reject `name` values that try to escape `.anchor/<sub>/`. We accept
+/// Reject `name` values that try to escape `.maru/<sub>/`. We accept
 /// only a leaf file name (no slashes, no `..`). Callers append `.md` so
 /// the input is the bare stem.
 fn validate_leaf_name(name: &str) -> Result<(), String> {
@@ -187,7 +187,7 @@ fn validate_leaf_name(name: &str) -> Result<(), String> {
 fn ensure_within(parent: &Path, child: &Path) -> Result<(), String> {
     let normalized = lexical_normalize(child);
     if !normalized.starts_with(parent) {
-        return Err("Path escapes the .anchor directory".to_string());
+        return Err("Path escapes the .maru directory".to_string());
     }
     Ok(())
 }
@@ -196,23 +196,27 @@ fn ensure_within(parent: &Path, child: &Path) -> Result<(), String> {
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-/// Idempotently set up `<work>/.anchor/` with skeleton files. Re-running
+/// Idempotently set up `<work>/.maru/` with skeleton files. Re-running
 /// on an already-bootstrapped workspace is a no-op except for any
 /// missing files (which are created with their defaults). Existing user
 /// content is never overwritten.
-pub fn ensure_anchor_dir(work: &Path) -> Result<PathBuf, String> {
-    let dir = anchor_path(work);
-    fs::create_dir_all(&dir).map_err(|err| format!("Cannot create .anchor: {err}"))?;
+pub fn ensure_maru_dir(work: &Path) -> Result<PathBuf, String> {
+    // M0 rename: adopt a pre-existing `.anchor/` (rename + compat symlink)
+    // before creating a fresh `.maru/` skeleton — otherwise the legacy dir
+    // with the user's versions/secrets would be silently orphaned.
+    crate::maru_migration::migrate_workspace(work);
+    let dir = maru_path(work);
+    fs::create_dir_all(&dir).map_err(|err| format!("Cannot create .maru: {err}"))?;
     fs::create_dir_all(rules_dir(work))
-        .map_err(|err| format!("Cannot create .anchor/rules: {err}"))?;
+        .map_err(|err| format!("Cannot create .maru/rules: {err}"))?;
     fs::create_dir_all(templates_dir(work))
-        .map_err(|err| format!("Cannot create .anchor/templates: {err}"))?;
+        .map_err(|err| format!("Cannot create .maru/templates: {err}"))?;
     fs::create_dir_all(versions_dir(work))
-        .map_err(|err| format!("Cannot create .anchor/versions: {err}"))?;
+        .map_err(|err| format!("Cannot create .maru/versions: {err}"))?;
 
     if !workspace_json_path(work).exists() {
         let now = Utc::now().to_rfc3339();
-        let initial = AnchorWorkspaceMeta {
+        let initial = MaruWorkspaceMeta {
             version: SCHEMA_VERSION,
             work_path: work.to_string_lossy().to_string(),
             paired_vault_path: None,
@@ -255,17 +259,17 @@ pub fn ensure_anchor_dir(work: &Path) -> Result<PathBuf, String> {
         )?;
     }
 
-    ensure_anchorignore(work)?;
+    ensure_maruignore(work)?;
     Ok(dir)
 }
 
-/// Append the recommended ignore patterns to `<work>/.anchorignore`,
+/// Append the recommended ignore patterns to `<work>/.maruignore`,
 /// creating the file if absent. Patterns already present are left as-is
 /// — the function is idempotent and never reorders existing lines.
-fn ensure_anchorignore(work: &Path) -> Result<(), String> {
-    let path = anchorignore_path(work);
+fn ensure_maruignore(work: &Path) -> Result<(), String> {
+    let path = maruignore_path(work);
     let existing = if path.exists() {
-        fs::read_to_string(&path).map_err(|err| format!("Cannot read .anchorignore: {err}"))?
+        fs::read_to_string(&path).map_err(|err| format!("Cannot read .maruignore: {err}"))?
     } else {
         String::new()
     };
@@ -275,7 +279,7 @@ fn ensure_anchorignore(work: &Path) -> Result<(), String> {
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .collect();
-    let missing: Vec<&&str> = ANCHORIGNORE_DEFAULTS
+    let missing: Vec<&&str> = MARUIGNORE_DEFAULTS
         .iter()
         .filter(|pattern| !already.contains(**pattern))
         .collect();
@@ -286,9 +290,9 @@ fn ensure_anchorignore(work: &Path) -> Result<(), String> {
         lines.push(String::new());
     }
     if existing.is_empty() {
-        lines.push("# anchor: recommended ignore patterns (auto-added by anchor)".to_string());
+        lines.push("# maru: recommended ignore patterns (auto-added by maru)".to_string());
     } else {
-        lines.push("# anchor: added by anchor".to_string());
+        lines.push("# maru: added by maru".to_string());
     }
     for pattern in missing {
         lines.push((*pattern).to_string());
@@ -297,7 +301,7 @@ fn ensure_anchorignore(work: &Path) -> Result<(), String> {
     if !content.ends_with('\n') {
         content.push('\n');
     }
-    fs::write(&path, content).map_err(|err| format!("Cannot write .anchorignore: {err}"))?;
+    fs::write(&path, content).map_err(|err| format!("Cannot write .maruignore: {err}"))?;
     Ok(())
 }
 
@@ -562,8 +566,8 @@ fn migrate_legacy_settings_if_needed(work: &Path, global_path: &Path) -> Result<
     Ok(())
 }
 
-fn read_anchor_settings_internal(work: &Path, global_path: &Path) -> Result<JsonValue, String> {
-    ensure_anchor_dir(work)?;
+fn read_maru_settings_internal(work: &Path, global_path: &Path) -> Result<JsonValue, String> {
+    ensure_maru_dir(work)?;
     migrate_legacy_settings_if_needed(work, global_path)?;
 
     let mut settings = default_settings_json();
@@ -576,28 +580,28 @@ fn read_anchor_settings_internal(work: &Path, global_path: &Path) -> Result<Json
     Ok(settings)
 }
 
-fn save_anchor_settings_internal(
+fn save_maru_settings_internal(
     work: &Path,
     global_path: &Path,
     value: JsonValue,
-) -> Result<AnchorSettingsSaveOutcome, String> {
-    save_anchor_settings_internal_with_base(work, global_path, value, None)
+) -> Result<MaruSettingsSaveOutcome, String> {
+    save_maru_settings_internal_with_base(work, global_path, value, None)
 }
 
-fn save_anchor_settings_internal_with_base(
+fn save_maru_settings_internal_with_base(
     work: &Path,
     global_path: &Path,
     value: JsonValue,
     base_value: Option<JsonValue>,
-) -> Result<AnchorSettingsSaveOutcome, String> {
-    ensure_anchor_dir(work)?;
+) -> Result<MaruSettingsSaveOutcome, String> {
+    ensure_maru_dir(work)?;
     migrate_legacy_settings_if_needed(work, global_path)?;
     let (global, workspace_state) = split_settings_json(&value);
     let state_path = workspace_state_json_path(work);
     let Some(base) = base_value else {
         write_json_pretty(global_path, &global)?;
         write_json_pretty(&state_path, &workspace_state)?;
-        return Ok(AnchorSettingsSaveOutcome {
+        return Ok(MaruSettingsSaveOutcome {
             global_changed: true,
             workspace_changed: true,
         });
@@ -621,7 +625,7 @@ fn save_anchor_settings_internal_with_base(
     if workspace_changed {
         write_json_pretty(&state_path, &current_workspace_state)?;
     }
-    Ok(AnchorSettingsSaveOutcome {
+    Ok(MaruSettingsSaveOutcome {
         global_changed,
         workspace_changed,
     })
@@ -629,7 +633,7 @@ fn save_anchor_settings_internal_with_base(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnchorSettingsSaveOutcome {
+pub struct MaruSettingsSaveOutcome {
     pub global_changed: bool,
     pub workspace_changed: bool,
 }
@@ -649,7 +653,7 @@ pub struct ProjectPickerEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnchorWorkspaceMeta {
+pub struct MaruWorkspaceMeta {
     pub version: u32,
     pub work_path: String,
     pub paired_vault_path: Option<String>,
@@ -661,7 +665,7 @@ pub struct AnchorWorkspaceMeta {
     pub updated_at: String,
 }
 
-/// Patch envelope for `update_anchor_workspace`.
+/// Patch envelope for `update_maru_workspace`.
 ///
 /// Each field is `Option<String>` with v1 semantics: `Some(value)` sets
 /// the field, omitting / sending `null` leaves the existing value
@@ -670,7 +674,7 @@ pub struct AnchorWorkspaceMeta {
 /// extension when a real use case appears.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AnchorWorkspaceMetaPatch {
+pub struct MaruWorkspaceMetaPatch {
     #[serde(default)]
     pub paired_vault_path: Option<String>,
     #[serde(default)]
@@ -681,22 +685,22 @@ pub struct AnchorWorkspaceMetaPatch {
     pub last_active_mode: Option<String>,
 }
 
-fn read_workspace_internal(work: &Path) -> Result<AnchorWorkspaceMeta, String> {
+fn read_workspace_internal(work: &Path) -> Result<MaruWorkspaceMeta, String> {
     let path = workspace_json_path(work);
     let content =
         fs::read_to_string(&path).map_err(|err| format!("Cannot read workspace.json: {err}"))?;
-    let meta: AnchorWorkspaceMeta = serde_json::from_str(&content)
+    let meta: MaruWorkspaceMeta = serde_json::from_str(&content)
         .map_err(|err| format!("Cannot parse workspace.json: {err}"))?;
     if meta.version > SCHEMA_VERSION {
         return Err(format!(
-            "Anchor workspace schema is newer than this client (got v{}, supports v{})",
+            "Maru workspace schema is newer than this client (got v{}, supports v{})",
             meta.version, SCHEMA_VERSION
         ));
     }
     Ok(meta)
 }
 
-fn write_workspace(work: &Path, meta: &AnchorWorkspaceMeta) -> Result<(), String> {
+fn write_workspace(work: &Path, meta: &MaruWorkspaceMeta) -> Result<(), String> {
     let mut value = serde_json::to_value(meta)
         .map_err(|err| format!("Cannot serialize workspace meta: {err}"))?;
     if let JsonValue::Object(ref mut map) = value {
@@ -714,19 +718,19 @@ fn write_workspace(work: &Path, meta: &AnchorWorkspaceMeta) -> Result<(), String
 }
 
 #[tauri::command]
-pub fn read_anchor_workspace(work_path: String) -> Result<AnchorWorkspaceMeta, String> {
+pub fn read_maru_workspace(work_path: String) -> Result<MaruWorkspaceMeta, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_workspace_internal(&work)
 }
 
 #[tauri::command]
-pub fn update_anchor_workspace(
+pub fn update_maru_workspace(
     work_path: String,
-    patch: AnchorWorkspaceMetaPatch,
-) -> Result<AnchorWorkspaceMeta, String> {
+    patch: MaruWorkspaceMetaPatch,
+) -> Result<MaruWorkspaceMeta, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let mut meta = read_workspace_internal(&work)?;
     if let Some(value) = patch.paired_vault_path {
         meta.paired_vault_path = Some(value);
@@ -747,10 +751,10 @@ pub fn update_anchor_workspace(
 
 /// Direct write used by `workspace::register_workspace_pair` so the
 /// pairing can stamp the meta atomically with vault registration. Goes
-/// through the same `ensure_anchor_dir → read → patch → write` pipeline
+/// through the same `ensure_maru_dir → read → patch → write` pipeline
 /// as the command but without a `patch` envelope.
 pub fn set_paired_vault_path(work: &Path, paired: Option<String>) -> Result<(), String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     let mut meta = read_workspace_internal(work)?;
     meta.paired_vault_path = paired;
     meta.updated_at = Utc::now().to_rfc3339();
@@ -758,7 +762,7 @@ pub fn set_paired_vault_path(work: &Path, paired: Option<String>) -> Result<(), 
 }
 
 pub fn set_owner_name(work: &Path, owner: Option<String>) -> Result<(), String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     let mut meta = read_workspace_internal(work)?;
     meta.owner_name = owner;
     meta.updated_at = Utc::now().to_rfc3339();
@@ -766,9 +770,9 @@ pub fn set_owner_name(work: &Path, owner: Option<String>) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub fn bootstrap_anchor_dir(work_path: String) -> Result<AnchorWorkspaceMeta, String> {
+pub fn bootstrap_maru_dir(work_path: String) -> Result<MaruWorkspaceMeta, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_workspace_internal(&work)
 }
 
@@ -837,9 +841,9 @@ fn rule_entry_from_path(path: &Path, name: String) -> RuleEntry {
 }
 
 #[tauri::command]
-pub fn list_anchor_rules(work_path: String) -> Result<Vec<RuleEntry>, String> {
+pub fn list_maru_rules(work_path: String) -> Result<Vec<RuleEntry>, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let dir = rules_dir(&work);
     let mut entries = Vec::new();
     for entry in fs::read_dir(&dir)
@@ -860,9 +864,9 @@ pub fn list_anchor_rules(work_path: String) -> Result<Vec<RuleEntry>, String> {
 }
 
 #[tauri::command]
-pub fn read_anchor_rule(work_path: String, name: String) -> Result<RuleDocument, String> {
+pub fn read_maru_rule(work_path: String, name: String) -> Result<RuleDocument, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = rule_path(&work, &name)?;
     let content =
         fs::read_to_string(&path).map_err(|err| format!("Cannot read rule {name}: {err}"))?;
@@ -888,22 +892,22 @@ pub fn read_anchor_rule(work_path: String, name: String) -> Result<RuleDocument,
 }
 
 #[tauri::command]
-pub fn save_anchor_rule(
+pub fn save_maru_rule(
     work_path: String,
     name: String,
     content: String,
 ) -> Result<RuleEntry, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = rule_path(&work, &name)?;
     fs::write(&path, content).map_err(|err| format!("Cannot save rule {name}: {err}"))?;
     Ok(rule_entry_from_path(&path, name))
 }
 
 #[tauri::command]
-pub fn delete_anchor_rule(work_path: String, name: String) -> Result<(), String> {
+pub fn delete_maru_rule(work_path: String, name: String) -> Result<(), String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = rule_path(&work, &name)?;
     if path.exists() {
         fs::remove_file(&path).map_err(|err| format!("Cannot delete rule: {err}"))?;
@@ -959,9 +963,9 @@ fn template_entry_from_path(path: &Path, name: String) -> TemplateEntry {
 }
 
 #[tauri::command]
-pub fn list_anchor_templates(work_path: String) -> Result<Vec<TemplateEntry>, String> {
+pub fn list_maru_templates(work_path: String) -> Result<Vec<TemplateEntry>, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let dir = templates_dir(&work);
     let mut entries = Vec::new();
     for entry in fs::read_dir(&dir)
@@ -982,30 +986,30 @@ pub fn list_anchor_templates(work_path: String) -> Result<Vec<TemplateEntry>, St
 }
 
 #[tauri::command]
-pub fn read_anchor_template(work_path: String, name: String) -> Result<String, String> {
+pub fn read_maru_template(work_path: String, name: String) -> Result<String, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = template_path(&work, &name)?;
     fs::read_to_string(&path).map_err(|err| format!("Cannot read template {name}: {err}"))
 }
 
 #[tauri::command]
-pub fn save_anchor_template(
+pub fn save_maru_template(
     work_path: String,
     name: String,
     content: String,
 ) -> Result<TemplateEntry, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = template_path(&work, &name)?;
     fs::write(&path, content).map_err(|err| format!("Cannot save template {name}: {err}"))?;
     Ok(template_entry_from_path(&path, name))
 }
 
 #[tauri::command]
-pub fn delete_anchor_template(work_path: String, name: String) -> Result<(), String> {
+pub fn delete_maru_template(work_path: String, name: String) -> Result<(), String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     let path = template_path(&work, &name)?;
     if path.exists() {
         fs::remove_file(&path).map_err(|err| format!("Cannot delete template: {err}"))?;
@@ -1018,23 +1022,23 @@ pub fn delete_anchor_template(work_path: String, name: String) -> Result<(), Str
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub fn read_anchor_mcp(work_path: String) -> Result<JsonValue, String> {
+pub fn read_maru_mcp(work_path: String) -> Result<JsonValue, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_json(&mcp_json_path(&work))
 }
 
 #[tauri::command]
-pub fn save_anchor_mcp(work_path: String, value: JsonValue) -> Result<(), String> {
+pub fn save_maru_mcp(work_path: String, value: JsonValue) -> Result<(), String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     write_json_pretty(&mcp_json_path(&work), &value)
 }
 
 #[tauri::command]
-pub fn read_anchor_projects(work_path: String) -> Result<JsonValue, String> {
+pub fn read_maru_projects(work_path: String) -> Result<JsonValue, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_json(&projects_json_path(&work))
 }
 
@@ -1073,9 +1077,9 @@ pub fn list_workspace_projects(
 }
 
 #[tauri::command]
-pub fn save_anchor_projects(work_path: String, value: JsonValue) -> Result<(), String> {
+pub fn save_maru_projects(work_path: String, value: JsonValue) -> Result<(), String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     write_json_pretty(&projects_json_path(&work), &value)
 }
 
@@ -1195,45 +1199,45 @@ fn yaml_key_string<'a>(map: &'a serde_yaml::Mapping, key: &str) -> Option<&'a st
 }
 
 #[tauri::command]
-pub fn read_anchor_skills(work_path: String) -> Result<JsonValue, String> {
+pub fn read_maru_skills(work_path: String) -> Result<JsonValue, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_json(&skills_json_path(&work))
 }
 
 #[tauri::command]
-pub fn save_anchor_skills(work_path: String, value: JsonValue) -> Result<(), String> {
+pub fn save_maru_skills(work_path: String, value: JsonValue) -> Result<(), String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     write_json_pretty(&skills_json_path(&work), &value)
 }
 
 #[tauri::command]
-pub fn read_anchor_settings(work_path: String) -> Result<JsonValue, String> {
+pub fn read_maru_settings(work_path: String) -> Result<JsonValue, String> {
     let work = normalize_work_path(&work_path)?;
     let global_path = global_settings_json_path()?;
-    read_anchor_settings_internal(&work, &global_path)
+    read_maru_settings_internal(&work, &global_path)
 }
 
 #[tauri::command]
-pub fn save_anchor_settings(
+pub fn save_maru_settings(
     work_path: String,
     value: JsonValue,
     base_value: Option<JsonValue>,
-) -> Result<AnchorSettingsSaveOutcome, String> {
+) -> Result<MaruSettingsSaveOutcome, String> {
     let work = normalize_work_path(&work_path)?;
     let global_path = global_settings_json_path()?;
-    save_anchor_settings_internal_with_base(&work, &global_path, value, base_value)
+    save_maru_settings_internal_with_base(&work, &global_path, value, base_value)
 }
 
 #[tauri::command]
-pub fn read_anchor_imports(work_path: String) -> Result<JsonValue, String> {
+pub fn read_maru_imports(work_path: String) -> Result<JsonValue, String> {
     let work = normalize_work_path(&work_path)?;
-    ensure_anchor_dir(&work)?;
+    ensure_maru_dir(&work)?;
     read_json(&imports_json_path(&work))
 }
 
-/// Append entries to `.anchor/imports.json`. Each entry is a free-form
+/// Append entries to `.maru/imports.json`. Each entry is a free-form
 /// JSON object — the schema is owned by `sys_import.rs`.
 pub fn append_imports(work: &Path, items: Vec<JsonValue>) -> Result<(), String> {
     let path = imports_json_path(work);
@@ -1263,7 +1267,7 @@ pub fn write_rule_with_origin(
     origin_rel: &str,
     sha256: &str,
 ) -> Result<PathBuf, String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     let path = rule_path(work, name)?;
     // Strip any leading frontmatter on incoming body — origin file may
     // itself be frontmatter-bearing. We attach our own metadata block.
@@ -1299,7 +1303,7 @@ pub fn write_template_with_origin(
     origin_rel: &str,
     sha256: &str,
 ) -> Result<PathBuf, String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     let path = template_path(work, name)?;
     let parts = parse_frontmatter(body);
     let stripped_body = parts.body;
@@ -1322,17 +1326,17 @@ pub fn write_template_with_origin(
 
 /// Used by sys_import to overwrite the projects/mcp/skills JSON.
 pub fn write_mcp(work: &Path, value: &JsonValue) -> Result<(), String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     write_json_pretty(&mcp_json_path(work), value)
 }
 
 pub fn write_projects(work: &Path, value: &JsonValue) -> Result<(), String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     write_json_pretty(&projects_json_path(work), value)
 }
 
 pub fn write_skills(work: &Path, value: &JsonValue) -> Result<(), String> {
-    ensure_anchor_dir(work)?;
+    ensure_maru_dir(work)?;
     write_json_pretty(&skills_json_path(work), value)
 }
 
@@ -1350,30 +1354,30 @@ mod tests {
     }
 
     #[test]
-    fn ensure_anchor_dir_creates_skeleton() {
+    fn ensure_maru_dir_creates_skeleton() {
         let tmp = fresh_work();
-        ensure_anchor_dir(tmp.path()).unwrap();
-        assert!(tmp.path().join(".anchor/workspace.json").exists());
-        assert!(tmp.path().join(".anchor/rules").is_dir());
-        assert!(tmp.path().join(".anchor/templates").is_dir());
-        assert!(tmp.path().join(".anchor/versions").is_dir());
-        assert!(tmp.path().join(".anchor/mcp.json").exists());
-        assert!(tmp.path().join(".anchor/projects.json").exists());
-        assert!(tmp.path().join(".anchor/skills.json").exists());
-        assert!(!tmp.path().join(".anchor/settings.json").exists());
-        assert!(tmp.path().join(".anchor/imports.json").exists());
-        assert!(tmp.path().join(".anchorignore").exists());
+        ensure_maru_dir(tmp.path()).unwrap();
+        assert!(tmp.path().join(".maru/workspace.json").exists());
+        assert!(tmp.path().join(".maru/rules").is_dir());
+        assert!(tmp.path().join(".maru/templates").is_dir());
+        assert!(tmp.path().join(".maru/versions").is_dir());
+        assert!(tmp.path().join(".maru/mcp.json").exists());
+        assert!(tmp.path().join(".maru/projects.json").exists());
+        assert!(tmp.path().join(".maru/skills.json").exists());
+        assert!(!tmp.path().join(".maru/settings.json").exists());
+        assert!(tmp.path().join(".maru/imports.json").exists());
+        assert!(tmp.path().join(".maruignore").exists());
     }
 
     #[test]
-    fn ensure_anchor_dir_is_idempotent() {
+    fn ensure_maru_dir_is_idempotent() {
         let tmp = fresh_work();
-        ensure_anchor_dir(tmp.path()).unwrap();
+        ensure_maru_dir(tmp.path()).unwrap();
         // Edit a known file the second call should not clobber.
-        let mcp = tmp.path().join(".anchor/mcp.json");
+        let mcp = tmp.path().join(".maru/mcp.json");
         fs::write(&mcp, "{\"version\": 1, \"servers\": {\"x\": {}}}").unwrap();
         let before = fs::read_to_string(&mcp).unwrap();
-        ensure_anchor_dir(tmp.path()).unwrap();
+        ensure_maru_dir(tmp.path()).unwrap();
         let after = fs::read_to_string(&mcp).unwrap();
         assert_eq!(
             before, after,
@@ -1387,47 +1391,47 @@ mod tests {
         let work = fresh_work();
         assert_eq!(
             global_settings_json_path_for_home(home.path()),
-            home.path().join(".anchor/settings.json")
+            home.path().join(".maru/settings.json")
         );
         assert_eq!(
             workspace_state_json_path(work.path()),
-            work.path().join(".anchor/workspace-state.json")
+            work.path().join(".maru/workspace-state.json")
         );
         assert_eq!(
             legacy_settings_json_path(work.path()),
-            work.path().join(".anchor/settings.json")
+            work.path().join(".maru/settings.json")
         );
     }
 
     #[test]
-    fn ensure_anchorignore_appends_without_dup() {
+    fn ensure_maruignore_appends_without_dup() {
         let tmp = fresh_work();
         fs::write(
-            tmp.path().join(".anchorignore"),
+            tmp.path().join(".maruignore"),
             "# pre-existing\nnode_modules\n.venv\n",
         )
         .unwrap();
-        ensure_anchor_dir(tmp.path()).unwrap();
-        let content = fs::read_to_string(tmp.path().join(".anchorignore")).unwrap();
+        ensure_maru_dir(tmp.path()).unwrap();
+        let content = fs::read_to_string(tmp.path().join(".maruignore")).unwrap();
         // node_modules and .venv must not duplicate.
         assert_eq!(content.matches("node_modules").count(), 1);
         assert_eq!(content.matches(".venv").count(), 1);
         // Newly-required patterns are appended.
         assert!(content.contains("_sys/env"));
-        assert!(content.contains(".anchor/secrets"));
+        assert!(content.contains(".maru/secrets"));
         assert!(content.contains(".secrets"));
         // Idempotent on a second run.
-        ensure_anchor_dir(tmp.path()).unwrap();
-        let again = fs::read_to_string(tmp.path().join(".anchorignore")).unwrap();
-        assert_eq!(content, again, "second ensure_anchorignore must be a no-op");
+        ensure_maru_dir(tmp.path()).unwrap();
+        let again = fs::read_to_string(tmp.path().join(".maruignore")).unwrap();
+        assert_eq!(content, again, "second ensure_maruignore must be a no-op");
     }
 
     #[test]
     fn settings_split_round_trips_pretty() {
         let tmp = fresh_work();
         let home = fresh_work();
-        let global = home.path().join(".anchor/settings.json");
-        let initial = read_anchor_settings_internal(tmp.path(), &global).unwrap();
+        let global = home.path().join(".maru/settings.json");
+        let initial = read_maru_settings_internal(tmp.path(), &global).unwrap();
         assert_eq!(
             initial
                 .pointer("/ui/documentBrowserMode")
@@ -1476,8 +1480,8 @@ mod tests {
             "inboxChannels": {},
             "connectors": {}
         });
-        save_anchor_settings_internal(tmp.path(), &global, next).unwrap();
-        let reloaded = read_anchor_settings_internal(tmp.path(), &global).unwrap();
+        save_maru_settings_internal(tmp.path(), &global, next).unwrap();
+        let reloaded = read_maru_settings_internal(tmp.path(), &global).unwrap();
         assert_eq!(
             reloaded
                 .pointer("/ui/documentBrowserMode")
@@ -1502,12 +1506,12 @@ mod tests {
             "global settings should be pretty JSON with trailing newline"
         );
         let state_raw =
-            fs::read_to_string(tmp.path().join(".anchor/workspace-state.json")).unwrap();
+            fs::read_to_string(tmp.path().join(".maru/workspace-state.json")).unwrap();
         assert!(
             state_raw.contains('\n') && state_raw.ends_with('\n'),
             "workspace state should be pretty JSON with trailing newline"
         );
-        assert!(!tmp.path().join(".anchor/settings.json").exists());
+        assert!(!tmp.path().join(".maru/settings.json").exists());
         let global_value = read_json(&global).unwrap();
         assert_eq!(
             global_value
@@ -1517,7 +1521,7 @@ mod tests {
         );
         assert!(global_value.pointer("/ui/collapsedTreeFolders").is_none());
         assert!(global_value.pointer("/ui/documentViews").is_none());
-        let state_value = read_json(&tmp.path().join(".anchor/workspace-state.json")).unwrap();
+        let state_value = read_json(&tmp.path().join(".maru/workspace-state.json")).unwrap();
         assert_eq!(
             state_value
                 .pointer("/ui/collapsedTreeFolders/0")
@@ -1539,17 +1543,17 @@ mod tests {
         let work_a = fresh_work();
         let work_b = fresh_work();
         let home = fresh_work();
-        let global = home.path().join(".anchor/settings.json");
+        let global = home.path().join(".maru/settings.json");
 
-        let base_a = read_anchor_settings_internal(work_a.path(), &global).unwrap();
-        let stale_base_b = read_anchor_settings_internal(work_b.path(), &global).unwrap();
+        let base_a = read_maru_settings_internal(work_a.path(), &global).unwrap();
+        let stale_base_b = read_maru_settings_internal(work_b.path(), &global).unwrap();
         let mut next_a = base_a.clone();
         insert_path(
             &mut next_a,
             &["ui", "themeMode"],
             JsonValue::String("dark".to_string()),
         );
-        save_anchor_settings_internal_with_base(work_a.path(), &global, next_a, Some(base_a))
+        save_maru_settings_internal_with_base(work_a.path(), &global, next_a, Some(base_a))
             .unwrap();
 
         let mut next_b = stale_base_b.clone();
@@ -1558,11 +1562,11 @@ mod tests {
             &["ui", "collapsedTreeFolders"],
             json!(["workspace-b-only"]),
         );
-        save_anchor_settings_internal_with_base(work_b.path(), &global, next_b, Some(stale_base_b))
+        save_maru_settings_internal_with_base(work_b.path(), &global, next_b, Some(stale_base_b))
             .unwrap();
 
-        let effective_a = read_anchor_settings_internal(work_a.path(), &global).unwrap();
-        let effective_b = read_anchor_settings_internal(work_b.path(), &global).unwrap();
+        let effective_a = read_maru_settings_internal(work_a.path(), &global).unwrap();
+        let effective_b = read_maru_settings_internal(work_b.path(), &global).unwrap();
         assert_eq!(
             effective_a
                 .pointer("/ui/themeMode")
@@ -1587,8 +1591,8 @@ mod tests {
     fn connectors_save_to_global_defaults_not_workspace_state() {
         let tmp = fresh_work();
         let home = fresh_work();
-        let global = home.path().join(".anchor/settings.json");
-        let base = read_anchor_settings_internal(tmp.path(), &global).unwrap();
+        let global = home.path().join(".maru/settings.json");
+        let base = read_maru_settings_internal(tmp.path(), &global).unwrap();
         let mut next = base.clone();
         insert_path(
             &mut next,
@@ -1601,7 +1605,7 @@ mod tests {
         );
 
         let outcome =
-            save_anchor_settings_internal_with_base(tmp.path(), &global, next, Some(base)).unwrap();
+            save_maru_settings_internal_with_base(tmp.path(), &global, next, Some(base)).unwrap();
 
         assert!(outcome.global_changed);
         assert!(!outcome.workspace_changed);
@@ -1612,7 +1616,7 @@ mod tests {
                 .and_then(JsonValue::as_str),
             Some("http://localhost:9710")
         );
-        let state_value = read_json_if_exists(&tmp.path().join(".anchor/workspace-state.json"))
+        let state_value = read_json_if_exists(&tmp.path().join(".maru/workspace-state.json"))
             .unwrap()
             .unwrap_or_else(|| json!({}));
         assert!(state_value.pointer("/connectors").is_none());
@@ -1622,10 +1626,10 @@ mod tests {
     fn legacy_workspace_settings_migrate_without_deleting_source() {
         let tmp = fresh_work();
         let home = fresh_work();
-        let global = home.path().join(".anchor/settings.json");
-        ensure_anchor_dir(tmp.path()).unwrap();
+        let global = home.path().join(".maru/settings.json");
+        ensure_maru_dir(tmp.path()).unwrap();
         fs::write(
-            tmp.path().join(".anchor/settings.json"),
+            tmp.path().join(".maru/settings.json"),
             r##"{
   "version": 1,
   "ui": {
@@ -1649,7 +1653,7 @@ mod tests {
         )
         .unwrap();
 
-        let effective = read_anchor_settings_internal(tmp.path(), &global).unwrap();
+        let effective = read_maru_settings_internal(tmp.path(), &global).unwrap();
         assert_eq!(
             effective
                 .pointer("/ui/documentBrowserMode")
@@ -1681,12 +1685,12 @@ mod tests {
                 .and_then(JsonValue::as_str),
             Some("http://localhost:9710")
         );
-        assert!(read_json(&tmp.path().join(".anchor/workspace-state.json"))
+        assert!(read_json(&tmp.path().join(".maru/workspace-state.json"))
             .unwrap()
             .pointer("/connectors")
             .is_none());
-        assert!(tmp.path().join(".anchor/settings.json").exists());
-        assert!(tmp.path().join(".anchor/workspace-state.json").exists());
+        assert!(tmp.path().join(".maru/settings.json").exists());
+        assert!(tmp.path().join(".maru/workspace-state.json").exists());
         assert!(global.exists());
     }
 
@@ -1695,7 +1699,7 @@ mod tests {
         let tmp = fresh_work();
         let file = tmp.path().join("not-a-dir");
         fs::write(&file, "x").unwrap();
-        let result = read_anchor_settings(file.to_string_lossy().to_string());
+        let result = read_maru_settings(file.to_string_lossy().to_string());
         assert!(result.is_err());
     }
 
@@ -1703,20 +1707,20 @@ mod tests {
     fn workspace_meta_round_trips() {
         let tmp = fresh_work();
         let work = tmp.path().to_string_lossy().to_string();
-        let meta = read_anchor_workspace(work.clone()).unwrap();
+        let meta = read_maru_workspace(work.clone()).unwrap();
         assert_eq!(meta.version, SCHEMA_VERSION);
         assert!(meta.paired_vault_path.is_none());
-        let patch = AnchorWorkspaceMetaPatch {
+        let patch = MaruWorkspaceMetaPatch {
             paired_vault_path: Some("/vault/path".to_string()),
             owner_name: Some("이영준".to_string()),
             locale: None,
             last_active_mode: Some("system".to_string()),
         };
-        let updated = update_anchor_workspace(work.clone(), patch).unwrap();
+        let updated = update_maru_workspace(work.clone(), patch).unwrap();
         assert_eq!(updated.paired_vault_path.as_deref(), Some("/vault/path"));
         assert_eq!(updated.owner_name.as_deref(), Some("이영준"));
         assert_eq!(updated.last_active_mode.as_deref(), Some("system"));
-        let reloaded = read_anchor_workspace(work).unwrap();
+        let reloaded = read_maru_workspace(work).unwrap();
         assert_eq!(reloaded.paired_vault_path.as_deref(), Some("/vault/path"));
     }
 
@@ -1725,20 +1729,20 @@ mod tests {
         let tmp = fresh_work();
         let work = tmp.path().to_string_lossy().to_string();
         let body = "---\nenabled: true\nscope: meetings\n---\n# Demo Rule\n\nbody.\n";
-        let entry = save_anchor_rule(work.clone(), "demo".to_string(), body.to_string()).unwrap();
+        let entry = save_maru_rule(work.clone(), "demo".to_string(), body.to_string()).unwrap();
         assert_eq!(entry.name, "demo");
         assert!(entry.enabled);
         assert_eq!(entry.scope.as_deref(), Some("meetings"));
 
-        let listed = list_anchor_rules(work.clone()).unwrap();
+        let listed = list_maru_rules(work.clone()).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].title, "Demo Rule");
 
-        let doc = read_anchor_rule(work.clone(), "demo".to_string()).unwrap();
+        let doc = read_maru_rule(work.clone(), "demo".to_string()).unwrap();
         assert_eq!(doc.content, body);
 
-        delete_anchor_rule(work.clone(), "demo".to_string()).unwrap();
-        let listed = list_anchor_rules(work).unwrap();
+        delete_maru_rule(work.clone(), "demo".to_string()).unwrap();
+        let listed = list_maru_rules(work).unwrap();
         assert!(listed.is_empty());
     }
 
@@ -1746,14 +1750,14 @@ mod tests {
     fn rule_name_rejects_path_traversal() {
         let tmp = fresh_work();
         let work = tmp.path().to_string_lossy().to_string();
-        let result = save_anchor_rule(work, "../escape".to_string(), "x".to_string());
+        let result = save_maru_rule(work, "../escape".to_string(), "x".to_string());
         assert!(result.is_err());
     }
 
     #[test]
     fn imports_append_round_trips() {
         let tmp = fresh_work();
-        ensure_anchor_dir(tmp.path()).unwrap();
+        ensure_maru_dir(tmp.path()).unwrap();
         append_imports(
             tmp.path(),
             vec![json!({ "origin_rel": "_sys/rules/x.md", "sha256": "deadbeef", "category": "rule" })],

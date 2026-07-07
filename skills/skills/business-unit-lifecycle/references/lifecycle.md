@@ -13,7 +13,7 @@ placement of files into any project is governed by
 projects/{domain}/{slug}/
 ├── 00-readme/
 │   ├── README.md
-│   ├── bu-config.yaml           # view copy of .anchor/bu-config.yaml
+│   ├── bu-config.yaml           # view copy of .maru/bu-config.yaml
 │   ├── contact-tree.md          # 담당/대리/결재 line
 │   └── kpi-targets.md           # yearly KPI targets
 ├── 01-formal-reports/           # 정형보고
@@ -33,7 +33,7 @@ projects/{domain}/{slug}/
 ├── 05-decks/                    # 발표 덱 (per-slug deck job)
 ├── _inbox/                      # temporary intake (universal special)
 ├── _archive/                    # old versions (universal special)
-└── .anchor/
+└── .maru/
     └── bu-config.yaml           # primary BU metadata
 ```
 
@@ -68,7 +68,7 @@ no-Korean-dirname naming policy; the canonical rule shows the Korean labels.
 | `05-decks/` | 발표 덱. One subfolder per deck job. |
 | `_inbox/` | Temporary holding area before routing. Do not keep canonical files here. |
 | `_archive/` | Old versions, discarded drafts, migration snapshots, outgoing packages. |
-| `.anchor/` | Primary `bu-config.yaml` (plus tooling state). |
+| `.maru/` | Primary `bu-config.yaml` (plus tooling state). |
 
 ## Frontmatter
 

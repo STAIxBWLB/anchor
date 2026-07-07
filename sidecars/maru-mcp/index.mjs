@@ -5,13 +5,13 @@ import path from "node:path";
 import readline from "node:readline";
 import { randomUUID } from "node:crypto";
 
-const workspace = path.resolve(process.env.ANCHOR_MCP_WORKSPACE ?? process.cwd());
+const workspace = path.resolve(process.env.MARU_MCP_WORKSPACE ?? process.cwd());
 const workspaceReal = realpathSync(workspace);
 
 const tools = [
   {
     name: "workspace.search",
-    description: "Search text files in the local Anchor workspace.",
+    description: "Search text files in the local Maru workspace.",
     inputSchema: {
       type: "object",
       properties: {
@@ -39,7 +39,7 @@ const tools = [
   },
   {
     name: "run.status",
-    description: "Read run event counts from .anchor/runs/skills.",
+    description: "Read run event counts from .maru/runs/skills.",
     inputSchema: {
       type: "object",
       properties: {
@@ -72,12 +72,12 @@ const tools = [
   },
   {
     name: "artifact.list",
-    description: "List saved Anchor E2E artifacts from .anchor/e2e-runs.",
+    description: "List saved Maru E2E artifacts from .maru/e2e-runs.",
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "artifact.read",
-    description: "Read saved Anchor E2E artifact metadata and file inventory.",
+    description: "Read saved Maru E2E artifact metadata and file inventory.",
     inputSchema: {
       type: "object",
       properties: {
@@ -114,7 +114,7 @@ async function dispatch(method, params) {
   if (method === "initialize") {
     return {
       protocolVersion: "2025-06-18",
-      serverInfo: { name: "anchor-mcp", version: "0.1.0" },
+      serverInfo: { name: "maru-mcp", version: "0.1.0" },
       capabilities: { tools: {} },
     };
   }
@@ -183,7 +183,7 @@ async function listSkills() {
 }
 
 async function runStatus(runId) {
-  const root = path.join(workspace, ".anchor", "runs", "skills");
+  const root = path.join(workspace, ".maru", "runs", "skills");
   const runs = runId ? [runId] : await fs.readdir(root).catch(() => []);
   const statuses = [];
   for (const id of runs) {
@@ -214,19 +214,19 @@ async function createProposal(runId, proposal) {
     runId,
     ts: new Date().toISOString(),
     type: "proposal.created",
-    actor: "anchor.mcp",
+    actor: "maru.mcp",
     payload: { proposal },
-    schemaVersion: "anchor_agent_run_event_v1",
+    schemaVersion: "maru_agent_run_event_v1",
     parentId: null,
   };
-  const eventsPath = path.join(workspace, ".anchor", "runs", "skills", runId, "events.jsonl");
+  const eventsPath = path.join(workspace, ".maru", "runs", "skills", runId, "events.jsonl");
   await fs.mkdir(path.dirname(eventsPath), { recursive: true });
   await fs.appendFile(eventsPath, `${JSON.stringify(event)}\n`);
   return { runId, eventId: event.id };
 }
 
 async function listArtifacts() {
-  const root = path.join(workspace, ".anchor", "e2e-runs");
+  const root = path.join(workspace, ".maru", "e2e-runs");
   const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
   const artifacts = [];
   for (const entry of entries) {
@@ -249,7 +249,7 @@ async function listArtifacts() {
 
 async function readArtifact(runId) {
   validateRunId(runId);
-  const root = path.join(workspace, ".anchor", "e2e-runs", runId);
+  const root = path.join(workspace, ".maru", "e2e-runs", runId);
   const realRoot = await fs.realpath(root);
   if (!isInside(realRoot, workspaceReal)) {
     throw new Error("path_escapes_workspace");
@@ -276,7 +276,7 @@ async function readArtifact(runId) {
 
 async function readEvents(runId) {
   validateRunId(runId);
-  const eventsPath = path.join(workspace, ".anchor", "runs", "skills", runId, "events.jsonl");
+  const eventsPath = path.join(workspace, ".maru", "runs", "skills", runId, "events.jsonl");
   const raw = await fs.readFile(eventsPath, "utf8").catch(() => "");
   return raw
     .split("\n")
@@ -299,7 +299,7 @@ async function* walk(dir) {
   for (const entry of entries) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if ([".git", "node_modules", "target", "dist", ".anchor"].includes(entry.name)) continue;
+      if ([".git", "node_modules", "target", "dist", ".maru"].includes(entry.name)) continue;
       yield* walk(file);
     } else if (entry.isFile()) {
       yield file;

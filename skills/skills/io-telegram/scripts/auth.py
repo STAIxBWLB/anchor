@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive Telegram login for Anchor's io-telegram skill."""
+"""Interactive Telegram login for Maru's io-telegram skill."""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ async def login(args: argparse.Namespace) -> None:
     try:
         from telethon import TelegramClient
     except ImportError as exc:
-        raise SystemExit("telethon is not installed in ~/.anchor/env") from exc
+        raise SystemExit("telethon is not installed in ~/.maru/env") from exc
     session_file = Path(args.session_file).expanduser()
     if not session_file.is_absolute():
         raise SystemExit("session-file must be absolute")

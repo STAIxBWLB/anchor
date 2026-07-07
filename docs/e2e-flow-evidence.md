@@ -1,4 +1,4 @@
-# Anchor E2E Flow Evidence
+# Maru E2E Flow Evidence
 
 This note records the README-driven E2E flow evidence without modifying the
 attached plan file.
@@ -8,15 +8,15 @@ attached plan file.
 The E2E console is hidden in normal app mode. Use one of these explicit opt-ins
 when the flow is needed for future verification:
 
-- Open the app with `?anchor-e2e=1`.
-- Set `localStorage["anchor:e2e:enabled"] = "true"` before app boot.
-- Start Vite/Tauri with `VITE_ANCHOR_E2E_FLOW=1`.
+- Open the app with `?maru-e2e=1`.
+- Set `localStorage["maru:e2e:enabled"] = "true"` before app boot.
+- Start Vite/Tauri with `VITE_MARU_E2E_FLOW=1`.
 
 ## Timing Evidence
 
 - Current-code baseline: Playwright smoke average `4019.88ms` over 3 runs on
   the local `pnpm dev` server and sample workspace fixture.
-- Post-change browser harness: `anchor-e2e-flow.spec.ts` average `4574.46ms`
+- Post-change browser harness: `maru-e2e-flow.spec.ts` average `4574.46ms`
   over 3 runs, including Playwright process, browser startup, page boot, and UI
   assertions. This is recorded as non-gated harness overhead.
 - Post-change flow metadata: `2100.00ms` average over 3 runs, emitted by the E2E
@@ -45,7 +45,7 @@ The unmeasurable stages are also recorded in generated `todos.json` and
 
 - `pnpm typecheck`
 - `pnpm test`
-- `pnpm exec playwright test e2e/anchor-e2e-flow.spec.ts --reporter=line`
+- `pnpm exec playwright test e2e/maru-e2e-flow.spec.ts --reporter=line`
 - `cargo test e2e_flow --lib`
 - `node scripts/e2e-mcp-smoke.mjs`
 

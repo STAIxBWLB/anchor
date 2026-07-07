@@ -60,34 +60,34 @@ skill. The user may scope processing with `inbox-process <channel>`.
    before leaving the item pending, and attach the matched `vault_note` /
    `relatedMeetings` to the proposal. Resolve the destination **subfolder** (not
    just the project) per `folder-placement.md` — map the item kind to the
-   project's matching subfolder (`<project>/.anchor/bu-config.yaml` `tree_map` →
+   project's matching subfolder (`<project>/.maru/bu-config.yaml` `tree_map` →
    existing `NN-`/`N-` subfolder → `_incoming/` fallback; never the bare project
    root). Write the decision to `inbox.naming.route_file`.
 8. Ask for confirmation before moving originals or summaries outside the inbox.
-   In Anchor review mode (see *Anchor Run Contract*), do not move anything
-   yourself — defer the move to Anchor's confirmation step.
+   In Maru review mode (see *Maru Run Contract*), do not move anything
+   yourself — defer the move to Maru's confirmation step.
    When filing a raw original OUT of the exempt inbox zone into a non-exempt
    project folder, rename it to an English slug per `_sys/rules/naming-policy.md`
    (`YYMMDD-type-description[-vX].ext`) and preserve the Korean original in the
    item manifest `source.original_name`.
 9. Move processed items to `done/`, `failed/`, or `duplicate/` and append a
-   receipt to `_state/index.jsonl`. In Anchor review mode, skip this step;
-   Anchor performs the move and writes the receipt after the user confirms.
+   receipt to `_state/index.jsonl`. In Maru review mode, skip this step;
+   Maru performs the move and writes the receipt after the user confirms.
 
-## Anchor Run Contract
+## Maru Run Contract
 
-When Anchor runs this skill in background/review mode (the dispatch metadata
+When Maru runs this skill in background/review mode (the dispatch metadata
 sets `reviewFlow: true`), process **every** selected item in one run and:
 
 1. Emit concise human-readable progress logs. Prefix each major log line with
    exactly one phase marker at the start of the line (after any timestamp) so
-   Anchor can render stepwise status and colour-code phases:
+   Maru can render stepwise status and colour-code phases:
    - `[phase:source]` after the selected items / channels are resolved.
    - `[phase:extract]` while extracting text into `inbox.naming.extracted_file`.
    - `[phase:summary]` while writing `inbox.naming.summary_file`.
    - `[phase:classify]` while classifying action/schedule/info/ideation/noise.
    - `[phase:route]` while scoring routes against `project-registry.yaml`.
-   - `[phase:review]` when preparing the `anchor_inbox_review_v1` block.
+   - `[phase:review]` when preparing the `maru_inbox_review_v1` block.
    - For errors prepend `ERROR:` to the message or use `[phase:error]`.
 2. You MAY write the inbox-internal artifacts during the run: per item write
    `extracted_file`, `summary_file`, and `route_file` INSIDE that item's
@@ -99,15 +99,15 @@ sets `reviewFlow: true`), process **every** selected item in one run and:
 3. In review mode you MUST NOT perform the destructive route step yourself: do
    not move items to `done/`, `failed/`, or `duplicate/`, do not file raw
    originals into project folders, and do not append the `_state/index.jsonl`
-   route receipt. Anchor applies those only after the user confirms.
+   route receipt. Maru applies those only after the user confirms.
 4. Do not run follow-up skills (`task-management`, `meeting-notes`, vault
    skills) directly; surface them as `recommendedAction: "handoff"` items.
-5. Return exactly one `anchor_inbox_review_v1` JSON object listing a decision
+5. Return exactly one `maru_inbox_review_v1` JSON object listing a decision
    for every processed item:
 
 ```json
 {
-  "schemaVersion": "anchor_inbox_review_v1",
+  "schemaVersion": "maru_inbox_review_v1",
   "summary": "short batch summary across channels",
   "items": [
     {
@@ -162,7 +162,7 @@ Hooks are optional and config-driven:
 
 - Use `project-registry.yaml` as the first source of truth for the target project.
 - Resolve the destination **subfolder** per `folder-placement.md`: classify the
-  item's kind, then map kind → subfolder (`<project>/.anchor/bu-config.yaml`
+  item's kind, then map kind → subfolder (`<project>/.maru/bu-config.yaml`
   `tree_map` → existing `NN-`/`N-` subfolder → default kind→category). Never drop
   files at the bare project root.
 - If project confidence is weak (top score < 3) or the kind is ambiguous, route

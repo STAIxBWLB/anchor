@@ -1,18 +1,18 @@
-# Anchor Bundled Skills
+# Maru Bundled Skills
 
-Skills bundle embedded by Anchor. This directory is the T1 core source for
+Skills bundle embedded by Maru. This directory is the T1 core source for
 skills that must ship with the desktop app. Public/private extension skills
-belong in the Anchor source checkouts under `~/.anchor/skills/_sources/`.
+belong in the Maru source checkouts under `~/.maru/skills/_sources/`.
 
 ## Layout
 
 ```
-skills/<name>/SKILL.md     Anchor-bundled T1 skill packages
+skills/<name>/SKILL.md     Maru-bundled T1 skill packages
 envs/default/              shared Python/Node runtime scaffold
 lib/build-graph.py         shared graph builder
 lib/vault_adapter.md       Obsidian MCP vault access rules
 docs/                      shared reference catalogs
-manifest.json              Anchor-compatible skills manifest
+manifest.json              Maru-compatible skills manifest
 ```
 
 There is no category subdirectory split or legacy helper directory split in
@@ -32,23 +32,23 @@ this bundle.
 
 ## Runtime Federation
 
-Anchor materializes this bundle into `~/.anchor/skills/_builtin`, records it in
-`~/.anchor/skills/registry.json`, and installs user-facing skill entrypoints as
+Maru materializes this bundle into `~/.maru/skills/_builtin`, records it in
+`~/.maru/skills/registry.json`, and installs user-facing skill entrypoints as
 symlinks:
 
 ```text
-~/.anchor/skills/<name> -> ~/.anchor/skills/_builtin/skills/<name>
-~/.claude/skills/<name> -> ~/.anchor/skills/<name>
+~/.maru/skills/<name> -> ~/.maru/skills/_builtin/skills/<name>
+~/.claude/skills/<name> -> ~/.maru/skills/<name>
 ```
 
-Do not install these packages by copying files manually. Use Anchor's Skills UI
+Do not install these packages by copying files manually. Use Maru's Skills UI
 or `skill_host` commands so registry state and symlinks stay consistent.
 
-Anchor can bootstrap this bundle's shared runtime into its runtime root:
+Maru can bootstrap this bundle's shared runtime into its runtime root:
 
 ```bash
-envs/default/setup.sh --target ~/.anchor/env --dry-run
-envs/default/setup.sh --target ~/.anchor/env
+envs/default/setup.sh --target ~/.maru/env --dry-run
+envs/default/setup.sh --target ~/.maru/env
 ```
 
 ## Runtime Values

@@ -141,7 +141,7 @@ fn resource_body_path(cache_root: &Path, resource: &str, key: &str) -> PathBuf {
 // ---------- Offline queue (Phase 3 stub, Phase 6에서 활성화) ----------
 
 pub fn queue_root(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".anchor").join("queue").join("hub")
+    workspace_root.join(".maru").join("queue").join("hub")
 }
 
 pub fn queue_depth(workspace_root: &Path) -> io::Result<usize> {

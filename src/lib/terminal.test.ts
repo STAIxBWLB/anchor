@@ -3,8 +3,8 @@ import {
   activeItemMention,
   buildAgentContextArgs,
   buildAgentResumeArgs,
-  buildAnchorBackgroundContextEnv,
-  buildAnchorContextEnv,
+  buildMaruBackgroundContextEnv,
+  buildMaruContextEnv,
   createTerminalTab,
   createTerminalTask,
   describeActiveContextChip,
@@ -31,7 +31,7 @@ import {
   terminalTabsReducer,
   type ActiveTerminalContext,
 } from "./terminal";
-import { DEFAULT_ANCHOR_SETTINGS, normalizeAnchorSettings } from "./settings";
+import { DEFAULT_MARU_SETTINGS, normalizeMaruSettings } from "./settings";
 
 const CTX: ActiveTerminalContext = {
   workspaceRoot: "/work/vault",
@@ -189,12 +189,12 @@ describe("terminal tab reducer", () => {
   });
 
   it("auto-launches only when open, empty, and enabled", () => {
-    const settings = normalizeAnchorSettings(DEFAULT_ANCHOR_SETTINGS);
+    const settings = normalizeMaruSettings(DEFAULT_MARU_SETTINGS);
     expect(shouldAutoLaunchTerminal(settings, false, 0)).toBeNull();
     expect(shouldAutoLaunchTerminal(settings, true, 1)).toBeNull();
     expect(shouldAutoLaunchTerminal(settings, true, 0)).toBe("shell");
 
-    const disabled = normalizeAnchorSettings({
+    const disabled = normalizeMaruSettings({
       terminal: {
         autoLaunch: "shell",
         launchers: {
@@ -433,36 +433,36 @@ describe("terminal session status", () => {
 });
 
 describe("active-item context bridge", () => {
-  it("injects ANCHOR_* env, omitting empty item keys", () => {
-    const env = buildAnchorContextEnv(CTX, "term-1", true);
-    expect(env.ANCHOR_TERMINAL).toBe("1");
-    expect(env.ANCHOR_SESSION_ID).toBe("term-1");
-    expect(env.ANCHOR_WORKSPACE).toBe("/work/vault");
-    expect(env.ANCHOR_APP_MODE).toBe("pkm");
-    expect(env.ANCHOR_ACTIVE_DOC_REL).toBe("notes/메모.md");
+  it("injects MARU_* env, omitting empty item keys", () => {
+    const env = buildMaruContextEnv(CTX, "term-1", true);
+    expect(env.MARU_TERMINAL).toBe("1");
+    expect(env.MARU_SESSION_ID).toBe("term-1");
+    expect(env.MARU_WORKSPACE).toBe("/work/vault");
+    expect(env.MARU_APP_MODE).toBe("pkm");
+    expect(env.MARU_ACTIVE_DOC_REL).toBe("notes/메모.md");
 
-    const noItem = buildAnchorContextEnv(
+    const noItem = buildMaruContextEnv(
       { ...CTX, docAbsPath: null, docRelPath: null, docTitle: null, docType: null },
       "term-2",
       true,
     );
-    expect("ANCHOR_ACTIVE_DOC" in noItem).toBe(false);
-    expect("ANCHOR_ACTIVE_DOC_REL" in noItem).toBe(false);
+    expect("MARU_ACTIVE_DOC" in noItem).toBe(false);
+    expect("MARU_ACTIVE_DOC_REL" in noItem).toBe(false);
   });
 
   it("returns only safe markers when disabled", () => {
-    const env = buildAnchorContextEnv(CTX, "term-1", false);
-    expect(Object.keys(env).sort()).toEqual(["ANCHOR_SESSION_ID", "ANCHOR_TERMINAL"]);
+    const env = buildMaruContextEnv(CTX, "term-1", false);
+    expect(Object.keys(env).sort()).toEqual(["MARU_SESSION_ID", "MARU_TERMINAL"]);
   });
 
   it("builds non-terminal context env for background agent runs", () => {
-    const env = buildAnchorBackgroundContextEnv(CTX, true);
-    expect(env.ANCHOR_WORKSPACE).toBe("/work/vault");
-    expect(env.ANCHOR_APP_MODE).toBe("pkm");
-    expect(env.ANCHOR_ACTIVE_DOC_REL).toBe("notes/메모.md");
-    expect("ANCHOR_TERMINAL" in env).toBe(false);
-    expect("ANCHOR_SESSION_ID" in env).toBe(false);
-    expect(buildAnchorBackgroundContextEnv(CTX, false)).toEqual({});
+    const env = buildMaruBackgroundContextEnv(CTX, true);
+    expect(env.MARU_WORKSPACE).toBe("/work/vault");
+    expect(env.MARU_APP_MODE).toBe("pkm");
+    expect(env.MARU_ACTIVE_DOC_REL).toBe("notes/메모.md");
+    expect("MARU_TERMINAL" in env).toBe(false);
+    expect("MARU_SESSION_ID" in env).toBe(false);
+    expect(buildMaruBackgroundContextEnv(CTX, false)).toEqual({});
   });
 
   it("adds --add-dir only for agents with a workspace", () => {

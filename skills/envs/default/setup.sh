@@ -23,7 +23,7 @@ EOF
 # .venv, node_modules, and jre.
 verify_runtimes() {
     local target="$1" ok=0 py jre c
-    echo "🔍 Anchor 런타임 헬스체크: $target"
+    echo "🔍 Maru 런타임 헬스체크: $target"
 
     py="$target/.venv/bin/python3"
     if [[ -x "$py" ]] && "$py" - <<'PYEOF' 2>/dev/null
@@ -154,7 +154,7 @@ fi
 # (3b. Java 런타임 설치 — 제거됨. hwpx는 hwp-cli로 전환되어 JRE 불필요.)
 
 # 3c. Node 런타임 설치 (md2docx docx-js 변환 실행용)
-# ~/.anchor/env/node 에 번들 — 실행 시 시스템 node(fnm/nvm) 의존 제거.
+# ~/.maru/env/node 에 번들 — 실행 시 시스템 node(fnm/nvm) 의존 제거.
 # pnpm 설치(3)는 node_modules 만 생성; 이 런타임이 docx-js 변환기를 실행한다.
 NODE_TARGET="${TARGET_DIR}/node"
 if [[ -x "$NODE_TARGET/bin/node" ]] && "$NODE_TARGET/bin/node" --version 2>/dev/null | grep -q '^v22\.'; then

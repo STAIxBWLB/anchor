@@ -9,7 +9,7 @@ import {
   type UnknownRecord,
 } from "./skillProposal";
 
-export const TASK_REVIEW_SCHEMA_VERSION = "anchor_task_review_v1";
+export const TASK_REVIEW_SCHEMA_VERSION = "maru_task_review_v1";
 
 export type TaskReviewCheckKind = "field" | "schedule" | "conflict" | "uncertainty";
 export type TaskReviewCheckStatus = "pending" | "accepted" | "edited" | "rejected";
@@ -166,11 +166,11 @@ export function deriveTaskRunSteps({
     hasPhase(logLines, "draft") ||
     hasPhase(logLines, "proposal") ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_skill_proposal_v1|proposal\.created/i.test(line));
+    logLines.some((line) => /maru_skill_proposal_v1|proposal\.created/i.test(line));
   const hasReviewSignal =
     reviewLoaded ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_task_review_v1/i.test(line));
+    logLines.some((line) => /maru_task_review_v1/i.test(line));
 
   const runStatus: TaskRunStepStatus = failed ? "error" : running ? "active" : "complete";
   const draftStatus: TaskRunStepStatus = failed

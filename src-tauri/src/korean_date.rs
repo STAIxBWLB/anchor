@@ -23,7 +23,7 @@ pub fn parse_korean_date_cmd(input: String, now_iso: String) -> Result<Option<St
     Ok(parse_korean_date(&input, now).map(|dt| dt.to_rfc3339()))
 }
 
-/// Parse a Korean natural-language date phrase against an anchor `now`.
+/// Parse a Korean natural-language date phrase against an maru `now`.
 /// Returns `Some(dt)` on a recognised phrase, `None` otherwise. Time
 /// defaults to 09:00 when omitted. Year defaults to `now.year()` for
 /// month/day phrases that omit it.
@@ -170,7 +170,7 @@ mod tests {
     use super::*;
     use chrono::TimeZone;
 
-    /// 2026-04-28 (Tue) 09:00 KST — anchor's "now" for every test below.
+    /// 2026-04-28 (Tue) 09:00 KST — maru's "now" for every test below.
     fn now() -> DateTime<FixedOffset> {
         FixedOffset::east_opt(9 * 3600)
             .unwrap()

@@ -2,7 +2,7 @@
  * Diagram-scoped keyboard shortcut hook.
  *
  * The source HTML editor's keydown handler (line 9223) is a 100-line global
- * switch that fires regardless of focus context. Anchor's main shell already
+ * switch that fires regardless of focus context. Maru's main shell already
  * binds Cmd+S elsewhere; we need a way to scope diagram shortcuts to the
  * diagram pane and call `stopImmediatePropagation()` so the global handler
  * doesn't double-fire.
@@ -10,7 +10,7 @@
  * `useScopedKeyboardShortcuts(predicate, handler)` attaches a `keydown` on
  * `window` (with `capture: true`) but only invokes the handler when the
  * `predicate` returns truthy. When the handler calls `event.preventDefault()`
- * we also stop propagation so the outer Anchor handlers don't re-process.
+ * we also stop propagation so the outer Maru handlers don't re-process.
  */
 
 import { useEffect } from "react";

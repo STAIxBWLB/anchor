@@ -1,23 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAnchorSettings } from "./settings";
+import { normalizeMaruSettings } from "./settings";
 import {
   gwsAuthCommand,
-  isTelegramMonitorConfigOutsideAnchor,
+  isTelegramMonitorConfigOutsideMaru,
   m365LoginCommand,
   telegramLoginCommand,
 } from "./telegram";
 
 describe("telegramLoginCommand", () => {
   it("runs through the user shell and expands tilde paths before quoting", () => {
-    const settings = normalizeAnchorSettings({
+    const settings = normalizeMaruSettings({
       comms: {
         telegram: {
-          pythonPath: "~/.anchor/env/.venv/bin/python",
+          pythonPath: "~/.maru/env/.venv/bin/python",
           scriptPath:
-            "~/.anchor/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py",
-          sessionFile: "~/.anchor/telegram/monitor.session",
+            "~/.maru/skills/_builtin/skills/io-telegram/scripts/telegram_monitor.py",
+          sessionFile: "~/.maru/telegram/monitor.session",
           monitorConfigPath:
-            "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
+            "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml",
         },
       },
     }).comms.telegram;
@@ -27,16 +27,16 @@ describe("telegramLoginCommand", () => {
     expect(command.command).toBeNull();
     expect(command.args[0]).toBe("-lc");
     expect(command.args[1]).toContain(
-      '"$HOME/.anchor/env/.venv/bin/python"',
+      '"$HOME/.maru/env/.venv/bin/python"',
     );
     expect(command.args[1]).toContain(
-      '"$HOME/.anchor/skills/_builtin/skills/io-telegram/scripts/auth.py"',
+      '"$HOME/.maru/skills/_builtin/skills/io-telegram/scripts/auth.py"',
     );
     expect(command.args[1]).toContain(
-      '--session-file "$HOME/.anchor/telegram/monitor.session"',
+      '--session-file "$HOME/.maru/telegram/monitor.session"',
     );
     expect(command.args[1]).toContain(
-      '--config-file "$HOME/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml"',
+      '--config-file "$HOME/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml"',
     );
   });
 });
@@ -65,32 +65,32 @@ describe("provider reauth commands", () => {
   });
 });
 
-describe("isTelegramMonitorConfigOutsideAnchor", () => {
-  it("does not warn for empty or Anchor-home monitor config paths", () => {
-    expect(isTelegramMonitorConfigOutsideAnchor(null)).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor("")).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor(" ~/.anchor ")).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor("~/.anchor/telegram/config.yaml")).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor("$HOME/.anchor")).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor("$HOME/.anchor/telegram/config.yaml")).toBe(false);
+describe("isTelegramMonitorConfigOutsideMaru", () => {
+  it("does not warn for empty or Maru-home monitor config paths", () => {
+    expect(isTelegramMonitorConfigOutsideMaru(null)).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru("")).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru(" ~/.maru ")).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru("~/.maru/telegram/config.yaml")).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru("$HOME/.maru")).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru("$HOME/.maru/telegram/config.yaml")).toBe(false);
   });
 
-  it("does not warn for absolute paths inside an Anchor home directory", () => {
+  it("does not warn for absolute paths inside an Maru home directory", () => {
     expect(
-      isTelegramMonitorConfigOutsideAnchor("/Users/yj.lee/.anchor/telegram/config.yaml"),
+      isTelegramMonitorConfigOutsideMaru("/Users/yj.lee/.maru/telegram/config.yaml"),
     ).toBe(false);
-    expect(isTelegramMonitorConfigOutsideAnchor("/home/foo/.anchor")).toBe(false);
+    expect(isTelegramMonitorConfigOutsideMaru("/home/foo/.maru")).toBe(false);
   });
 
-  it("does not warn for workspace .anchor secrets paths", () => {
+  it("does not warn for workspace .maru secrets paths", () => {
     expect(
-      isTelegramMonitorConfigOutsideAnchor(
-        "~/workspace/work/.anchor/secrets/services/telegram-monitor.config.yaml",
+      isTelegramMonitorConfigOutsideMaru(
+        "~/workspace/work/.maru/secrets/services/telegram-monitor.config.yaml",
       ),
     ).toBe(false);
   });
 
-  it("warns for monitor config paths outside Anchor-managed paths", () => {
-    expect(isTelegramMonitorConfigOutsideAnchor("/tmp/telegram-monitor.yaml")).toBe(true);
+  it("warns for monitor config paths outside Maru-managed paths", () => {
+    expect(isTelegramMonitorConfigOutsideMaru("/tmp/telegram-monitor.yaml")).toBe(true);
   });
 });

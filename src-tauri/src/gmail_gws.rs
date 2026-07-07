@@ -1,6 +1,6 @@
 // Phase 2 step 5 (revised): Gmail surface via the user's existing
 // Google Workspace CLI (`gws`). Replaces the planned async-imap path —
-// no app password, no TLS, no IMAP state machine. Anchor shells out to
+// no app password, no TLS, no IMAP state machine. Maru shells out to
 // `gws gmail +triage --format json` and parses the JSON envelope.
 //
 // `gws` writes "Using keyring backend: keyring" to stderr; stdout is
@@ -10,7 +10,7 @@
 // /opt/homebrew/bin or ~/go/bin where users typically install `gws`.
 // `resolve_gws_path` augments PATH with the standard install
 // locations and falls back to a user-provided absolute path stored in
-// `<vault>/.anchor/inbox.json`.
+// `<vault>/.maru/inbox.json`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -94,8 +94,8 @@ const GMAIL_ACCEPT_KIND: &str = "gmail.accept";
 const GMAIL_REJECT_KIND: &str = "gmail.reject";
 const GMAIL_STAGE_KIND: &str = "gmail.stage";
 const INBOX_BULK_KIND: &str = "inbox.bulk";
-const ACCEPTED_LABEL: &str = "anchor-accepted";
-const REJECTED_LABEL: &str = "anchor-rejected";
+const ACCEPTED_LABEL: &str = "maru-accepted";
+const REJECTED_LABEL: &str = "maru-rejected";
 
 /// Resolve the `gws` binary. Priority: explicit override → PATH →
 /// augmented PATH probe. Returns the absolute path so spawning is not
@@ -700,22 +700,22 @@ mod tests {
 
     #[test]
     fn parses_label_list_payload() {
-        let raw = r#"{"labels":[{"id":"Label_1","name":"anchor-accepted"},{"id":"INBOX","name":"INBOX"}]}"#;
+        let raw = r#"{"labels":[{"id":"Label_1","name":"maru-accepted"},{"id":"INBOX","name":"INBOX"}]}"#;
         let labels = parse_label_list(raw.to_string()).unwrap();
         assert_eq!(
             labels[0],
             GmailLabel {
                 id: "Label_1".to_string(),
-                name: "anchor-accepted".to_string(),
+                name: "maru-accepted".to_string(),
             }
         );
     }
 
     #[test]
-    fn label_create_body_uses_anchor_visible_label() {
-        let body = gmail_label_create_body("anchor-rejected");
+    fn label_create_body_uses_maru_visible_label() {
+        let body = gmail_label_create_body("maru-rejected");
         let value: serde_json::Value = serde_json::from_str(&body).unwrap();
-        assert_eq!(value["name"], "anchor-rejected");
+        assert_eq!(value["name"], "maru-rejected");
         assert_eq!(value["labelListVisibility"], "labelShow");
         assert_eq!(value["messageListVisibility"], "show");
     }
@@ -738,9 +738,9 @@ mod tests {
 
     #[test]
     fn decision_metadata_matches_policy() {
-        assert_eq!(GmailDecision::Accepted.label_name(), "anchor-accepted");
+        assert_eq!(GmailDecision::Accepted.label_name(), "maru-accepted");
         assert_eq!(GmailDecision::Accepted.approval_kind(), "gmail.accept");
-        assert_eq!(GmailDecision::Rejected.label_name(), "anchor-rejected");
+        assert_eq!(GmailDecision::Rejected.label_name(), "maru-rejected");
         assert_eq!(GmailDecision::Rejected.approval_kind(), "gmail.reject");
     }
 

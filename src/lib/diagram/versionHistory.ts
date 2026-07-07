@@ -1,7 +1,7 @@
 /**
  * Version-history helpers — auto-snapshot scheduling + Tauri bridge.
  *
- * Snapshots live at `<workspace>/.anchor/diagrams/history/<docId>/snapshot-<ts>.json`
+ * Snapshots live at `<workspace>/.maru/diagrams/history/<docId>/snapshot-<ts>.json`
  * (Rust side caps the ring at 20). This module is the React-facing front:
  * - `formatSnapshotTs` produces the filesystem-safe ISO compact stamp.
  * - `createAutoSnapshotScheduler` returns a tiny controller you can start/stop

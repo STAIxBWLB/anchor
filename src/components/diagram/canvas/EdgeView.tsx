@@ -35,7 +35,7 @@ function EdgeViewBase({ edge, fromNode, toNode, selected, onSelect }: EdgeViewPr
 
   return (
     <g
-      className={`anchor-diagram-edge${selected ? " is-selected" : ""}`}
+      className={`maru-diagram-edge${selected ? " is-selected" : ""}`}
       data-edge-id={edge.id}
       onPointerDown={handlePointerDown}
     >

@@ -196,7 +196,7 @@ mod tests {
         assert!(!updated.contains("title: Old"));
     }
 
-    /// Anchor extension: real-world Korean + Chinese frontmatter must round-trip
+    /// Maru extension: real-world Korean + Chinese frontmatter must round-trip
     /// without alphabetizing keys or losing the trailing newline.
     #[test]
     fn test_roundtrip_korean_chinese_preserves_order() {
@@ -226,17 +226,17 @@ mod tests {
         assert!(updated.ends_with('\n'));
     }
 
-    /// Anchor extension: comments inside frontmatter must not be erased on update.
+    /// Maru extension: comments inside frontmatter must not be erased on update.
     #[test]
     fn test_roundtrip_preserves_comments() {
-        let content = "---\n# Anchor metadata block\ntitle: Doc\n# Internal — do not edit\nstatus: draft\n---\n# Doc\n";
+        let content = "---\n# Maru metadata block\ntitle: Doc\n# Internal — do not edit\nstatus: draft\n---\n# Doc\n";
         let updated = update_frontmatter_content(
             content,
             "status",
             Some(FrontmatterValue::String("active".to_string())),
         )
         .unwrap();
-        assert!(updated.contains("# Anchor metadata block"));
+        assert!(updated.contains("# Maru metadata block"));
         assert!(updated.contains("# Internal — do not edit"));
         assert!(updated.contains("status: active"));
     }

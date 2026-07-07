@@ -189,7 +189,7 @@ pub fn check_telegram_auth(options: TelegramFetchOptions) -> Result<ProviderAuth
     let mut cmd = Command::new(&config.python_path);
     cmd.env("PATH", augmented_path())
         .env(
-            "ANCHOR_SKILLS_ENV",
+            "MARU_SKILLS_ENV",
             config.env_root.to_string_lossy().to_string(),
         )
         .arg(&config.script_path)
@@ -377,7 +377,7 @@ fn fetch_telegram_recent_inner(
     let mut cmd = Command::new(&config.python_path);
     cmd.env("PATH", augmented_path())
         .env(
-            "ANCHOR_SKILLS_ENV",
+            "MARU_SKILLS_ENV",
             config.env_root.to_string_lossy().to_string(),
         )
         .arg(&config.script_path)
@@ -450,7 +450,7 @@ fn resolve_telegram_command_config(
         .unwrap_or_else(|| env_root.join(".venv").join("bin").join("python"));
     if !is_executable(&python_path) {
         return Err(format!(
-            "env_missing: Telegram requires {}. Bootstrap ~/.anchor/env first.",
+            "env_missing: Telegram requires {}. Bootstrap ~/.maru/env first.",
             python_path.to_string_lossy()
         ));
     }
@@ -573,7 +573,7 @@ fn parse_telegram_output(raw: &str) -> Result<Vec<TelegramMessage>, String> {
 
 fn default_telegram_script_path() -> PathBuf {
     host_fs::skills_root()
-        .unwrap_or_else(|_| PathBuf::from(".anchor/skills"))
+        .unwrap_or_else(|_| PathBuf::from(".maru/skills"))
         .join("_builtin")
         .join("skills")
         .join("io-telegram")
@@ -582,8 +582,8 @@ fn default_telegram_script_path() -> PathBuf {
 }
 
 fn default_telegram_session_path() -> PathBuf {
-    host_fs::anchor_home()
-        .unwrap_or_else(|_| PathBuf::from(".anchor"))
+    host_fs::maru_home()
+        .unwrap_or_else(|_| PathBuf::from(".maru"))
         .join("telegram")
         .join("monitor.session")
 }
@@ -677,11 +677,11 @@ mod tests {
     use super::*;
     use crate::inbox_drop::sanitize_filename;
 
-    // Isolates the process-global `ANCHOR_TEST_HOME` under the shared skill-host
+    // Isolates the process-global `MARU_TEST_HOME` under the shared skill-host
     // home lock. `_guard` is declared last so it drops last — the lock is held
     // until after the env var is restored and the TempDir is removed, so this
     // test never races skill_host tests on the global env var (and never writes
-    // the skill registry into the real ~/.anchor).
+    // the skill registry into the real ~/.maru).
     struct TelegramTestHome {
         _dir: tempfile::TempDir,
         previous: Option<std::ffi::OsString>,
@@ -691,17 +691,17 @@ mod tests {
     impl Drop for TelegramTestHome {
         fn drop(&mut self) {
             match self.previous.as_ref() {
-                Some(previous) => std::env::set_var("ANCHOR_TEST_HOME", previous),
-                None => std::env::remove_var("ANCHOR_TEST_HOME"),
+                Some(previous) => std::env::set_var("MARU_TEST_HOME", previous),
+                None => std::env::remove_var("MARU_TEST_HOME"),
             }
         }
     }
 
-    fn isolated_anchor_home() -> TelegramTestHome {
-        let guard = host_fs::test_anchor_home_lock();
+    fn isolated_maru_home() -> TelegramTestHome {
+        let guard = host_fs::test_maru_home_lock();
         let dir = tempfile::tempdir().unwrap();
-        let previous = std::env::var_os("ANCHOR_TEST_HOME");
-        std::env::set_var("ANCHOR_TEST_HOME", dir.path());
+        let previous = std::env::var_os("MARU_TEST_HOME");
+        std::env::set_var("MARU_TEST_HOME", dir.path());
         TelegramTestHome {
             _dir: dir,
             previous,
@@ -722,8 +722,8 @@ mod tests {
     #[test]
     fn rejects_relative_session_files() {
         // resolve_telegram_command_config calls store::default_public_env_setup,
-        // which writes the skill registry under ANCHOR_TEST_HOME; isolate it.
-        let _home = isolated_anchor_home();
+        // which writes the skill registry under MARU_TEST_HOME; isolate it.
+        let _home = isolated_maru_home();
         let options = TelegramFetchOptions {
             work_path: None,
             max: None,

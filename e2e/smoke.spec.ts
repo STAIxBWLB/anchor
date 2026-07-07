@@ -2,9 +2,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    if (window.sessionStorage.getItem("anchor:e2e:storage-cleared") === "true") return;
+    if (window.sessionStorage.getItem("maru:e2e:storage-cleared") === "true") return;
     window.localStorage.clear();
-    window.sessionStorage.setItem("anchor:e2e:storage-cleared", "true");
+    window.sessionStorage.setItem("maru:e2e:storage-cleared", "true");
   });
 });
 
@@ -99,19 +99,19 @@ test("boots the sample workspace and opens multiple editor tabs", async ({ page 
   await expect(page.getByRole("tab", { name: "Private" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Public 추가" })).toBeVisible();
   const documentList = page.locator(".document-list");
-  await expect(documentList.getByRole("button", { name: /Anchor 사업 주간 점검 회의/ })).toBeVisible();
+  await expect(documentList.getByRole("button", { name: /Maru 사업 주간 점검 회의/ })).toBeVisible();
 
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await documentList.getByRole("button", { name: /Anchor 용어집/ }).click();
+  await documentList.getByRole("button", { name: /Maru 용어집/ }).click();
 
-  await expect(page.locator(".document-tab-title", { hasText: "Anchor 사업 주간 점검 회의" })).toBeVisible();
-  await expect(page.locator(".document-tab-title", { hasText: "Anchor 용어집" })).toBeVisible();
+  await expect(page.locator(".document-tab-title", { hasText: "Maru 사업 주간 점검 회의" })).toBeVisible();
+  await expect(page.locator(".document-tab-title", { hasText: "Maru 용어집" })).toBeVisible();
 
   await page.locator(".tab-trigger", { hasText: "원문" }).click();
-  await expect(page.locator("textarea.source-editor")).toHaveValue(/# Anchor 용어집/);
+  await expect(page.locator("textarea.source-editor")).toHaveValue(/# Maru 용어집/);
 
   await page.locator(".tab-trigger", { hasText: "미리보기" }).click();
-  await expect(page.locator(".preview-surface")).toContainText("Anchor 용어집");
+  await expect(page.locator(".preview-surface")).toContainText("Maru 용어집");
 
   await page.getByRole("tab", { name: "증빙" }).click();
   await expect(page.locator(".evidence-binder")).toContainText("Evidence Binder");
@@ -139,9 +139,9 @@ test("switches explorer between private and optional public workspace tabs", asy
   );
   const documentList = page.locator(".document-list");
   await expect(documentList.getByRole("button", { name: /references/ })).toBeVisible();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toHaveCount(0);
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toHaveCount(0);
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toBeVisible();
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toBeVisible();
 });
 
 test("switches between public provider roots and gates read-only actions", async ({
@@ -162,7 +162,7 @@ test("switches between public provider roots and gates read-only actions", async
 
   const documentList = page.locator(".document-list");
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await documentList.getByRole("button", { name: /Anchor 용어집/ }).click();
+  await documentList.getByRole("button", { name: /Maru 용어집/ }).click();
   await page.locator(".tab-trigger", { hasText: "원문" }).click();
 
   await expect(page.locator("textarea.source-editor")).toHaveAttribute("readonly", "");
@@ -331,7 +331,7 @@ test("restores the previous app state on startup", async ({ page }) => {
         ).some(
           (value) =>
             value != null &&
-            value.includes('"rightRelPath":"anchor-weekly-meeting.md"') &&
+            value.includes('"rightRelPath":"maru-weekly-meeting.md"') &&
             value.includes('"focusedGroup":"right"'),
         ),
       ),
@@ -363,7 +363,7 @@ test("opens meetings mode with list, detail, and calendar views", async ({ page 
   await expect(page.locator(".meetings-pane")).toBeVisible();
   const meetingsPane = page.locator(".meetings-pane");
   await expect(
-    meetingsPane.getByRole("button", { name: /Anchor 사업 주간 점검/ }),
+    meetingsPane.getByRole("button", { name: /Maru 사업 주간 점검/ }),
   ).toBeVisible();
 
   await meetingsPane.getByRole("button", { name: /Skills 관리/ }).click();
@@ -441,7 +441,7 @@ test("opens meetings mode with list, detail, and calendar views", async ({ page 
     let raw: string | null = null;
     for (let index = 0; index < window.localStorage.length; index += 1) {
       const key = window.localStorage.key(index);
-      if (key?.startsWith("anchor:meetings:progress-dock:")) {
+      if (key?.startsWith("maru:meetings:progress-dock:")) {
         raw = window.localStorage.getItem(key);
         break;
       }
@@ -487,12 +487,12 @@ test("opens document studio with the seven-step shell", async ({ page }) => {
   await expect(page.locator(".studio-step-rail")).toContainText("Source");
   await expect(page.locator(".studio-step-rail")).toContainText("Package");
   await expect(page.locator(".studio-active-document")).toContainText(
-    "Anchor 사업 주간 점검 회의",
+    "Maru 사업 주간 점검 회의",
   );
 });
 
 test("shows the meetings settings tab in the settings window shell", async ({ page }) => {
-  await page.goto("/?window=settings&workPath=mock%3A%2F%2Fanchor-sample-workspace&tab=meetings");
+  await page.goto("/?window=settings&workPath=mock%3A%2F%2Fmaru-sample-workspace&tab=meetings");
 
   await expect(page.getByRole("tab", { name: "회의록" })).toHaveAttribute(
     "aria-selected",
@@ -506,7 +506,7 @@ test("manages secrets settings with full-width scroll and explicit reveal", asyn
   page,
 }) => {
   await page.setViewportSize({ width: 1200, height: 720 });
-  await page.goto("/?window=settings&workPath=mock%3A%2F%2Fanchor-sample-workspace&tab=secrets");
+  await page.goto("/?window=settings&workPath=mock%3A%2F%2Fmaru-sample-workspace&tab=secrets");
 
   await expect(page.getByRole("tab", { name: "Secrets" })).toHaveAttribute(
     "aria-selected",
@@ -589,7 +589,7 @@ test("manages secrets settings with full-width scroll and explicit reveal", asyn
   await dialog.getByRole("button", { name: "Delete" }).click();
   const confirmMessage = await confirmDialogPromise;
   expect(confirmMessage).toContain(
-    "Delete the text secret file .anchor/secrets/services/telegram-monitor.config.yaml?",
+    "Delete the text secret file .maru/secrets/services/telegram-monitor.config.yaml?",
   );
   expect(confirmMessage).not.toContain("metadata entry");
   await expect(dialog).toBeVisible();
@@ -600,18 +600,18 @@ test("supports tree bulk controls and Finder context menu", async ({ page }) => 
 
   const documentList = page.locator(".document-list");
   await expect(documentList.getByRole("button", { name: /references/ })).toBeVisible();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toHaveCount(0);
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toHaveCount(0);
 
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toBeVisible();
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toBeVisible();
 
   await documentList.getByRole("button", { name: "모두 접기" }).click();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toHaveCount(0);
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toHaveCount(0);
 
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await expect(documentList.getByRole("button", { name: /Anchor 용어집/ })).toBeVisible();
+  await expect(documentList.getByRole("button", { name: /Maru 용어집/ })).toBeVisible();
 
-  await documentList.getByRole("button", { name: /Anchor 용어집/ }).click({
+  await documentList.getByRole("button", { name: /Maru 용어집/ }).click({
     button: "right",
   });
   await expect(page.getByRole("menuitem", { name: "파일 열기" })).toBeVisible();
@@ -627,10 +627,10 @@ test("shows supported document tab menu items and performs file operations", asy
 
   const documentList = page.locator(".document-list");
   await documentList.getByRole("button", { name: "모두 펴기" }).click();
-  await documentList.getByRole("button", { name: /Anchor 용어집/ }).click();
+  await documentList.getByRole("button", { name: /Maru 용어집/ }).click();
   await documentList.getByRole("button", { name: "목록" }).click();
 
-  const glossaryTab = page.locator(".document-tab[title='references/anchor-glossary.md']");
+  const glossaryTab = page.locator(".document-tab[title='references/maru-glossary.md']");
   await expect(glossaryTab).toBeVisible();
   await glossaryTab.click({ button: "right" });
 
@@ -655,7 +655,7 @@ test("shows supported document tab menu items and performs file operations", asy
   await expect(menu).not.toContainText("Reopen Editor With");
 
   await menu.getByRole("menuitem", { name: "Explorer View에서 보기" }).click();
-  const revealedGlossary = documentList.getByRole("button", { name: /Anchor 용어집/ });
+  const revealedGlossary = documentList.getByRole("button", { name: /Maru 용어집/ });
   await expect(documentList.getByRole("button", { name: "트리" })).toHaveClass(/active/);
   await expect(revealedGlossary).toBeVisible();
   await expect(revealedGlossary).toBeFocused();
@@ -665,33 +665,33 @@ test("shows supported document tab menu items and performs file operations", asy
     .locator(".document-tab-context-menu")
     .getByRole("menuitem", { name: "복제..." })
     .click();
-  const copyTab = page.locator(".document-tab[title='references/anchor-glossary-copy.md']");
+  const copyTab = page.locator(".document-tab[title='references/maru-glossary-copy.md']");
   await expect(copyTab).toBeVisible();
 
   page.once("dialog", async (dialog) => {
     expect(dialog.type()).toBe("prompt");
-    await dialog.accept("anchor-glossary-renamed");
+    await dialog.accept("maru-glossary-renamed");
   });
   await copyTab.click({ button: "right" });
   await page
     .locator(".document-tab-context-menu")
     .getByRole("menuitem", { name: "이름 변경..." })
     .click();
-  const renamedTab = page.locator(".document-tab[title='references/anchor-glossary-renamed.md']");
+  const renamedTab = page.locator(".document-tab[title='references/maru-glossary-renamed.md']");
   await expect(renamedTab).toBeVisible();
 
   page.once("dialog", async (dialog) => {
     expect(dialog.type()).toBe("prompt");
-    await dialog.accept("moved/anchor-glossary-renamed.md");
+    await dialog.accept("moved/maru-glossary-renamed.md");
   });
   await renamedTab.click({ button: "right" });
   await page
     .locator(".document-tab-context-menu")
     .getByRole("menuitem", { name: "이동..." })
     .click();
-  const movedTab = page.locator(".document-tab[title='moved/anchor-glossary-renamed.md']");
+  const movedTab = page.locator(".document-tab[title='moved/maru-glossary-renamed.md']");
   await expect(movedTab).toBeVisible();
-  await expect(page.locator("textarea.source-editor")).toHaveValue(/# Anchor 용어집/);
+  await expect(page.locator("textarea.source-editor")).toHaveValue(/# Maru 용어집/);
 
   page.once("dialog", async (dialog) => {
     expect(dialog.type()).toBe("confirm");
@@ -703,7 +703,7 @@ test("shows supported document tab menu items and performs file operations", asy
     .getByRole("menuitem", { name: "삭제" })
     .click();
   await expect(movedTab).toHaveCount(0);
-  await expect(page.locator(".toast", { hasText: ".anchor/trash/documents/moved/" })).toBeVisible();
+  await expect(page.locator(".toast", { hasText: ".maru/trash/documents/moved/" })).toBeVisible();
 });
 
 test("suppresses native context menus outside document surfaces", async ({ page }) => {
@@ -777,23 +777,23 @@ test("switches between Documents and Files explorer modes", async ({ page }) => 
   await expect(explorer.getByRole("button", { name: /rise-budget-review\.pdf/ })).toBeVisible();
   await explorer.getByRole("button", { name: "모두 접기" }).click();
   await expect(explorer.getByRole("button", { name: /rise-budget-review\.pdf/ })).toHaveCount(0);
-  await expect(explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ })).toHaveCount(0);
+  await expect(explorer.getByRole("button", { name: /maru-weekly-meeting\.md/ })).toHaveCount(0);
 
   await explorer.getByRole("button", { name: "전체" }).click();
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
-  await explorer.getByRole("button", { name: /anchor-glossary\.md/ }).dblclick();
-  await expect(page.locator(".document-tab-title", { hasText: "Anchor 용어집" })).toBeVisible();
+  await explorer.getByRole("button", { name: /maru-glossary\.md/ }).dblclick();
+  await expect(page.locator(".document-tab-title", { hasText: "Maru 용어집" })).toBeVisible();
   await explorer.getByRole("button", { name: "모두 접기" }).click();
-  await expect(explorer.getByRole("button", { name: /anchor-glossary\.md/ })).toHaveCount(0);
+  await expect(explorer.getByRole("button", { name: /maru-glossary\.md/ })).toHaveCount(0);
 
-  await page.locator(".document-tab[title='references/anchor-glossary.md']").click({
+  await page.locator(".document-tab[title='references/maru-glossary.md']").click({
     button: "right",
   });
   await page
     .locator(".document-tab-context-menu")
     .getByRole("menuitem", { name: "Explorer View에서 보기" })
     .click();
-  const revealedFile = explorer.getByRole("button", { name: /anchor-glossary\.md/ });
+  const revealedFile = explorer.getByRole("button", { name: /maru-glossary\.md/ });
   await expect(explorer.getByRole("button", { name: "Files" })).toHaveClass(/active/);
   await expect(revealedFile).toBeVisible();
   await expect(revealedFile).toBeFocused();
@@ -804,14 +804,14 @@ test("queues selected files in the right Files pane and applies explicitly", asy
 
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "Files" }).click();
-  await explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ }).click();
+  await explorer.getByRole("button", { name: /maru-weekly-meeting\.md/ }).click();
   await explorer.getByRole("button", { name: "선택 파일 추가" }).click();
 
   const rightPane = page.locator(".outline-pane");
   await expect(rightPane.getByRole("tab", { name: "파일" })).toHaveAttribute("aria-selected", "true");
   await expect(rightPane.getByRole("button", { name: "아이콘 보기" })).toHaveClass(/active/);
   await expect(rightPane.locator(".right-list.file-shelf-icons")).toBeVisible();
-  await expect(rightPane.locator(".right-list-item.queue", { hasText: "anchor-weekly-meeting.md" })).toBeVisible();
+  await expect(rightPane.locator(".right-list-item.queue", { hasText: "maru-weekly-meeting.md" })).toBeVisible();
   await expect(rightPane.locator('.queue-file-icon[data-kind="markdown"]')).toBeVisible();
   await rightPane.getByRole("button", { name: "리스트 보기" }).click();
   await expect(rightPane.locator(".right-list.file-shelf-icons")).toHaveCount(0);
@@ -825,7 +825,7 @@ test("clears selected and all file shelf items explicitly", async ({ page }) => 
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "Files" }).click();
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
-  await explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ }).click();
+  await explorer.getByRole("button", { name: /maru-weekly-meeting\.md/ }).click();
   await explorer.getByRole("button", { name: "선택 파일 추가" }).click();
   await explorer.getByRole("button", { name: /minutes-template\.md/ }).click();
   await explorer.getByRole("button", { name: "선택 파일 추가" }).click();
@@ -837,7 +837,7 @@ test("clears selected and all file shelf items explicitly", async ({ page }) => 
   await rightPane.locator(".right-list-item.queue", { hasText: "minutes-template.md" }).click();
   await rightPane.getByRole("button", { name: "선택 항목 1개 비우기" }).click();
   await expect(rightPane.locator(".right-list-item.queue", { hasText: "minutes-template.md" })).toHaveCount(0);
-  await expect(rightPane.locator(".right-list-item.queue", { hasText: "anchor-weekly-meeting.md" })).toBeVisible();
+  await expect(rightPane.locator(".right-list-item.queue", { hasText: "maru-weekly-meeting.md" })).toBeVisible();
 
   await rightPane.getByRole("button", { name: "전체 비우기" }).click();
   await expect(rightPane.locator(".right-list-item.queue")).toHaveCount(0);
@@ -850,7 +850,7 @@ test("copies selected Files shelf items into a tree context target", async ({ pa
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "Files" }).click();
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
-  await explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ }).click();
+  await explorer.getByRole("button", { name: /maru-weekly-meeting\.md/ }).click();
   await explorer.getByRole("button", { name: "선택 파일 추가" }).click();
   await explorer.getByRole("button", { name: /minutes-template\.md/ }).click();
   await explorer.getByRole("button", { name: "선택 파일 추가" }).click();
@@ -858,7 +858,7 @@ test("copies selected Files shelf items into a tree context target", async ({ pa
   const rightPane = page.locator(".outline-pane");
   await rightPane.getByRole("tab", { name: "파일" }).click();
   const weeklyItem = rightPane.locator(".right-list-item.queue", {
-    hasText: "anchor-weekly-meeting.md",
+    hasText: "maru-weekly-meeting.md",
   });
   const templateItem = rightPane.locator(".right-list-item.queue", {
     hasText: "minutes-template.md",
@@ -880,7 +880,7 @@ test("drags a Documents list item into the right Files shelf", async ({ page }) 
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "목록" }).click();
   await page
-    .locator(".document-list .doc-row", { hasText: "Anchor 사업 주간 점검 회의" })
+    .locator(".document-list .doc-row", { hasText: "Maru 사업 주간 점검 회의" })
     .dragTo(page.getByRole("tab", { name: "파일" }));
 
   const rightPane = page.locator(".outline-pane");
@@ -889,7 +889,7 @@ test("drags a Documents list item into the right Files shelf", async ({ page }) 
     "true",
   );
   await expect(
-    rightPane.locator(".right-list-item.queue", { hasText: "anchor-weekly-meeting.md" }),
+    rightPane.locator(".right-list-item.queue", { hasText: "maru-weekly-meeting.md" }),
   ).toBeVisible();
 });
 
@@ -899,7 +899,7 @@ test("drags explorer items directly onto left tree targets", async ({ page }) =>
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
   await page
-    .locator(".document-list .tree-row.file", { hasText: "Anchor 사업 주간 점검 회의" })
+    .locator(".document-list .tree-row.file", { hasText: "Maru 사업 주간 점검 회의" })
     .dragTo(page.locator(".document-list .tree-row.folder", { hasText: "references" }));
 
   const rightPane = page.locator(".outline-pane");
@@ -916,13 +916,13 @@ test("drags multi-selected Files rows and folder rows", async ({ page }) => {
   const explorer = page.locator(".document-list");
   await explorer.getByRole("button", { name: "Files" }).click();
   await explorer.getByRole("button", { name: "모두 펴기" }).click();
-  await explorer.getByRole("button", { name: /anchor-weekly-meeting\.md/ }).click();
+  await explorer.getByRole("button", { name: /maru-weekly-meeting\.md/ }).click();
   await explorer.getByRole("button", { name: /minutes-template\.md/ }).click({
     modifiers: ["Meta"],
   });
 
   await page
-    .locator(".document-list .tree-row.file", { hasText: "anchor-weekly-meeting.md" })
+    .locator(".document-list .tree-row.file", { hasText: "maru-weekly-meeting.md" })
     .dragTo(page.locator(".document-list .tree-row.folder", { hasText: "attachments" }));
 
   const rightPane = page.locator(".outline-pane");
@@ -949,7 +949,7 @@ test("blocks moving dirty open documents by drag and drop", async ({ page }) => 
   await dispatchDrag(
     page,
     ".document-list .tree-row.file",
-    "Anchor 사업 주간 점검 회의",
+    "Maru 사업 주간 점검 회의",
     ".document-list .tree-row.folder",
     "references",
     true,
@@ -1102,7 +1102,7 @@ test("centers the empty editor placeholder", async ({ page }) => {
 });
 
 test("keeps the settings window content anchored at the top", async ({ page }) => {
-  await page.goto("/?window=settings&workPath=mock://anchor-sample-workspace");
+  await page.goto("/?window=settings&workPath=mock://maru-sample-workspace");
 
   const pane = page.locator(".settings-window-shell .system-pane");
   const header = pane.locator(".system-header");

@@ -123,7 +123,7 @@ pub fn validate_manifest(manifest_path: &Path) -> io::Result<ValidationReport> {
 /// Recover the workspace root from the manifest path by walking up until
 /// we exit the bundle directory. The manifest lives at
 /// `<workspace_root>/<bundle_dir>/manifest.yaml`. We treat the parent of
-/// the bundle directory as the workspace anchor.
+/// the bundle directory as the workspace maru.
 ///
 /// Callers can also pass an absolute path that already resolves correctly.
 fn workspace_root_from_manifest(manifest_path: &Path) -> io::Result<PathBuf> {

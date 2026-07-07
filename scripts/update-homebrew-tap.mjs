@@ -5,8 +5,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const releaseRepo = process.env.ANCHOR_RELEASE_REPO ?? "STAIxBWLB/anchor";
-const tapRepo = process.env.ANCHOR_HOMEBREW_TAP ?? "STAIxBWLB/homebrew-cask";
+const releaseRepo = process.env.MARU_RELEASE_REPO ?? "STAIxBWLB/maru";
+const tapRepo = process.env.MARU_HOMEBREW_TAP ?? "STAIxBWLB/homebrew-cask";
 const [tag, tapDirArg, ...options] = process.argv.slice(2);
 const shouldCommit = options.includes("--commit");
 const shouldPush = options.includes("--push");
@@ -40,10 +40,10 @@ function sha256For(name) {
 
 const replacements = {
   VERSION: version,
-  APP_ARM_SHA256: sha256For(`Anchor_${version}_darwin_aarch64_dmg.dmg`),
-  APP_INTEL_SHA256: sha256For(`Anchor_${version}_darwin_x64_dmg.dmg`),
-  CLI_ARM_SHA256: sha256For(`anchor-cli_${version}_darwin_aarch64.tar.gz`),
-  CLI_INTEL_SHA256: sha256For(`anchor-cli_${version}_darwin_x86_64.tar.gz`),
+  APP_ARM_SHA256: sha256For(`Maru_${version}_darwin_aarch64_dmg.dmg`),
+  APP_INTEL_SHA256: sha256For(`Maru_${version}_darwin_x64_dmg.dmg`),
+  CLI_ARM_SHA256: sha256For(`maru-cli_${version}_darwin_aarch64.tar.gz`),
+  CLI_INTEL_SHA256: sha256For(`maru-cli_${version}_darwin_x86_64.tar.gz`),
 };
 
 function renderTemplate(templatePath, outputPath) {
@@ -56,35 +56,42 @@ function renderTemplate(templatePath, outputPath) {
   console.log(`wrote ${outputPath}`);
 }
 
-const appCaskPath = resolve(tapDir, "Casks/anchor-workspace.rb");
-const legacyAppCaskPath = resolve(tapDir, "Casks/anchor.rb");
-const hadLegacyAppCask = existsSync(legacyAppCaskPath);
+const appCaskPath = resolve(tapDir, "Casks/maru-workspace.rb");
+// Pre-M0 anchor-era artifacts, removed one-time on the first Maru release
+// (DR-024 §6; mirrors the earlier anchor.rb → anchor-workspace.rb migration).
+const legacyPaths = ["Casks/anchor.rb", "Casks/anchor-workspace.rb", "Formula/anchor-cli.rb"];
+const removedLegacy = [];
 
 renderTemplate(
-  resolve(repoRoot, "packaging/homebrew/Casks/anchor-workspace.rb.template"),
+  resolve(repoRoot, "packaging/homebrew/Casks/maru-workspace.rb.template"),
   appCaskPath,
 );
-if (hadLegacyAppCask) {
-  unlinkSync(legacyAppCaskPath);
-  console.log(`removed ${legacyAppCaskPath}`);
+for (const legacyRel of legacyPaths) {
+  const legacyPath = resolve(tapDir, legacyRel);
+  if (existsSync(legacyPath)) {
+    unlinkSync(legacyPath);
+    removedLegacy.push(legacyRel);
+    console.log(`removed ${legacyPath}`);
+  }
 }
 renderTemplate(
-  resolve(repoRoot, "packaging/homebrew/Formula/anchor-cli.rb.template"),
-  resolve(tapDir, "Formula/anchor-cli.rb"),
+  resolve(repoRoot, "packaging/homebrew/Formula/maru-cli.rb.template"),
+  resolve(tapDir, "Formula/maru-cli.rb"),
 );
 
 if (shouldCommit || shouldPush) {
-  const pathsToStage = ["Casks/anchor-workspace.rb", "Formula/anchor-cli.rb"];
-  if (hadLegacyAppCask) {
-    pathsToStage.unshift("Casks/anchor.rb");
-  }
+  const pathsToStage = [
+    ...removedLegacy,
+    "Casks/maru-workspace.rb",
+    "Formula/maru-cli.rb",
+  ];
   execFileSync("git", ["-C", tapDir, "add", "--all", ...pathsToStage], {
     stdio: "inherit",
   });
 }
 
 if (shouldCommit) {
-  execFileSync("git", ["-C", tapDir, "commit", "-m", `anchor: update to ${tag}`], {
+  execFileSync("git", ["-C", tapDir, "commit", "-m", `maru: update to ${tag}`], {
     stdio: "inherit",
   });
 }
@@ -97,14 +104,16 @@ console.log("");
 console.log(`Homebrew tap target: ${tapRepo}`);
 console.log("Next:");
 console.log(`  cd ${tapDir}`);
-console.log("  brew audit --cask anchor-workspace");
-console.log("  brew audit --formula anchor-cli");
+console.log("  brew audit --cask maru-workspace");
+console.log("  brew audit --formula maru-cli");
 if (!shouldCommit) {
-  const pathsForNextSteps = hadLegacyAppCask
-    ? "Casks/anchor.rb Casks/anchor-workspace.rb Formula/anchor-cli.rb"
-    : "Casks/anchor-workspace.rb Formula/anchor-cli.rb";
+  const pathsForNextSteps = [
+    ...removedLegacy,
+    "Casks/maru-workspace.rb",
+    "Formula/maru-cli.rb",
+  ].join(" ");
   console.log(`  git diff -- ${pathsForNextSteps}`);
   console.log(
-    `  git add --all ${pathsForNextSteps} && git commit -m "anchor: update to ${tag}"`,
+    `  git add --all ${pathsForNextSteps} && git commit -m "maru: update to ${tag}"`,
   );
 }

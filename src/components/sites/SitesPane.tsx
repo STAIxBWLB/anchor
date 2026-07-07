@@ -9,7 +9,7 @@ import {
   RotateCw,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { readSites, saveSites } from "../../lib/anchorDir";
+import { readSites, saveSites } from "../../lib/maruDir";
 import { clipboardWriteText } from "../../lib/clipboard";
 import { useTranslation } from "../../lib/i18n";
 import {

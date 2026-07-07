@@ -13,7 +13,7 @@ use include_dir::{include_dir, Dir};
 
 use crate::skill_host::fs as host_fs;
 
-const VAULT_CACHE_REL: &[&str] = &[".anchor", "cache", "workspace-index-v2.json"];
+const VAULT_CACHE_REL: &[&str] = &[".maru", "cache", "workspace-index-v2.json"];
 const GENERATED_DIRS: &[&str] = &[
     "node_modules",
     "target",
@@ -222,7 +222,7 @@ pub fn default_vault_path() -> Result<String, String> {
 
 #[tauri::command]
 pub fn sample_workspace_path() -> Result<String, String> {
-    let root = host_fs::anchor_home()?.join("sample-workspace");
+    let root = host_fs::maru_home()?.join("sample-workspace");
     host_fs::ensure_dir(&root)?;
     seed_dir_if_missing(&SAMPLE_WORKSPACE_DIR, &root)?;
     Ok(root.to_string_lossy().to_string())
@@ -236,7 +236,7 @@ pub fn sample_workspace_path() -> Result<String, String> {
 fn seed_dir_if_missing(dir: &Dir<'_>, root: &Path) -> Result<(), String> {
     for file in dir.files() {
         // `file.path()` is the path relative to the embed root, e.g.
-        // `references/anchor-glossary.md`, so it joins straight onto `root`.
+        // `references/maru-glossary.md`, so it joins straight onto `root`.
         let target = root.join(file.path());
         if target.exists() {
             continue;
@@ -261,7 +261,7 @@ pub fn scan_vault(
 ) -> Result<Vec<VaultEntry>, String> {
     let vault = normalize_existing_dir(&vault_path)?;
     let scan_filter = ScanFilter::from_options(scan_options)?;
-    let ignore_patterns = load_anchorignore(&vault);
+    let ignore_patterns = load_maruignore(&vault);
     let version_names = collect_version_names(&vault);
 
     // Collect candidate paths sequentially (walkdir isn't thread-safe and
@@ -285,7 +285,7 @@ pub fn scan_vault(
                 return false;
             }
             let rel = path.strip_prefix(&vault).unwrap_or(path);
-            !matches_anchorignore(rel, &ignore_patterns)
+            !matches_maruignore(rel, &ignore_patterns)
         })
         .filter_map(Result::ok)
     {
@@ -530,22 +530,27 @@ fn read_entry(path: &Path, vault: &Path, version_names: &[String]) -> Result<Vau
 }
 
 /// Built-in patterns that any workspace should ignore even without an
-/// explicit `.anchorignore`. macOS / Windows / git noise that has
+/// explicit `.maruignore`. macOS / Windows / git noise that has
 /// nothing to do with the user's notes.
-pub const DEFAULT_ANCHOR_IGNORE: &[&str] =
+pub const DEFAULT_MARU_IGNORE: &[&str] =
     &[".DS_Store", ".gitkeep", ".keep", "Thumbs.db", "Icon\r"];
 
-/// Load `.anchorignore` patterns from the workspace root, merged with the
+/// Load `.maruignore` patterns from the workspace root, merged with the
 /// built-in defaults. Each non-comment, non-empty line is a pattern.
 /// Comparison is plain prefix / segment match (no glob support yet —
 /// gitignore-like patterns can be added in Phase 1 if real-world workspaces
 /// need them).
-pub fn load_anchorignore(vault: &Path) -> Vec<String> {
-    let mut patterns: Vec<String> = DEFAULT_ANCHOR_IGNORE
+pub fn load_maruignore(vault: &Path) -> Vec<String> {
+    let mut patterns: Vec<String> = DEFAULT_MARU_IGNORE
         .iter()
         .map(|p| (*p).to_string())
         .collect();
-    let path = vault.join(".anchorignore");
+    // `.maruignore` preferred; fall back to the pre-M0 `.anchorignore` so
+    // existing user vaults keep working (DR-024 §5).
+    let mut path = vault.join(".maruignore");
+    if !path.exists() {
+        path = vault.join(".anchorignore");
+    }
     if !path.exists() {
         return patterns;
     }
@@ -565,7 +570,7 @@ pub fn load_anchorignore(vault: &Path) -> Vec<String> {
     patterns
 }
 
-pub fn matches_anchorignore(rel_path: &Path, patterns: &[String]) -> bool {
+pub fn matches_maruignore(rel_path: &Path, patterns: &[String]) -> bool {
     if patterns.is_empty() {
         return false;
     }
@@ -603,7 +608,7 @@ fn count_versions_from_names(path: &Path, version_names: &[String]) -> usize {
 }
 
 fn collect_version_names(vault: &Path) -> Vec<String> {
-    let dir = vault.join(".anchor").join("versions");
+    let dir = vault.join(".maru").join("versions");
     if !dir.exists() {
         return Vec::new();
     }
@@ -669,10 +674,10 @@ mod tests {
     }
 
     #[test]
-    fn scan_vault_respects_anchorignore() {
+    fn scan_vault_respects_maruignore() {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
-        write_file(root, ".anchorignore", "skipme\n_sys/env\n");
+        write_file(root, ".maruignore", "skipme\n_sys/env\n");
         write_file(root, "keep.md", "# Keep\n");
         write_file(root, "skipme/inside.md", "# Inside\n");
         write_file(root, "_sys/env/python.md", "# Python\n");
@@ -874,8 +879,8 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path();
         write_file(root, "report.md", "# Report\n");
-        write_file(root, ".anchor/versions/report-20260503.md", "# Old\n");
-        write_file(root, ".anchor/versions/report-20260504.md", "# Older\n");
+        write_file(root, ".maru/versions/report-20260503.md", "# Old\n");
+        write_file(root, ".maru/versions/report-20260504.md", "# Older\n");
         let entries = scan_vault(root.to_string_lossy().to_string(), None).unwrap();
         let report = entries
             .iter()
@@ -914,13 +919,13 @@ mod tests {
 
     /// Bench harness for ad-hoc perf measurement on a real workspace. Ignored by
     /// default — run with `cargo test bench_scan_real_workspace -- --ignored
-    /// --nocapture --test-threads=1` (set ANCHOR_BENCH_WORKSPACE to override).
+    /// --nocapture --test-threads=1` (set MARU_BENCH_WORKSPACE to override).
     /// Use this before reaching for a workspace cache: tolaria's cache lift is
     /// 1,400 LOC, so confirm scan_vault is actually slow first.
     #[test]
     #[ignore]
     fn bench_scan_real_workspace() {
-        let path = std::env::var("ANCHOR_BENCH_WORKSPACE")
+        let path = std::env::var("MARU_BENCH_WORKSPACE")
             .unwrap_or_else(|_| "/Users/yj.lee/workspace/work".to_string());
         let t0 = std::time::Instant::now();
         let entries = scan_vault(path.clone(), None).expect("scan failed");
@@ -939,13 +944,13 @@ mod tests {
         seed_dir_if_missing(&SAMPLE_WORKSPACE_DIR, root).unwrap();
         // A top-level note, the dotfile, the nested dot-dir snapshot, and a note
         // with a Korean + whitespace filename must all materialize.
-        assert!(root.join("2026-anchor-project-report.md").is_file());
-        assert!(root.join(".anchorignore").is_file());
+        assert!(root.join("2026-maru-project-report.md").is_file());
+        assert!(root.join(".maruignore").is_file());
         assert!(root
-            .join(".anchor/versions/2026-anchor-project-report-20260424-173000.md")
+            .join(".maru/versions/2026-maru-project-report-20260424-173000.md")
             .is_file());
         assert!(root
-            .join("meetings/2026/2026-04/04-20 회의 - Anchor 사업 주간 점검 - KPI.md")
+            .join("meetings/2026/2026-04/04-20 회의 - Maru 사업 주간 점검 - KPI.md")
             .is_file());
     }
 
@@ -955,7 +960,7 @@ mod tests {
         let root = tmp.path();
         seed_dir_if_missing(&SAMPLE_WORKSPACE_DIR, root).unwrap();
 
-        let edited = root.join("2026-anchor-project-report.md");
+        let edited = root.join("2026-maru-project-report.md");
         fs::write(&edited, "# my own notes\n").unwrap();
 
         // Re-seeding must not error and must leave the user's edit untouched.

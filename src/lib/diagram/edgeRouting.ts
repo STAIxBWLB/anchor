@@ -15,8 +15,8 @@ import { portPoint } from "./geometry";
 import type { DiagramEdge, DiagramNode } from "./types";
 
 export const ARROW_MARKER_ID = {
-  filled: "anchor-diagram-arrow-filled",
-  open: "anchor-diagram-arrow-open",
+  filled: "maru-diagram-arrow-filled",
+  open: "maru-diagram-arrow-open",
 } as const;
 
 export type ArrowKind = keyof typeof ARROW_MARKER_ID;

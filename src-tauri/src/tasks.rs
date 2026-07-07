@@ -2,7 +2,7 @@ use crate::frontmatter::{update_frontmatter_content, FrontmatterValue};
 use crate::vault::{
     lexical_normalize, normalize_existing_dir, parse_frontmatter, resolve_inside_vault, slugify,
 };
-use crate::vault_list::{assert_anchor_can_write, WorkspaceWriteAction};
+use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -227,7 +227,7 @@ pub fn create_task_note(
     draft: CreateTaskDraft,
     root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Create)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Create)?;
     let work = normalize_existing_dir(&work_path)?;
     let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
     let bucket_root = tasks_root.join(draft.bucket.as_str());
@@ -271,7 +271,7 @@ pub fn update_task_status(
     status: TaskStatus,
     root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
     let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
@@ -290,7 +290,7 @@ pub fn update_task_status(
     if current_bucket == target_bucket {
         return task_row_for_path(&work, &path, current_bucket);
     }
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
     let target = conflict_free_path(&target_path_for_bucket(&tasks_root, &path, target_bucket)?);
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("Cannot create task target: {err}"))?;
@@ -305,7 +305,7 @@ pub fn update_task_schedule_fields(
     rel_path: String,
     fields: UpdateTaskScheduleFields,
 ) -> Result<TaskNoteRow, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
     let original =
@@ -331,7 +331,7 @@ pub fn update_task_details(
     fields: UpdateTaskDetailsFields,
     root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::Modify)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
     let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
@@ -377,7 +377,7 @@ pub fn update_task_details(
     let target_bucket = target_status.target_bucket();
     if fields.status.is_some() && target_status != current_status && current_bucket != target_bucket
     {
-        assert_anchor_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
+        assert_maru_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
         let target =
             conflict_free_path(&target_path_for_bucket(&tasks_root, &path, target_bucket)?);
         if let Some(parent) = target.parent() {
@@ -398,7 +398,7 @@ pub fn move_task_note(
     target_bucket: TaskBucket,
     root: Option<String>,
 ) -> Result<TaskNoteRow, String> {
-    assert_anchor_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
+    assert_maru_can_write(&work_path, WorkspaceWriteAction::RenameMove)?;
     let work = normalize_existing_dir(&work_path)?;
     let path = resolve_inside_vault(&work_path, &rel_path)?;
     let tasks_root = resolve_tasks_root(&work, root.as_deref().unwrap_or("tasks"))?;
@@ -417,7 +417,7 @@ pub fn move_task_note(
 #[tauri::command]
 pub fn append_tasks_log(work_path: String, line: String) -> Result<(), String> {
     let work = normalize_existing_dir(&work_path)?;
-    let log_path = work.join(".anchor").join("tasks-log.md");
+    let log_path = work.join(".maru").join("tasks-log.md");
     if let Some(parent) = log_path.parent() {
         fs::create_dir_all(parent).map_err(|err| format!("Cannot create tasks log dir: {err}"))?;
     }
@@ -437,7 +437,7 @@ pub fn read_tasks_log(
     event_filter: Option<Vec<String>>,
 ) -> Result<Vec<TasksLogLine>, String> {
     let work = normalize_existing_dir(&work_path)?;
-    let log_path = work.join(".anchor").join("tasks-log.md");
+    let log_path = work.join(".maru").join("tasks-log.md");
     if !log_path.exists() {
         return Ok(Vec::new());
     }
@@ -857,7 +857,7 @@ mod tests {
         fs::create_dir_all(note.parent().unwrap()).unwrap();
         fs::write(
             &note,
-            "---\ntags:\n  - tasks\ntopics:\n  - anchor\nstatus: active\n---\n# Body\n\nText",
+            "---\ntags:\n  - tasks\ntopics:\n  - maru\nstatus: active\n---\n# Body\n\nText",
         )
         .unwrap();
 
@@ -867,7 +867,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(metadata.tags, vec!["anchor", "tasks"]);
+        assert_eq!(metadata.tags, vec!["maru", "tasks"]);
         assert_eq!(metadata.frontmatter["status"], json!("active"));
         assert_eq!(metadata.body, "# Body\n\nText");
         assert!(metadata.preview.contains("# Body"));
@@ -939,7 +939,7 @@ mod tests {
             tmp.path().to_string_lossy().to_string(),
             "tasks/active/task.md".to_string(),
             UpdateTaskScheduleFields {
-                project: Some(Some("Anchor".to_string())),
+                project: Some(Some("Maru".to_string())),
                 priority: Some(Some("high".to_string())),
                 due: Some(Some("2026-05-15".to_string())),
                 calendar_start: Some(Some("2026-05-15T09:00".to_string())),
@@ -953,7 +953,7 @@ mod tests {
         let raw = fs::read_to_string(&note).unwrap();
         assert!(raw.contains("status: active"));
         assert!(raw.contains("owner: Luca"));
-        assert!(raw.contains("project: Anchor"));
+        assert!(raw.contains("project: Maru"));
         assert!(raw.contains("priority: high"));
         assert!(raw.contains("due: 2026-05-15"));
         assert!(raw.contains("calendarStart: \"2026-05-15T09:00\""));
@@ -970,7 +970,7 @@ mod tests {
             tmp.path().to_string_lossy().to_string(),
             "../outside.md".to_string(),
             UpdateTaskScheduleFields {
-                project: Some(Some("Anchor".to_string())),
+                project: Some(Some("Maru".to_string())),
                 priority: None,
                 due: None,
                 calendar_start: None,
@@ -990,7 +990,7 @@ mod tests {
         fs::create_dir_all(note.parent().unwrap()).unwrap();
         fs::write(
             &note,
-            "---\nproject: Anchor\ndue: 2026-05-15\ncalendarStart: 2026-05-15T09:00\nestimateMinutes: 45\n---\n# Body\n",
+            "---\nproject: Maru\ndue: 2026-05-15\ncalendarStart: 2026-05-15T09:00\nestimateMinutes: 45\n---\n# Body\n",
         )
         .unwrap();
 
@@ -1019,7 +1019,7 @@ mod tests {
     #[test]
     fn update_task_schedule_fields_rejects_unknown_fields() {
         let err = serde_json::from_value::<UpdateTaskScheduleFields>(json!({
-            "project": "Anchor",
+            "project": "Maru",
             "unknown": "no",
         }))
         .unwrap_err();
@@ -1044,7 +1044,7 @@ mod tests {
             UpdateTaskDetailsFields {
                 title: Some("New title".to_string()),
                 status: Some(TaskStatus::InProgress),
-                project: Some(Some("Anchor".to_string())),
+                project: Some(Some("Maru".to_string())),
                 priority: Some(Some("high".to_string())),
                 due: Some(Some("2026-05-15".to_string())),
                 calendar_start: Some(Some("2026-05-15T09:00".to_string())),
@@ -1063,7 +1063,7 @@ mod tests {
         assert!(raw.contains("# keep this comment"));
         assert!(raw.contains("owner: Luca"));
         assert!(raw.contains("- keep"));
-        assert!(raw.contains("project: Anchor"));
+        assert!(raw.contains("project: Maru"));
         assert!(raw.contains("priority: high"));
         assert!(raw.contains("due: 2026-05-15"));
         assert!(raw.contains("calendarStart: \"2026-05-15T09:00\""));
@@ -1144,7 +1144,7 @@ mod tests {
             tmp.path().to_string_lossy().to_string(),
             "../outside.md".to_string(),
             UpdateTaskDetailsFields {
-                title: Some("Anchor".to_string()),
+                title: Some("Maru".to_string()),
                 status: None,
                 project: None,
                 priority: None,

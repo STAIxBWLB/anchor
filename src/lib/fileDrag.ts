@@ -1,7 +1,7 @@
 import type { FileQueueSourceKind, FileStoreOperation } from "./types";
 
-export const EXPLORER_DRAG_MIME = "application/x-anchor-explorer-items";
-export const FILE_QUEUE_DRAG_MIME = "application/x-anchor-file-queue";
+export const EXPLORER_DRAG_MIME = "application/x-maru-explorer-items";
+export const FILE_QUEUE_DRAG_MIME = "application/x-maru-file-queue";
 
 export type ExplorerDragOrigin = "documents" | "files";
 

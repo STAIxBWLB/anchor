@@ -191,11 +191,11 @@ export function MeetingsPane({
   const [metadata, setMetadata] = useState<MeetingMetadata | null>(null);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const clearedRunStorageKey = useMemo(
-    () => `anchor:meetings:cleared-runs:${workPath ?? "no-workspace"}`,
+    () => `maru:meetings:cleared-runs:${workPath ?? "no-workspace"}`,
     [workPath],
   );
   const progressDockStorageKey = useMemo(
-    () => `anchor:meetings:progress-dock:${workPath ?? "no-workspace"}`,
+    () => `maru:meetings:progress-dock:${workPath ?? "no-workspace"}`,
     [workPath],
   );
   const [clearedRunIds, setClearedRunIds] = useState<Set<string>>(() =>

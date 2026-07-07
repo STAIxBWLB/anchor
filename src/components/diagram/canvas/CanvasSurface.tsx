@@ -508,7 +508,7 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
   return (
     <svg
       ref={svgRef}
-      className="anchor-diagram-canvas"
+      className="maru-diagram-canvas"
       role="application"
       aria-label="Diagram canvas"
       onPointerDown={onSurfacePointerDown}

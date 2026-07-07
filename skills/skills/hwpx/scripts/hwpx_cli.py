@@ -353,7 +353,7 @@ def _hwp_env() -> dict:
     """hwp-cli 서브프로세스 환경 — PDF 폰트 임베드를 위해 HWP_FONT_DIR 보강."""
     env = dict(os.environ)
     if "HWP_FONT_DIR" not in env:
-        for cand in (Path.home() / ".anchor/env/fonts", Path.home() / "Library/Fonts"):
+        for cand in (Path.home() / ".maru/env/fonts", Path.home() / "Library/Fonts"):
             if cand.is_dir():
                 env["HWP_FONT_DIR"] = str(cand)
                 break
@@ -553,7 +553,7 @@ def cmd_fill(args) -> int:
     total = summary.get("replaced", 0)
     unfilled = [a for a, n in counts.items() if n == 0]
     if unfilled:
-        print(f"[hwpx] ⚠️  미치환 anchor {len(unfilled)}건: {', '.join(unfilled)}", file=sys.stderr)
+        print(f"[hwpx] ⚠️  미치환 maru {len(unfilled)}건: {', '.join(unfilled)}", file=sys.stderr)
     print(f"[hwpx] {total}건 치환 -> {out}", file=sys.stderr)
     return 0
 

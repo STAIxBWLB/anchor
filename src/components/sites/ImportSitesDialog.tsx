@@ -1,6 +1,6 @@
 import { Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { scanWorkSites } from "../../lib/anchorDir";
+import { scanWorkSites } from "../../lib/maruDir";
 import { useTranslation } from "../../lib/i18n";
 import {
   candidateToSite,

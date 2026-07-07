@@ -527,7 +527,7 @@ fn default_term_program(kind: &str) -> &'static str {
     if kind == "claude" || kind == "codex" {
         "ghostty"
     } else {
-        "Anchor"
+        "Maru"
     }
 }
 
@@ -630,7 +630,7 @@ mod tests {
         let shell = build_terminal_command_spec("shell", Some(&cwd_str), None, None, None).unwrap();
         assert!(!shell.program.is_empty());
         assert!(shell.args.is_empty());
-        assert_eq!(shell.extra_env["TERM_PROGRAM"], "Anchor");
+        assert_eq!(shell.extra_env["TERM_PROGRAM"], "Maru");
     }
 
     #[test]
@@ -664,7 +664,7 @@ mod tests {
     fn cwd_must_exist_and_be_a_directory() {
         let missing = env::current_dir()
             .unwrap()
-            .join("definitely-missing-anchor-cwd");
+            .join("definitely-missing-maru-cwd");
         let err = build_terminal_command_spec(
             "shell",
             Some(&missing.to_string_lossy()),

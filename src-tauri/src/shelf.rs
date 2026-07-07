@@ -52,7 +52,7 @@ pub fn store_shelf_files(
     sources: Vec<String>,
     operation: FileStoreOperation,
 ) -> Result<Vec<StoredFileOutcome>, String> {
-    let target_dir = resolve_inside_vault(&vault_path, ".anchor/stash/files")?;
+    let target_dir = resolve_inside_vault(&vault_path, ".maru/stash/files")?;
     store_files_into_dir(&sources, &target_dir, operation)
 }
 
@@ -226,14 +226,14 @@ fn unique_path(candidate: PathBuf) -> PathBuf {
 }
 
 fn memo_dir(vault_path: &str) -> Result<PathBuf, String> {
-    resolve_inside_vault(vault_path, ".anchor/memos")
+    resolve_inside_vault(vault_path, ".maru/memos")
 }
 
 fn resolve_memo_path(vault_path: &str, memo_path: &str) -> Result<PathBuf, String> {
     let dir = memo_dir(vault_path)?;
     let path = resolve_inside_vault(vault_path, memo_path)?;
     if !path.starts_with(&dir) {
-        return Err("Memo path escapes .anchor/memos".to_string());
+        return Err("Memo path escapes .maru/memos".to_string());
     }
     Ok(path)
 }
@@ -344,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn default_memos_stay_under_anchor() {
+    fn default_memos_stay_under_maru() {
         let tmp = TempDir::new().unwrap();
         let doc = save_memo(
             tmp.path().to_string_lossy().to_string(),
@@ -353,7 +353,7 @@ mod tests {
             "# Daily".to_string(),
         )
         .unwrap();
-        assert!(doc.entry.path.contains(".anchor/memos/daily.md"));
+        assert!(doc.entry.path.contains(".maru/memos/daily.md"));
         let list = list_memos(tmp.path().to_string_lossy().to_string()).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "daily.md");
@@ -368,7 +368,7 @@ mod tests {
             "outside.md".to_string(),
         )
         .unwrap_err();
-        assert!(err.contains(".anchor/memos"));
+        assert!(err.contains(".maru/memos"));
     }
 
     #[test]
@@ -382,7 +382,7 @@ mod tests {
         )
         .unwrap();
         let memo_path = PathBuf::from(&doc.entry.path);
-        assert!(doc.entry.path.contains(".anchor/memos/scratch.txt"));
+        assert!(doc.entry.path.contains(".maru/memos/scratch.txt"));
         assert!(memo_path.exists());
 
         delete_memo(
@@ -397,7 +397,7 @@ mod tests {
             "outside.txt".to_string(),
         )
         .unwrap_err();
-        assert!(err.contains(".anchor/memos"));
+        assert!(err.contains(".maru/memos"));
     }
 
     #[test]

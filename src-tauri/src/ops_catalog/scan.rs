@@ -2,13 +2,13 @@
 //
 // Pipeline:
 //   1. project-registry.yaml → 활성 사업단 슬러그 + program_id 인덱스
-//   2. projects/**/.anchor/bu-config.yaml + admin/**/.anchor/bu-config.yaml 수집
+//   2. projects/**/.maru/bu-config.yaml + admin/**/.maru/bu-config.yaml 수집
 //   3. inbox/items/pending/<slug>/manifest.yaml → InboxPending 엔트리
 //   4. tasks/active/ + tasks/calendar/ frontmatter → TaskDue 엔트리
 //   5. 워크스페이스 .md 파일 frontmatter 스캔 → DeadlineDue / ApprovalInFlight
 //   6. binary 옆에 .evidence.yaml 사이드카가 없으면 → EvidenceUnlinked
 //
-// 출력: <workspace>/.anchor/cache/catalog.json (CatalogIndex JSON)
+// 출력: <workspace>/.maru/cache/catalog.json (CatalogIndex JSON)
 //
 // Spec: plan §M1, _sys/rules/bu-lifecycle.md, frontmatter-schema.md, evidence-policy.md
 
@@ -151,7 +151,7 @@ fn collect_bu_configs(
             .min_depth(1)
             .max_depth(6)
             .into_iter()
-            // 단, `.anchor/` 자체는 BU config 수집을 위해 통과시킨다 (단 .anchor/cache, .anchor/runs 등은 제외).
+            // 단, `.maru/` 자체는 BU config 수집을 위해 통과시킨다 (단 .maru/cache, .maru/runs 등은 제외).
             .filter_entry(|e| !is_excluded_dir_for_bu_scan(e.path()))
             .filter_map(Result::ok)
         {
@@ -160,7 +160,7 @@ fn collect_bu_configs(
             }
             let p = entry.path();
             if p.file_name().map_or(false, |n| n == "bu-config.yaml")
-                && p.to_string_lossy().contains("/.anchor/")
+                && p.to_string_lossy().contains("/.maru/")
             {
                 match parse_bu_config(p) {
                     Ok(cfg) => {
@@ -613,7 +613,7 @@ fn is_excluded_dir(p: &Path) -> bool {
     matches!(
         name.as_ref(),
         ".git"
-            | ".anchor"
+            | ".maru"
             | ".venv"
             | "node_modules"
             | "_axvsys"
@@ -626,16 +626,16 @@ fn is_excluded_dir(p: &Path) -> bool {
     )
 }
 
-/// `.anchor/` 디렉토리는 통과시키고 `.anchor/cache`, `.anchor/runs`, `.anchor/queue`,
-/// `.anchor/studio` 같은 runtime 하위만 제외. BU config 수집 시 사용.
+/// `.maru/` 디렉토리는 통과시키고 `.maru/cache`, `.maru/runs`, `.maru/queue`,
+/// `.maru/studio` 같은 runtime 하위만 제외. BU config 수집 시 사용.
 fn is_excluded_dir_for_bu_scan(p: &Path) -> bool {
     let name = match p.file_name() {
         Some(n) => n.to_string_lossy(),
         None => return false,
     };
-    // .anchor/<sub> 형태 검사
+    // .maru/<sub> 형태 검사
     if let Some(parent) = p.parent() {
-        if parent.file_name().map_or(false, |n| n == ".anchor") {
+        if parent.file_name().map_or(false, |n| n == ".maru") {
             return matches!(
                 name.as_ref(),
                 "cache"
@@ -715,9 +715,9 @@ mod tests {
     use super::*;
 
     fn make_workspace(tmp: &Path) -> io::Result<()> {
-        std::fs::create_dir_all(tmp.join("projects/sample-bu/.anchor"))?;
+        std::fs::create_dir_all(tmp.join("projects/sample-bu/.maru"))?;
         std::fs::write(
-            tmp.join("projects/sample-bu/.anchor/bu-config.yaml"),
+            tmp.join("projects/sample-bu/.maru/bu-config.yaml"),
             "bu_id: sample-bu\ncategory: program\nmapping_mode: standard\ntree_map: {}\n",
         )?;
 
@@ -879,7 +879,7 @@ mod tests {
     /// Real-workspace verification gate (Phase 3 W4 §4 of the README next-up list).
     ///
     /// Run with:
-    ///   ANCHOR_CATALOG_BENCH_WORKSPACE=/Users/yj.lee/workspace/work \
+    ///   MARU_CATALOG_BENCH_WORKSPACE=/Users/yj.lee/workspace/work \
     ///       cargo test --lib -- --ignored --nocapture catalog_real_workspace_smoke
     ///
     /// Asserts the scan completes within 30 seconds of a cold start and
@@ -888,8 +888,8 @@ mod tests {
     #[test]
     #[ignore]
     fn catalog_real_workspace_smoke() {
-        let Ok(ws) = std::env::var("ANCHOR_CATALOG_BENCH_WORKSPACE") else {
-            eprintln!("Set ANCHOR_CATALOG_BENCH_WORKSPACE=/path/to/workspace");
+        let Ok(ws) = std::env::var("MARU_CATALOG_BENCH_WORKSPACE") else {
+            eprintln!("Set MARU_CATALOG_BENCH_WORKSPACE=/path/to/workspace");
             return;
         };
         let root = PathBuf::from(&ws);

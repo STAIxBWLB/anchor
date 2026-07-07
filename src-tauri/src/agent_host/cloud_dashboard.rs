@@ -121,7 +121,7 @@ mod tests {
             json!({
                 "request": {
                     "runtimeProvider": "claude",
-                    "skillId": "anchor-builtin::meeting-notes",
+                    "skillId": "maru-builtin::meeting-notes",
                     "intent": "secret prompt body"
                 }
             }),
@@ -132,7 +132,7 @@ mod tests {
             events.iter().map(|e| &e.payload),
         );
         assert_eq!(summary.providers, vec!["claude"]);
-        assert_eq!(summary.skills, vec!["anchor-builtin::meeting-notes"]);
+        assert_eq!(summary.skills, vec!["maru-builtin::meeting-notes"]);
     }
 
     #[test]
@@ -142,7 +142,7 @@ mod tests {
         let events = vec![new_run_event(
             "ai-loop",
             "run.started",
-            "anchor.structured_loop",
+            "maru.structured_loop",
             json!({ "runtimeProvider": "codex", "directive": "secret directive" }),
             None,
         )];
@@ -163,7 +163,7 @@ mod tests {
             &new_run_event(
                 "ai-export",
                 "run.started",
-                "anchor.structured_loop",
+                "maru.structured_loop",
                 json!({ "runtimeProvider": "codex" }),
                 None,
             ),
@@ -174,7 +174,7 @@ mod tests {
             &new_run_event(
                 "ai-export",
                 "proposal.created",
-                "anchor.structured_loop",
+                "maru.structured_loop",
                 json!({}),
                 None,
             ),

@@ -19,9 +19,9 @@ const renderer = {
     title?: string | null;
     text: string;
   }): string {
-    const isWiki = href?.startsWith("anchor:wikilink:");
+    const isWiki = href?.startsWith("maru:wikilink:");
     if (isWiki) {
-      const target = decodeURIComponent(href.slice("anchor:wikilink:".length));
+      const target = decodeURIComponent(href.slice("maru:wikilink:".length));
       return `<a class="wikilink" href="#" data-wikilink="${escapeAttr(target)}">${text}</a>`;
     }
     const titleAttr = title ? ` title="${escapeAttr(title)}"` : "";
@@ -44,7 +44,7 @@ function escapeAttr(value: string): string {
 const FRONTMATTER_RE = /^---\n[\s\S]*?\n---\n?/;
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
-/** Strip frontmatter, rewrite wikilinks to anchor links, render with marked,
+/** Strip frontmatter, rewrite wikilinks to maru links, render with marked,
  *  sanitize with DOMPurify. Failures fall back to escaped plain text so a
  *  parse panic in one document never freezes the whole editor pane. */
 export function renderMarkdown(markdown: string): string {
@@ -52,7 +52,7 @@ export function renderMarkdown(markdown: string): string {
     const body = markdown.replace(FRONTMATTER_RE, "");
     const wikiRewritten = body.replace(WIKILINK_RE, (_, target, label) => {
       const text = (label ?? target).trim();
-      return `[${text}](anchor:wikilink:${encodeURIComponent(target.trim())})`;
+      return `[${text}](maru:wikilink:${encodeURIComponent(target.trim())})`;
     });
     const html = marked.parse(wikiRewritten, { async: false }) as string;
     return DOMPurify.sanitize(html, {

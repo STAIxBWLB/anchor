@@ -77,7 +77,7 @@ export interface SkillInstall {
   skillId: string;
   target: SkillInstallTarget;
   installedAs: string;
-  managedBy: "anchor" | "external" | string;
+  managedBy: "maru" | "external" | string;
   entrypointPath: string;
   targetPath: string;
   mode?: SkillInstallMode | string;
@@ -235,7 +235,7 @@ export interface SyncAllOutcome {
 
 export interface InstallOutcome {
   install: SkillInstall;
-  anchorEntrypoint: string;
+  maruEntrypoint: string;
 }
 
 export interface ResetOutcome {
@@ -276,7 +276,7 @@ export interface ImportOutcome {
   skill: SkillRecord;
   mode: "copy" | "link" | string;
   importedPath: string;
-  anchorEntrypoint: string;
+  maruEntrypoint: string;
 }
 
 export interface ImportUnmanageOutcome {

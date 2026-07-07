@@ -48,7 +48,7 @@ export function RibbonArrow() {
       </RibbonGroup>
       <RibbonSeparator />
       <RibbonGroup labelKey="diagram.ribbon.group.edgeArrows">
-        <label className="anchor-diagram-ribbon-field" title={t("diagram.edge.arrowStart")}>
+        <label className="maru-diagram-ribbon-field" title={t("diagram.edge.arrowStart")}>
           <span>{t("diagram.edge.arrowStart")}</span>
           <select
             disabled={disabled}
@@ -60,7 +60,7 @@ export function RibbonArrow() {
             <option value="open">{t("diagram.edge.arrow.open")}</option>
           </select>
         </label>
-        <label className="anchor-diagram-ribbon-field" title={t("diagram.edge.arrowEnd")}>
+        <label className="maru-diagram-ribbon-field" title={t("diagram.edge.arrowEnd")}>
           <span>{t("diagram.edge.arrowEnd")}</span>
           <select
             disabled={disabled}
@@ -75,7 +75,7 @@ export function RibbonArrow() {
       </RibbonGroup>
       <RibbonSeparator />
       <RibbonGroup labelKey="diagram.ribbon.group.edgeStyle">
-        <label className="anchor-diagram-ribbon-field" title={t("diagram.edge.width")}>
+        <label className="maru-diagram-ribbon-field" title={t("diagram.edge.width")}>
           <span>{t("diagram.edge.width")}</span>
           <input
             type="number"
@@ -87,7 +87,7 @@ export function RibbonArrow() {
             onChange={(event) => patch({ width: Number(event.target.value) || 1.5 })}
           />
         </label>
-        <label className="anchor-diagram-ribbon-field" title={t("diagram.edge.color")}>
+        <label className="maru-diagram-ribbon-field" title={t("diagram.edge.color")}>
           <span>{t("diagram.edge.color")}</span>
           <input
             type="color"

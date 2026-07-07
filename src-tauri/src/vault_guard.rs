@@ -1,7 +1,7 @@
 //! vault_guard — schema gate for managed vault writes (Wave 7 V2).
 //!
 //! maru-vault-graph-spec §2.4/§3 F1: when a workspace root has
-//! `write_policy: "managed"`, every Anchor write to `notes/**/*.md` must pass
+//! `write_policy: "managed"`, every Maru write to `notes/**/*.md` must pass
 //! the frontmatter schema below. The rules are the V2 contract, hardcoded:
 //!   - description: ≤ 200 chars (required)
 //!   - type ∈ {insight, decision, observation, person, project, method, moc, reference}
@@ -161,7 +161,7 @@ pub fn is_managed_root(vault_path: &str) -> bool {
 }
 
 /// Central managed-write gate — called from document.rs write commands at the
-/// existing assert_anchor_can_write sites. No-op unless the workspace root is
+/// existing assert_maru_can_write sites. No-op unless the workspace root is
 /// registered with `write_policy: "managed"` AND the target is a vault note.
 pub fn validate_managed_write(
     vault_path: &str,

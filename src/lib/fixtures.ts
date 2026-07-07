@@ -14,10 +14,10 @@ import type {
   VersionSnapshot,
 } from "./types";
 
-export const MOCK_WORKSPACE_PATH = "mock://anchor-sample-workspace";
+export const MOCK_WORKSPACE_PATH = "mock://maru-sample-workspace";
 export const MOCK_VAULT_PATH = MOCK_WORKSPACE_PATH;
-export const MOCK_PUBLIC_WORKSPACE_PATH = "mock://anchor-public-workspace";
-export const MOCK_PUBLIC_READONLY_WORKSPACE_PATH = "mock://anchor-sharepoint-workspace";
+export const MOCK_PUBLIC_WORKSPACE_PATH = "mock://maru-public-workspace";
+export const MOCK_PUBLIC_READONLY_WORKSPACE_PATH = "mock://maru-sharepoint-workspace";
 let mockActivePrivate = MOCK_WORKSPACE_PATH;
 let mockActivePublic: string | null = null;
 
@@ -26,7 +26,7 @@ const now = "2026-04-27T09:00:00+09:00";
 const sampleContent = `---
 type: meeting
 status: active
-project: "[[Anchor Project]]"
+project: "[[Maru Project]]"
 tags:
   - 회의록
 people:
@@ -34,7 +34,7 @@ people:
 created_at: 2026-04-20T09:00:00+09:00
 updated_at: ${now}
 ---
-# Anchor 사업 주간 점검 회의
+# Maru 사업 주간 점검 회의
 
 ## 메모
 참석자들은 사업 KPI 산식과 예산 집행률 보고 기준을 다음 회의 전까지 정리하기로 했다.
@@ -48,7 +48,7 @@ tags:
 created_at: 2026-04-15T10:00:00+09:00
 updated_at: 2026-04-22T11:00:00+09:00
 ---
-# Anchor 용어집
+# Maru 용어집
 
 ## 본부 약어
 - HRD : 인재양성본부
@@ -57,22 +57,22 @@ updated_at: 2026-04-22T11:00:00+09:00
 
 export const mockDocuments: DocumentPayload[] = [
   {
-    path: `${MOCK_VAULT_PATH}/anchor-weekly-meeting.md`,
-    relPath: "anchor-weekly-meeting.md",
-    title: "Anchor 사업 주간 점검 회의",
+    path: `${MOCK_VAULT_PATH}/maru-weekly-meeting.md`,
+    relPath: "maru-weekly-meeting.md",
+    title: "Maru 사업 주간 점검 회의",
     content: sampleContent,
     body: sampleContent.split("---\n").slice(2).join("---\n").trim(),
     meta: {
       type: "meeting",
       status: "active",
-      project: "[[Anchor Project]]",
+      project: "[[Maru Project]]",
     },
     fileKind: "md",
   },
   {
-    path: `${MOCK_VAULT_PATH}/references/anchor-glossary.md`,
-    relPath: "references/anchor-glossary.md",
-    title: "Anchor 용어집",
+    path: `${MOCK_VAULT_PATH}/references/maru-glossary.md`,
+    relPath: "references/maru-glossary.md",
+    title: "Maru 용어집",
     content: referenceContent,
     body: referenceContent.split("---\n").slice(2).join("---\n").trim(),
     meta: { type: "reference", status: "archived" },
@@ -223,7 +223,7 @@ export function mockTrashDocument(documentPath: string): DeletedDocument {
   const fileName = parts.pop() ?? "document.md";
   const folder = parts.length > 0 ? `${parts.join("/")}/` : "";
   const stem = fileName.replace(/\.(md|markdown)$/i, "");
-  const trashRelPath = `.anchor/trash/documents/${folder}${stem}-${Date.now()}.md`;
+  const trashRelPath = `.maru/trash/documents/${folder}${stem}-${Date.now()}.md`;
   return {
     originalPath: found.path,
     originalRelPath: found.relPath,
@@ -275,8 +275,8 @@ export function mockCreateDocument(
 
 export function mockCreateVersion(title: string): VersionSnapshot {
   return {
-    path: `${MOCK_VAULT_PATH}/.anchor/versions/${Date.now()}.md`,
-    relPath: `.anchor/versions/${Date.now()}.md`,
+    path: `${MOCK_VAULT_PATH}/.maru/versions/${Date.now()}.md`,
+    relPath: `.maru/versions/${Date.now()}.md`,
     title: `${title} - mock snapshot`,
     createdAt: now,
   };
@@ -415,12 +415,12 @@ export function mockInboxDropItems(): InboxDropItem[] {
 export function mockMeetingNoteRows(rootPath = MOCK_VAULT_PATH): MeetingNoteRow[] {
   return [
     {
-      path: `${rootPath}/meetings/2026/2026-04/04-20 회의 - Anchor 사업 주간 점검 - KPI.md`,
-      relPath: "meetings/2026/2026-04/04-20 회의 - Anchor 사업 주간 점검 - KPI.md",
-      fileName: "04-20 회의 - Anchor 사업 주간 점검 - KPI.md",
+      path: `${rootPath}/meetings/2026/2026-04/04-20 회의 - Maru 사업 주간 점검 - KPI.md`,
+      relPath: "meetings/2026/2026-04/04-20 회의 - Maru 사업 주간 점검 - KPI.md",
+      fileName: "04-20 회의 - Maru 사업 주간 점검 - KPI.md",
       sizeBytes: sampleContent.length,
       updatedAt: now,
-      frontmatter: { title: "Anchor 사업 주간 점검 (KPI)" },
+      frontmatter: { title: "Maru 사업 주간 점검 (KPI)" },
     },
     {
       path: `${rootPath}/meetings/2026/2026-05/05-04 상담 - Skills 관리 - Codex.md`,
@@ -438,14 +438,14 @@ export function mockMeetingMetadata(relPath: string): MeetingMetadata {
     relPath,
     frontmatter: {
       type: "meeting",
-      tags: ["회의록", "anchor"],
-      attendees: ["Young Joon Lee", "Anchor Team"],
+      tags: ["회의록", "maru"],
+      attendees: ["Young Joon Lee", "Maru Team"],
       date: "2026-04-20",
     },
-    tags: ["회의록", "anchor"],
-    attendees: ["Young Joon Lee", "Anchor Team"],
+    tags: ["회의록", "maru"],
+    attendees: ["Young Joon Lee", "Maru Team"],
     date: "2026-04-20",
-    preview: "# Anchor 사업 주간 점검\n\nKPI 산식과 예산 집행률 기준을 정리한다.",
+    preview: "# Maru 사업 주간 점검\n\nKPI 산식과 예산 집행률 기준을 정리한다.",
     lineCount: 3,
     charCount: 44,
   };
@@ -454,7 +454,7 @@ export function mockMeetingMetadata(relPath: string): MeetingMetadata {
 export function mockMeetingGuides(): MeetingGuides {
   return {
     quickStart: "# Quick Start\n\n6 sections.",
-    glossary: "# Glossary\n\nAnchor = local-first workspace.",
+    glossary: "# Glossary\n\nMaru = local-first workspace.",
     people: "# People\n\nYoung Joon Lee.",
     tagStandards: "# Tags\n\n#회의록",
     notesGuidelines: "# Notes Guidelines\n\nUse concise Korean.",
@@ -464,18 +464,18 @@ export function mockMeetingGuides(): MeetingGuides {
 export function mockTaskNoteRows(rootPath = MOCK_VAULT_PATH): TaskNoteRow[] {
   return [
     {
-      path: `${rootPath}/tasks/active/260514-anchor-tasks-mode.md`,
-      relPath: "tasks/active/260514-anchor-tasks-mode.md",
-      fileName: "260514-anchor-tasks-mode.md",
+      path: `${rootPath}/tasks/active/260514-maru-tasks-mode.md`,
+      relPath: "tasks/active/260514-maru-tasks-mode.md",
+      fileName: "260514-maru-tasks-mode.md",
       bucket: "active",
       sizeBytes: 320,
       updatedAt: now,
       frontmatter: {
-        title: "Anchor tasks mode",
+        title: "Maru tasks mode",
         status: "active",
         priority: "high",
         due: "2026-05-14",
-        project: "Anchor",
+        project: "Maru",
         topics: ["tasks", "ui"],
       },
     },
@@ -490,7 +490,7 @@ export function mockTaskNoteRows(rootPath = MOCK_VAULT_PATH): TaskNoteRow[] {
         title: "Google sync review",
         status: "backlog",
         priority: "medium",
-        project: "Anchor",
+        project: "Maru",
       },
     },
   ];
@@ -500,16 +500,16 @@ export function mockTaskMetadata(relPath: string): TaskMetadata {
   return {
     relPath,
     frontmatter: {
-      title: "Anchor tasks mode",
+      title: "Maru tasks mode",
       status: "active",
       priority: "high",
       due: "2026-05-14",
-      project: "Anchor",
-      tags: ["tasks", "anchor"],
+      project: "Maru",
+      tags: ["tasks", "maru"],
     },
-    tags: ["tasks", "anchor"],
-    body: "# Anchor tasks mode\n\nAdd first-class task management.",
-    preview: "# Anchor tasks mode\n\nAdd first-class task management.",
+    tags: ["tasks", "maru"],
+    body: "# Maru tasks mode\n\nAdd first-class task management.",
+    preview: "# Maru tasks mode\n\nAdd first-class task management.",
     lineCount: 4,
     charCount: 58,
   };

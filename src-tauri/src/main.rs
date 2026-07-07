@@ -4,5 +4,5 @@
 )]
 
 fn main() {
-    anchor_lib::run()
+    maru_lib::run()
 }

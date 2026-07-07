@@ -1,14 +1,14 @@
 // One-shot, idempotent import from the user's pre-existing
-// `<work>/_sys/` operational area into anchor's `<work>/.anchor/`. The
+// `<work>/_sys/` operational area into maru's `<work>/.maru/`. The
 // `_sys/` directory remains the SSOT for external tools (Claude skills
-// CLI, launchd services, public skills repo); anchor only reads from
-// it on demand and stores its own copy under `.anchor/`.
+// CLI, launchd services, public skills repo); maru only reads from
+// it on demand and stores its own copy under `.maru/`.
 //
 // Single transaction shape:
 //   plan_sys_import(work_path) -> ImportPlan       (dry run; cheap, read-only)
 //   apply_sys_import(work_path, plan, selected) -> ImportReceipt   (copies)
 
-use crate::anchor_dir::{
+use crate::maru_dir::{
     append_imports, write_mcp, write_projects, write_rule_with_origin, write_skills,
     write_template_with_origin,
 };
@@ -65,7 +65,7 @@ fn sha256_file(path: &Path) -> Result<String, String> {
 
 fn read_imports_index(work: &Path) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
-    let path = work.join(".anchor/imports.json");
+    let path = work.join(".maru/imports.json");
     if !path.exists() {
         return map;
     }
@@ -166,7 +166,7 @@ fn collect_rule_candidates(
         if stem.is_empty() {
             continue;
         }
-        let target_rel = format!(".anchor/rules/{stem}.md");
+        let target_rel = format!(".maru/rules/{stem}.md");
         let label = label_for_markdown(&path);
         out.push(make_item(
             "rule",
@@ -210,7 +210,7 @@ fn collect_template_candidates(
         if stem.is_empty() {
             continue;
         }
-        let target_rel = format!(".anchor/templates/{stem}.md");
+        let target_rel = format!(".maru/templates/{stem}.md");
         let label = label_for_markdown(path);
         out.push(make_item(
             "template",
@@ -237,7 +237,7 @@ fn build_mcp_candidate(
         "mcp",
         path,
         work,
-        ".anchor/mcp.json",
+        ".maru/mcp.json",
         "MCP servers",
         prev_index,
     )?))
@@ -255,7 +255,7 @@ fn build_projects_candidate(
         "projects",
         path,
         work,
-        ".anchor/projects.json",
+        ".maru/projects.json",
         "Project registry",
         prev_index,
     )?))
@@ -273,7 +273,7 @@ fn build_skills_candidate(
         "skills",
         index,
         work,
-        ".anchor/skills.json",
+        ".maru/skills.json",
         "Skills catalog",
         prev_index,
     )?))
@@ -546,7 +546,7 @@ pub fn apply_sys_import(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::anchor_dir::ensure_anchor_dir;
+    use crate::maru_dir::ensure_maru_dir;
     use tempfile::TempDir;
 
     fn write_file(root: &Path, rel: &str, content: &str) {
@@ -587,7 +587,7 @@ mod tests {
             "_sys/skills/skills/private/sample/SKILL.md",
             "---\nname: sample\ndescription: A sample skill\nruntime: claude-code\n---\n# sample\n",
         );
-        ensure_anchor_dir(work).unwrap();
+        ensure_maru_dir(work).unwrap();
         tmp
     }
 
@@ -618,17 +618,17 @@ mod tests {
         let receipt =
             apply_sys_import(tmp.path().to_string_lossy().to_string(), plan, selected).unwrap();
         assert_eq!(receipt.applied.len(), 3); // 2 rules + 1 mcp
-        assert!(tmp.path().join(".anchor/rules/ingest-chain.md").exists());
+        assert!(tmp.path().join(".maru/rules/ingest-chain.md").exists());
         assert!(tmp
             .path()
-            .join(".anchor/rules/gitignore-policy.md")
+            .join(".maru/rules/gitignore-policy.md")
             .exists());
-        assert!(tmp.path().join(".anchor/mcp.json").exists());
+        assert!(tmp.path().join(".maru/mcp.json").exists());
         // Templates not selected → not written.
-        assert!(!tmp.path().join(".anchor/templates/meeting.md").exists());
+        assert!(!tmp.path().join(".maru/templates/meeting.md").exists());
 
         // imports.json receipts.
-        let imports = fs::read_to_string(tmp.path().join(".anchor/imports.json")).unwrap();
+        let imports = fs::read_to_string(tmp.path().join(".maru/imports.json")).unwrap();
         assert!(imports.contains("ingest-chain"));
         assert!(imports.contains("origin_sha256"));
 
@@ -648,7 +648,7 @@ mod tests {
         let plan = plan_sys_import(tmp.path().to_string_lossy().to_string()).unwrap();
         let selected = vec![plan.projects.as_ref().unwrap().origin_rel.clone()];
         apply_sys_import(tmp.path().to_string_lossy().to_string(), plan, selected).unwrap();
-        let written = fs::read_to_string(tmp.path().join(".anchor/projects.json")).unwrap();
+        let written = fs::read_to_string(tmp.path().join(".maru/projects.json")).unwrap();
         assert!(written.contains("\"key\": \"rise\""));
         assert!(written.contains("\"label\": \"RISE\""));
     }
@@ -659,7 +659,7 @@ mod tests {
         let plan = plan_sys_import(tmp.path().to_string_lossy().to_string()).unwrap();
         let selected = vec![plan.skills.as_ref().unwrap().origin_rel.clone()];
         apply_sys_import(tmp.path().to_string_lossy().to_string(), plan, selected).unwrap();
-        let written = fs::read_to_string(tmp.path().join(".anchor/skills.json")).unwrap();
+        let written = fs::read_to_string(tmp.path().join(".maru/skills.json")).unwrap();
         assert!(written.contains("\"name\": \"sample\""));
         assert!(written.contains("\"category\": \"private\""));
     }
@@ -667,7 +667,7 @@ mod tests {
     #[test]
     fn plan_handles_missing_sys_dir() {
         let tmp = TempDir::new().unwrap();
-        ensure_anchor_dir(tmp.path()).unwrap();
+        ensure_maru_dir(tmp.path()).unwrap();
         let plan = plan_sys_import(tmp.path().to_string_lossy().to_string()).unwrap();
         assert!(!plan.sys_present);
         assert!(plan.rules.is_empty());

@@ -11,7 +11,7 @@ import {
 // artifact is a LIST of per-item routing decisions (many items reviewed in one
 // run) rather than one item's grouped checks.
 
-export const INBOX_REVIEW_SCHEMA_VERSION = "anchor_inbox_review_v1";
+export const INBOX_REVIEW_SCHEMA_VERSION = "maru_inbox_review_v1";
 
 export type InboxReviewClassification = "action" | "schedule" | "info" | "ideation" | "noise";
 export type InboxConfidence = "high" | "medium" | "low";
@@ -161,11 +161,11 @@ export function deriveInboxRunSteps({
     hasPhase(logLines, "classify") ||
     hasPhase(logLines, "route") ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_inbox_review_v1/i.test(line));
+    logLines.some((line) => /maru_inbox_review_v1/i.test(line));
   const hasReviewSignal =
     reviewLoaded ||
     hasPhase(logLines, "review") ||
-    logLines.some((line) => /anchor_inbox_review_v1/i.test(line));
+    logLines.some((line) => /maru_inbox_review_v1/i.test(line));
 
   const runStatus: InboxRunStepStatus = failed ? "error" : running ? "active" : "complete";
   const draftStatus: InboxRunStepStatus = failed

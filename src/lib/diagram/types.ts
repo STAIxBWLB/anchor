@@ -1,5 +1,5 @@
 /**
- * Anchor diagram-mode domain types.
+ * Maru diagram-mode domain types.
  *
  * The schema number {@link DIAGRAM_SCHEMA_VERSION} continues the source
  * standalone editor's numbering (last was v:6, this is v:7) so legacy JSON can

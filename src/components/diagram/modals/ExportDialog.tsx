@@ -129,7 +129,7 @@ export function ExportDialog({ open, doc, workspace, getSvg, onClose }: ExportDi
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-export-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-export-dialog">
           <div className="dialog-header">
             <Dialog.Title>{t("diagram.dialog.export.title")}</Dialog.Title>
             <Dialog.Close asChild>
@@ -143,7 +143,7 @@ export function ExportDialog({ open, doc, workspace, getSvg, onClose }: ExportDi
               </button>
             </Dialog.Close>
           </div>
-          <div className="anchor-diagram-export-grid">
+          <div className="maru-diagram-export-grid">
             {FORMATS.map((fmt) => (
               <button
                 key={fmt.id}
@@ -156,15 +156,15 @@ export function ExportDialog({ open, doc, workspace, getSvg, onClose }: ExportDi
             ))}
           </div>
           {status.kind === "busy" ? (
-            <p className="anchor-diagram-export-status">{t("diagram.dialog.export.busy")}</p>
+            <p className="maru-diagram-export-status">{t("diagram.dialog.export.busy")}</p>
           ) : null}
           {status.kind === "done" ? (
-            <p className="anchor-diagram-export-status is-ok">
+            <p className="maru-diagram-export-status is-ok">
               {t("diagram.dialog.export.done", { path: status.path })}
             </p>
           ) : null}
           {status.kind === "error" ? (
-            <p className="anchor-diagram-export-status is-err">
+            <p className="maru-diagram-export-status is-err">
               {t("diagram.dialog.export.failed", { message: status.message })}
             </p>
           ) : null}

@@ -1,13 +1,13 @@
 import { ChevronRight, Play, RefreshCcw, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "../../lib/i18n";
-import type { AnchorAppMode } from "../../lib/settings";
+import type { MaruAppMode } from "../../lib/settings";
 import type { SkillRecord } from "../../lib/skills";
 
 interface SkillsQuickPaneProps {
   skills: SkillRecord[];
   loading?: boolean;
-  appMode?: AnchorAppMode;
+  appMode?: MaruAppMode;
   onRefresh: () => void;
   onRunSkill: (skill: SkillRecord) => void;
 }
@@ -103,7 +103,7 @@ function groupSkills(skills: SkillRecord[], t: Translate): SkillGroup[] {
   });
 }
 
-function prioritizeSkills(skills: SkillRecord[], appMode?: AnchorAppMode): SkillRecord[] {
+function prioritizeSkills(skills: SkillRecord[], appMode?: MaruAppMode): SkillRecord[] {
   if (appMode !== "meetings") return skills;
   const priority = new Map(
     ["meeting-notes", "vault-extract", "vault-connect", "task-management", "gaejosik"].map(

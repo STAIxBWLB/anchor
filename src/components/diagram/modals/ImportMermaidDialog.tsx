@@ -25,7 +25,7 @@ export function ImportMermaidDialog({ open, onApply, onCancel }: ImportMermaidDi
     <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content anchor-diagram-import-dialog">
+        <Dialog.Content className="dialog-content maru-diagram-import-dialog">
           <div className="dialog-header">
             <Dialog.Title>{t("diagram.dialog.importMermaid.title")}</Dialog.Title>
             <Dialog.Close asChild>
@@ -46,14 +46,14 @@ export function ImportMermaidDialog({ open, onApply, onCancel }: ImportMermaidDi
             rows={10}
             spellCheck={false}
           />
-          <p className="anchor-diagram-import-hint">{t("diagram.dialog.importMermaid.hint")}</p>
-          <div className="anchor-diagram-import-actions">
+          <p className="maru-diagram-import-hint">{t("diagram.dialog.importMermaid.hint")}</p>
+          <div className="maru-diagram-import-actions">
             <button type="button" onClick={onCancel}>
               {t("diagram.dialog.importMermaid.cancel")}
             </button>
             <button
               type="button"
-              className="anchor-diagram-toolbar-primary"
+              className="maru-diagram-toolbar-primary"
               onClick={() => onApply(mermaidToDoc(text))}
               disabled={text.trim().length === 0}
             >

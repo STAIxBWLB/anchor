@@ -6,7 +6,7 @@
  * and `jh-pdca-grid`. Those are renamed to neutral generics here so that ko/en
  * both make sense and any user can fill in their own content.
  *
- * Each template builder takes a center anchor `(cx, cy)` and returns a partial
+ * Each template builder takes a center maru `(cx, cy)` and returns a partial
  * `DiagramDoc` (nodes + edges). All strings go through {@link t} so callers can
  * pre-translate to the active locale.
  */
@@ -33,7 +33,7 @@ export interface TemplateDefinition {
   labelKey: string;
   /** i18n key for the one-line description shown in the picker. */
   descriptionKey: string;
-  /** Builder — given a center anchor and the active translator. */
+  /** Builder — given a center maru and the active translator. */
   build: (cx: number, cy: number, t: Translator) => TemplateBundle;
   /** Optional thumbnail viewBox (px) for the picker preview. */
   preview: { w: number; h: number };

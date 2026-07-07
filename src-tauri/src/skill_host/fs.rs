@@ -11,26 +11,26 @@ pub fn home_dir() -> Result<PathBuf, String> {
     dirs::home_dir().ok_or_else(|| "Cannot resolve home directory".to_string())
 }
 
-pub fn anchor_home() -> Result<PathBuf, String> {
-    if let Some(path) = test_anchor_home_override() {
-        return Ok(path.join(".anchor"));
+pub fn maru_home() -> Result<PathBuf, String> {
+    if let Some(path) = test_maru_home_override() {
+        return Ok(path.join(".maru"));
     }
-    Ok(home_dir()?.join(".anchor"))
+    Ok(home_dir()?.join(".maru"))
 }
 
 pub fn skills_root() -> Result<PathBuf, String> {
-    Ok(anchor_home()?.join("skills"))
+    Ok(maru_home()?.join("skills"))
 }
 
 pub fn env_root() -> Result<PathBuf, String> {
-    Ok(anchor_home()?.join("env"))
+    Ok(maru_home()?.join("env"))
 }
 
 /// Base directory under which tool install roots (`~/.claude`, `~/.codex`)
 /// resolve. In production this is the real home; under tests it follows the
-/// `ANCHOR_TEST_HOME` override so installs stay sandboxed.
+/// `MARU_TEST_HOME` override so installs stay sandboxed.
 pub fn install_root_base() -> Result<PathBuf, String> {
-    if let Some(path) = test_anchor_home_override() {
+    if let Some(path) = test_maru_home_override() {
         return Ok(path);
     }
     home_dir()
@@ -136,22 +136,22 @@ pub fn safe_entry_name(input: &str) -> Result<String, String> {
 }
 
 #[cfg(test)]
-fn test_anchor_home_override() -> Option<PathBuf> {
-    std::env::var_os("ANCHOR_TEST_HOME").map(PathBuf::from)
+fn test_maru_home_override() -> Option<PathBuf> {
+    std::env::var_os("MARU_TEST_HOME").map(PathBuf::from)
 }
 
 #[cfg(test)]
-static ANCHOR_TEST_HOME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static MARU_TEST_HOME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[cfg(test)]
-pub(crate) fn test_anchor_home_lock() -> MutexGuard<'static, ()> {
-    ANCHOR_TEST_HOME_LOCK
+pub(crate) fn test_maru_home_lock() -> MutexGuard<'static, ()> {
+    MARU_TEST_HOME_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(not(test))]
-fn test_anchor_home_override() -> Option<PathBuf> {
+fn test_maru_home_override() -> Option<PathBuf> {
     None
 }

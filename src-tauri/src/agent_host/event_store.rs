@@ -25,7 +25,7 @@ pub fn run_events_path(cwd: &str, run_id: &str) -> Result<PathBuf, String> {
     validate_run_id(run_id)?;
     let root = normalize_existing_dir(cwd)?;
     Ok(root
-        .join(".anchor")
+        .join(".maru")
         .join("runs")
         .join("skills")
         .join(run_id)

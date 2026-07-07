@@ -1,4 +1,4 @@
-// Provides typed YAML value formatting that preserves anchor's frontmatter
+// Provides typed YAML value formatting that preserves maru's frontmatter
 // invariants (key order + comments) when used together with ops.rs.
 
 use serde::{Deserialize, Serialize};
