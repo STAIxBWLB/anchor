@@ -10,11 +10,12 @@
 //! `Err` (UI also degrades, but surfaces the reason). NetworkX ≥3.4 writes the
 //! edge list under `"edges"`, older versions under `"links"` — accept both.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::atomic_file::write_atomic;
 use crate::vault::resolve_inside_vault;
 
 /// Relative path of the disposable layout cache inside a workspace.
@@ -52,15 +53,22 @@ pub struct VaultGraphFile {
 }
 
 #[tauri::command]
-pub fn vault_graph_read(vault_path: String) -> Result<Option<VaultGraphFile>, String> {
-    let path = resolve_inside_vault(&vault_path, "reports/vault-graph.json")?;
+pub fn vault_graph_read(
+    vault_path: String,
+    source: Option<String>,
+) -> Result<Option<VaultGraphFile>, String> {
+    let report = match source.as_deref() {
+        Some("workspace") => "reports/workspace-graph.json",
+        _ => "reports/vault-graph.json",
+    };
+    let path = resolve_inside_vault(&vault_path, report)?;
     if !path.is_file() {
         return Ok(None);
     }
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|err| format!("Cannot read vault-graph.json: {err}"))?;
-    let parsed: VaultGraphFile = serde_json::from_str(&raw)
-        .map_err(|err| format!("Cannot parse vault-graph.json: {err}"))?;
+    let raw =
+        std::fs::read_to_string(&path).map_err(|err| format!("Cannot read {report}: {err}"))?;
+    let parsed: VaultGraphFile =
+        serde_json::from_str(&raw).map_err(|err| format!("Cannot parse {report}: {err}"))?;
     Ok(Some(parsed))
 }
 
@@ -68,17 +76,34 @@ pub fn vault_graph_read(vault_path: String) -> Result<Option<VaultGraphFile>, St
 /// `<workspace>/.maru/cache/graph-layout.json`; the filesystem/live graph is
 /// authoritative, this only warm-starts the force layout on re-entry.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GraphLayoutCache {
     #[serde(default)]
     pub version: u32,
     #[serde(default)]
     pub positions: BTreeMap<String, [f64; 2]>,
+    #[serde(default)]
+    pub pinned_ids: BTreeSet<String>,
+    #[serde(default)]
+    pub camera: Option<GraphCameraState>,
+    #[serde(default)]
+    pub graph_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GraphCameraState {
+    pub x: f64,
+    pub y: f64,
+    pub ratio: f64,
+    pub angle: f64,
 }
 
 fn layout_cache_path(workspace: &str) -> PathBuf {
     LAYOUT_CACHE_REL
         .iter()
-        .fold(Path::new(workspace).to_path_buf(), |acc, part| acc.join(part))
+        .fold(Path::new(workspace).to_path_buf(), |acc, part| {
+            acc.join(part)
+        })
 }
 
 #[tauri::command]
@@ -90,20 +115,35 @@ pub fn vault_graph_layout_read(workspace: String) -> Result<Option<GraphLayoutCa
     let raw = std::fs::read_to_string(&path)
         .map_err(|err| format!("Cannot read graph-layout.json: {err}"))?;
     // A corrupt disposable cache degrades to "no seed", never an error toast.
-    Ok(serde_json::from_str(&raw).ok())
+    let mut cache = match serde_json::from_str::<GraphLayoutCache>(&raw) {
+        Ok(cache) => cache,
+        Err(_) => return Ok(None),
+    };
+    if cache.version < 2 {
+        cache.version = 2;
+    }
+    Ok(Some(cache))
 }
 
 #[tauri::command]
-pub fn vault_graph_layout_save(workspace: String, cache: GraphLayoutCache) -> Result<(), String> {
+pub fn vault_graph_layout_save(
+    workspace: String,
+    mut cache: GraphLayoutCache,
+) -> Result<(), String> {
     let path = layout_cache_path(&workspace);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|err| format!("Cannot create graph layout cache directory: {err}"))?;
     }
+    if let Ok(Some(existing)) = vault_graph_layout_read(workspace.clone()) {
+        for (id, position) in existing.positions {
+            cache.positions.entry(id).or_insert(position);
+        }
+    }
+    cache.version = 2;
     let serialized = serde_json::to_string(&cache)
         .map_err(|err| format!("Cannot serialize graph layout cache: {err}"))?;
-    std::fs::write(&path, serialized)
-        .map_err(|err| format!("Cannot write graph-layout.json: {err}"))
+    write_atomic(&path, serialized.as_bytes())
 }
 
 #[cfg(test)]
@@ -133,7 +173,7 @@ mod tests {
                             "confidence_tag": "EXTRACTED"}]}"#,
         )
         .unwrap();
-        let graph = vault_graph_read(root).unwrap().unwrap();
+        let graph = vault_graph_read(root, None).unwrap().unwrap();
         assert_eq!(graph.nodes.len(), 1);
         assert_eq!(graph.nodes[0].community, Some(3));
         assert_eq!(graph.edges.len(), 1);
@@ -149,7 +189,7 @@ mod tests {
                 "links": [{"source": "a", "target": "b"}]}"#,
         )
         .unwrap();
-        let graph = vault_graph_read(root).unwrap().unwrap();
+        let graph = vault_graph_read(root, None).unwrap().unwrap();
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].target, "b");
     }
@@ -157,14 +197,14 @@ mod tests {
     #[test]
     fn absent_file_is_ok_none() {
         let (_tmp, root) = vault_with_reports();
-        assert!(vault_graph_read(root).unwrap().is_none());
+        assert!(vault_graph_read(root, None).unwrap().is_none());
     }
 
     #[test]
     fn corrupt_file_is_err() {
         let (tmp, root) = vault_with_reports();
         fs::write(tmp.path().join("reports/vault-graph.json"), "{not json").unwrap();
-        assert!(vault_graph_read(root).is_err());
+        assert!(vault_graph_read(root, None).is_err());
     }
 
     #[test]
@@ -176,13 +216,26 @@ mod tests {
         let mut positions = BTreeMap::new();
         positions.insert("a-note".to_string(), [12.5, -4.0]);
         positions.insert("b-note".to_string(), [0.0, 100.0]);
-        let cache = GraphLayoutCache { version: 1, positions };
+        let cache = GraphLayoutCache {
+            version: 1,
+            positions,
+            pinned_ids: BTreeSet::from(["a-note".to_string()]),
+            camera: Some(GraphCameraState {
+                x: 0.5,
+                y: 0.4,
+                ratio: 1.2,
+                angle: 0.0,
+            }),
+            graph_key: Some("vault".to_string()),
+        };
         vault_graph_layout_save(root.clone(), cache).unwrap();
 
         let read = vault_graph_layout_read(root).unwrap().unwrap();
-        assert_eq!(read.version, 1);
+        assert_eq!(read.version, 2);
         assert_eq!(read.positions.get("a-note"), Some(&[12.5, -4.0]));
         assert_eq!(read.positions.len(), 2);
+        assert!(read.pinned_ids.contains("a-note"));
+        assert_eq!(read.camera.unwrap().ratio, 1.2);
     }
 
     #[test]
@@ -205,7 +258,7 @@ mod tests {
             r#"{"nodes": [{"id": "projects", "type": "moc"}], "edges": []}"#,
         )
         .unwrap();
-        let graph = vault_graph_read(root).unwrap().unwrap();
+        let graph = vault_graph_read(root, None).unwrap().unwrap();
         assert_eq!(graph.nodes[0].community, None);
         assert_eq!(graph.nodes[0].node_type.as_deref(), Some("moc"));
     }

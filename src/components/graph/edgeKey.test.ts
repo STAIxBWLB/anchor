@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { edgeKey } from "./GraphCanvas";
+import { edgeKey } from "./graphStyle";
 
 describe("edgeKey", () => {
   it("is order-independent", () => {
