@@ -1510,11 +1510,13 @@ fn stale_install_has_exact_owned_chain(install: &SkillInstall) -> bool {
     if install.managed_by != "maru" || install.mode != "symlink" {
         return false;
     }
-    let Ok(expected_target) = install_target_path(&install.target, &install.installed_as) else {
+    let Ok(installed_as) = host_fs::safe_entry_name(&install.installed_as) else {
         return false;
     };
-    let Ok(expected_entry) = host_fs::skills_root().map(|root| root.join(&install.installed_as))
-    else {
+    let Ok(expected_target) = install_target_path(&install.target, &installed_as) else {
+        return false;
+    };
+    let Ok(expected_entry) = host_fs::skills_root().map(|root| root.join(&installed_as)) else {
         return false;
     };
     Path::new(&install.target_path) == expected_target
@@ -4053,6 +4055,7 @@ fn install_root(target: &str) -> Result<PathBuf, String> {
 }
 
 fn install_target_path(target: &str, installed_as: &str) -> Result<PathBuf, String> {
+    let installed_as = host_fs::safe_entry_name(installed_as)?;
     Ok(install_root(target)?.join(installed_as))
 }
 
@@ -5290,6 +5293,13 @@ mod tests {
         assert_eq!(checked.desired_skills, 43);
         assert_eq!(checked.desired_installs, 86);
         assert_eq!(fs::read(&registry_path).unwrap(), before);
+    }
+
+    #[test]
+    fn tool_install_path_rejects_registry_traversal_names() {
+        let _home = test_home();
+        assert!(install_target_path("claude", "../../escape").is_err());
+        assert!(install_target_path("codex", "..\\escape").is_err());
     }
 
     #[test]
