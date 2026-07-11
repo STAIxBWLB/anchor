@@ -15,6 +15,7 @@ import Sigma from "sigma";
 import { EdgeArrowProgram, EdgeLineProgram } from "sigma/rendering";
 import type { GraphEdge, GraphNode } from "../../lib/graph/model";
 import { communityColor, edgeKey, graphTheme, graphTopologySignature, nodeColor, nodeRadius, refreshGraphTheme } from "./graphStyle";
+import { drawMaruNodeLabel, drawMaruNodeHover } from "./graphLabels";
 
 export interface GraphViewport {
   zoom: number;
@@ -368,8 +369,10 @@ export function GraphCanvas({
         labelFont: "Pretendard, sans-serif",
         labelSize: 11,
         labelWeight: "500",
-        labelRenderedSizeThreshold: 8,
+        labelRenderedSizeThreshold: 3,
         labelDensity: 0.55,
+        defaultDrawNodeLabel: drawMaruNodeLabel,
+        defaultDrawNodeHover: drawMaruNodeHover,
         hideEdgesOnMove: nodes.length > 5_000,
         hideLabelsOnMove: true,
         enableEdgeEvents: false,
@@ -393,6 +396,9 @@ export function GraphCanvas({
           const hoverVisible = hovered == null || node === hovered || adjacencyRef.current.get(hovered)?.has(node);
           const overlayVisible = !overlayIds || overlayIds.has(node);
           if (!hoverVisible || !overlayVisible) patch.color = graphTheme().dimNode;
+          if (node === state.hoverId) {
+            patch.size = data.size * 1.15;
+          }
           const emphasized = node === state.selectedId || node === state.focusNodeId || node === state.pathSourceId || overlayIds?.has(node);
           if (emphasized) {
             patch.borderColor = overlayIds?.has(node) ? graphTheme().warn : graphTheme().accent;
