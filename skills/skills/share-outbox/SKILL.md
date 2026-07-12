@@ -27,7 +27,8 @@ email, upload to cloud storage, create public links, or write to a vault.
 ## Workflow
 
 1. Identify the source file that will be sent. Use the actual file extension of
-   that source for the outgoing copy.
+   that source for the outgoing copy. Exception: Markdown sources are converted
+   to a share-ready format first; see "Format Conversion (Markdown Sources)".
 2. Resolve the Korean title:
    - Prefer an explicit user-provided Korean title.
    - Else use the inbox manifest `source.original_name`, raw source filename,
@@ -48,6 +49,35 @@ email, upload to cloud storage, create public links, or write to a vault.
 6. Append a local JSONL receipt to the configured receipt path. Default:
    `shared/_state/index.jsonl`.
 7. Return the output path and receipt path to the user.
+
+## Format Conversion (Markdown Sources)
+
+A `.md` source is not shared as-is by default: convert it before staging, then
+pass the converted file to `prepare_share_file.py` as the source. The script
+keys the outgoing extension, hash, and receipt off whatever file it receives,
+so no extra flags are needed.
+
+The user selects the target format by naming just the extension (e.g. "hwpx로",
+"pdf"). With no instruction, the default is `docx`.
+
+| target | conversion |
+|--------|------------|
+| (none) / `docx` | `~/.maru/skills/md2docx/md2docx <src.md> -o <tmp>/<stem>.docx` |
+| `hwpx` | `~/.maru/skills/hwpx/hwpx styled --markdown <src.md> -o <tmp>/<stem>.hwpx` |
+| `pdf` | convert to hwpx first, then `~/.maru/skills/hwpx/hwpx to-pdf <tmp>/<stem>.hwpx -o <tmp>/<stem>.pdf` |
+| `md` | stage the original without conversion (explicit instruction only) |
+| other (e.g. `pptx`) | use the matching workspace conversion skill if one exists; otherwise tell the user the target is unsupported (never silently fall back) |
+
+Rules:
+
+- Write the converted file into a temp directory, keeping the original stem so
+  title derivation is unchanged.
+- For inbox-item sources pass `--inbox-item` explicitly; the temp path breaks
+  automatic inference.
+- Forward style instructions to the conversion skill when given (`--theme`,
+  `--serif`, `--reference <form.hwpx>`, ...).
+- Report both the original source path and the staged output to the user; the
+  receipt's `source` records the converted temp file.
 
 ## Script
 
