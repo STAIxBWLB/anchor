@@ -8,6 +8,14 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
+## v0.4.3 — 2026-07-12 — Toolbar hotfix
+
+- Fixed the graph toolbar's scope toggle (전체/연결됨) overflowing its box:
+  the text button reused the 26px icon-button square, so CJK labels wrapped
+  one character per line and broke the toolbar layout. The button now sizes
+  to its text and never wraps; the source dropdown is pinned against flex
+  collapse at narrow widths.
+
 ## v0.4.2 — 2026-07-12 — Graph UI refresh (Obsidian-benchmark) + business-unit lifecycle Tree C
 
 **Graph UI refresh**, benchmarking Obsidian's graph view:
