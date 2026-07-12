@@ -8,6 +8,26 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
+## v0.4.5 — 2026-07-12 — App-wide CSS repair
+
+- Fixed elements rendering at browser defaults because their classes had no
+  CSS rule: the graph relation dialog's rows and buttons (renamed onto the
+  shared dialog/button system), the app-wide `.muted` utility (~28 uses),
+  the lazy-mode and editor Suspense fallbacks, writing-guideline spacing,
+  and run-log long-token wrapping.
+- Settings window repairs (found by an independent Codex audit): the
+  secret-editor dialog title rendered at browser-default 24px; the
+  no-workspace empty states (settings and tasks) were unstyled; the Tasks
+  display settings lacked their 3-column grid; an inert inline-heading grid
+  rule; and three undefined CSS variables silently dropping declarations
+  (`--panel-muted`, `--success`, inline `--maru-muted`), which had left
+  Telegram panels transparent and secrets ok-states colorless.
+- Diagram status/export chips now theme correctly in dark mode via
+  `--maru-ok/warn/danger-*` tokens.
+- Cross-review regressions fixed: checkbox rows no longer stack (selector
+  precedence), heading guards use zero-specificity `:where()`, and the
+  terminal's intentionally fixed dark palette is documented.
+
 ## v0.4.4 — 2026-07-12 — Graph noise filter
 
 - Auto-generated files (lint reports, work logs, summaries) no longer clutter
