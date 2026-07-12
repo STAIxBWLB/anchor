@@ -3786,7 +3786,8 @@ a {
 }
 
 .editor-empty .empty-document-plate,
-.system-empty .empty-document-plate {
+.system-empty .empty-document-plate,
+.tasks-empty .empty-document-plate {
   display: grid;
   place-items: center;
   gap: 14px;
@@ -3799,7 +3800,8 @@ a {
 }
 
 .editor-empty h2,
-.system-empty h2 {
+.system-empty h2,
+.tasks-empty .empty-document-plate h2 {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
@@ -3808,7 +3810,8 @@ a {
 }
 
 .editor-empty p,
-.system-empty p {
+.system-empty p,
+.tasks-empty .empty-document-plate p {
   margin: 0;
   max-width: 36ch;
   text-align: center;
@@ -5742,7 +5745,10 @@ button.git-badge:hover {
   word-break: break-all;
 }
 
-.checkbox-field {
+/* .field.checkbox-field outranks the later .field { display: grid } so the
+   checkbox stays inline with its label wherever the combo is used. */
+.checkbox-field,
+.field.checkbox-field {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
@@ -10378,13 +10384,15 @@ button.git-badge:hover {
   overflow: hidden;
 }
 /* Guard: bare headings dropped into the 12.5px pane get sane sizes instead
-   of browser defaults. 0-1-1 specificity, so styled containers still win. */
-.system-pane h3 {
+   of browser defaults. :where() keeps specificity at 0-0-1 so EVERY styled
+   heading rule (including equal-specificity ones like the skills headings)
+   still wins regardless of source order. */
+:where(.system-pane) h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 700;
 }
-.system-pane h4 {
+:where(.system-pane) h4 {
   margin: 0;
   font-size: 12.5px;
   font-weight: 650;
