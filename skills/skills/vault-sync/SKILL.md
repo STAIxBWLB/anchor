@@ -124,7 +124,7 @@ Scanned: meetings 9건, git-diff 5건, submodules 2건
     -> Proposed: update [[chu-ai-headquarters-establishment-vp-level]]
     -> Domain: operations
 
-[3] DIFF: projects/hope/10-planning/260403-plan-masterplan.md (new file)
+[3] DIFF: projects/hope/planning/260403-plan-masterplan.md (new file)
     -> Proposed: update [[hope-tuition-free-global-online-degree-idea]]
     -> Domain: projects
 
