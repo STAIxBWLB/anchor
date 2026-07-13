@@ -3773,6 +3773,9 @@ fn skills_apply_bundle_update_impl(
     // Swap under the registry lock.
     let _guard = registry_guard()?;
     let mut registry = load_registry_unlocked()?;
+    // Fresh installs (e.g. CLI-first use) have an empty registry; the builtin
+    // source must exist before the post-swap rescan.
+    ensure_default_sources(&mut registry, None)?;
     // Re-read state under the lock: `active` was sampled before the network
     // phase, and a concurrent apply may have already applied this revision.
     // Without this, the loser would delete the winner's active pristine.

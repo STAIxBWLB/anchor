@@ -90,6 +90,11 @@ function verify() {
       errors.push(`control character in tracked filename: ${JSON.stringify(rel)}`);
       continue;
     }
+    // NFC only: mixed Unicode normalization (macOS tools often emit NFD)
+    // makes the same Korean filename hash as two different bundle paths.
+    if (rel !== rel.normalize("NFC")) {
+      errors.push(`filename is not NFC-normalized: ${rel}`);
+    }
     // The app's dirty gate ignores these names as runtime junk, so a bundle
     // must never legitimately ship them (their drift would be invisible).
     if (/(^|\/)(__pycache__|\.pytest_cache|node_modules|\.venv)(\/|$)|\.pyc$|(^|\/)\.DS_Store$/.test(rel)) {
