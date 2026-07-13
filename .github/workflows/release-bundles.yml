@@ -27,6 +27,9 @@ jobs:
     name: Build ${{ matrix.platform }} ${{ matrix.args }}
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 90
+    # App releases only (v* tags). The skills-channel prerelease publishes
+    # through release-skills.yml and must not trigger app/CLI/Homebrew builds.
+    if: ${{ startsWith(github.event.release.tag_name || inputs.tag, 'v') }}
 
     strategy:
       fail-fast: false
@@ -212,6 +215,7 @@ jobs:
     name: Build CLI macOS ${{ matrix.asset_arch }}
     runs-on: macos-latest
     timeout-minutes: 45
+    if: ${{ startsWith(github.event.release.tag_name || inputs.tag, 'v') }}
 
     strategy:
       fail-fast: false
@@ -288,6 +292,7 @@ jobs:
     needs: [build, cli-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: ${{ startsWith(github.event.release.tag_name || inputs.tag, 'v') }}
 
     steps:
       - name: Resolve release

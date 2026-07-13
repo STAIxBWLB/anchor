@@ -33,7 +33,11 @@ const AGENTS_EXTERNAL_SOURCE_ID: &str = "agents-external";
 const CODEX_NATIVE_SOURCE_ID: &str = "codex-tool-native";
 const INSTALL_MARKER_FILE: &str = ".maru-install.json";
 
-static BUILTIN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../skills");
+// Frozen offline-bootstrap snapshot (src-tauri/skills-bootstrap), used only
+// for fresh installs with no bundle state. Live skill updates ship as signed
+// bundles from the skills-channel release; editing skills/ must not rebuild
+// or re-embed anything.
+static BUILTIN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills-bootstrap");
 
 static REGISTRY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
