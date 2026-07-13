@@ -181,6 +181,14 @@ skills-doctor-json: ## Run Maru skills doctor and print JSON
 skills-dirty: ## List dirty Maru skills as JSON
 	$(CARGO) run --manifest-path $(TAURI_DIR)/Cargo.toml --bin maru-cli -- skills dirty --json
 
+.PHONY: skills-verify
+skills-verify: ## Validate skills/ manifest, frontmatter, and tracked inventory
+	$(NODE) scripts/skills-bundle.mjs verify
+
+.PHONY: skills-package
+skills-package: ## Package skills bundle + metadata into dist-skills/ (REVISION=<n>)
+	$(NODE) scripts/skills-bundle.mjs package --revision $(or $(REVISION),0)
+
 .PHONY: diff-check
 diff-check: ## Check working tree diff for whitespace errors
 	git diff --check
