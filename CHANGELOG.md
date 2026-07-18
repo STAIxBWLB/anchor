@@ -8,7 +8,7 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
-## Unreleased — completeness hardening
+## v0.4.7 — 2026-07-18 — completeness hardening
 
 - **Update + close safety.** The startup update check no longer downloads,
   installs, and relaunches on its own: updates surface as an actionable
