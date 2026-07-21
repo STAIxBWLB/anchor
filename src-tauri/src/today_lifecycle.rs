@@ -7,11 +7,16 @@
 // Complete ordering is load-bearing for crash recovery:
 //   1. write the durable `prepared` outbox record (when googleTaskId exists)
 //   2. patch frontmatter (status/done/completedAt)
-//   3. move the note into the archive bucket
-//   4. append the `task_completed` event + best-effort day-snapshot update
-//   5. mark the outbox record `ready`
-// A crash between 1 and 5 leaves a `prepared` record; `recover_outbox`
-// marks it ready when the note landed at `status: done`, drops it otherwise.
+//   3. mark the outbox record `ready`
+//   4. move the note into the archive bucket
+//   5. append the `task_completed` event + best-effort day-snapshot update
+// `ready` must land BEFORE the bucket move: recovery resolves a `prepared`
+// record via the recorded note path, which the move invalidates — with the
+// old ordering a crash between move and ready silently dropped the owed
+// provider completion. A crash between 1 and 3 leaves a `prepared` record;
+// `recover_outbox` marks it ready when the note landed at the expected
+// status, drops it otherwise. A crash between 3 and 4 leaves a done note in
+// its old bucket — cosmetic, the provider op is preserved.
 
 use crate::atomic_file::write_atomic;
 use crate::document::revision_for;
@@ -175,20 +180,8 @@ fn run_complete(ctx: TransitionContext, task_id: &str) -> Result<TaskTransitionO
         Some(FrontmatterValue::String(ctx.now_iso.clone())),
     )?;
     write_atomic(&ctx.path, updated.as_bytes())?;
-    // 3. Bucket move.
-    let final_path = move_to_bucket(&ctx.tasks_root, &ctx.path, TaskBucket::Archive)?;
-    let final_rel = rel_path_for(&ctx.work, &final_path);
-    // 4. Event + best-effort day-snapshot reflection (never fatal).
-    append_task_event_for(
-        &ctx.work,
-        &ctx.date,
-        "task_completed",
-        Some(task_id.to_string()),
-        json!({ "taskPath": final_rel, "bucket": "archive" }),
-        ctx.now_iso.clone(),
-    )?;
-    let _ = note_task_transition(&ctx.work, &ctx.date, task_id, "done");
-    // 5. Prepared -> ready; until this lands, recovery owns the record.
+    // 3. Prepared -> ready, BEFORE the move invalidates the recorded path;
+    // until this lands, recovery owns the record.
     let sync_status = match prepared {
         Some(mut record) => {
             today_outbox::set_record_status(&ctx.work, &mut record, OutboxStatus::Ready, &ctx.now_iso)?;
@@ -196,10 +189,45 @@ fn run_complete(ctx: TransitionContext, task_id: &str) -> Result<TaskTransitionO
         }
         None => TaskSyncStatus::Local,
     };
+    // 4. Bucket move.
+    let final_path = move_to_bucket(&ctx.tasks_root, &ctx.path, TaskBucket::Archive)?;
+    let final_rel = rel_path_for(&ctx.work, &final_path);
+    // 5. Event + day-snapshot reflection — best-effort: the completion and
+    // its provider op are already durable, so an unwritable events dir must
+    // not fail the transition (or, worse, strand the record `prepared`).
+    let _ = append_task_event_for(
+        &ctx.work,
+        &ctx.date,
+        "task_completed",
+        Some(task_id.to_string()),
+        json!({ "taskPath": final_rel, "bucket": "archive" }),
+        ctx.now_iso.clone(),
+    );
+    let _ = note_task_transition(&ctx.work, &ctx.date, task_id, "done");
     outcome_for(&final_path, TaskBucket::Archive, sync_status, task_id)
 }
 
 fn run_reopen(ctx: TransitionContext, task_id: &str) -> Result<TaskTransitionOutcome, String> {
+    // Same durable ordering as complete: the provider mirror (only when a
+    // complete op already drained — a reopen of a task the provider never
+    // saw needs no remote call) is recorded `prepared` BEFORE the local
+    // mutation, promoted to `ready` after the patch and before the move.
+    let prepared = match &ctx.google_task_id {
+        Some(google_task_id)
+            if today_outbox::has_synced_complete(&ctx.work, google_task_id)? =>
+        {
+            Some(today_outbox::enqueue_record(
+                &ctx.work,
+                OutboxOp::Reopen,
+                &ctx.rel_path,
+                google_task_id,
+                ctx.google_task_list_id.clone(),
+                OutboxStatus::Prepared,
+                &ctx.now_iso,
+            )?)
+        }
+        _ => None,
+    };
     let mut updated = patch(
         &ctx.raw,
         "status",
@@ -208,36 +236,24 @@ fn run_reopen(ctx: TransitionContext, task_id: &str) -> Result<TaskTransitionOut
     updated = patch(&updated, "done", None)?;
     updated = patch(&updated, "completedAt", None)?;
     write_atomic(&ctx.path, updated.as_bytes())?;
+    let sync_status = match prepared {
+        Some(mut record) => {
+            today_outbox::set_record_status(&ctx.work, &mut record, OutboxStatus::Ready, &ctx.now_iso)?;
+            TaskSyncStatus::Syncing
+        }
+        None => TaskSyncStatus::Local,
+    };
     let final_path = move_to_bucket(&ctx.tasks_root, &ctx.path, TaskBucket::Active)?;
     let final_rel = rel_path_for(&ctx.work, &final_path);
-    append_task_event_for(
+    let _ = append_task_event_for(
         &ctx.work,
         &ctx.date,
         "task_reopened",
         Some(task_id.to_string()),
         json!({ "taskPath": final_rel, "bucket": "active" }),
         ctx.now_iso.clone(),
-    )?;
+    );
     let _ = note_task_transition(&ctx.work, &ctx.date, task_id, "active");
-    // Mirror to the provider only when a complete op already drained — a
-    // reopen of a task the provider never saw needs no remote call.
-    let sync_status = match &ctx.google_task_id {
-        Some(google_task_id)
-            if today_outbox::has_synced_complete(&ctx.work, google_task_id)? =>
-        {
-            today_outbox::enqueue_record(
-                &ctx.work,
-                OutboxOp::Reopen,
-                &final_rel,
-                google_task_id,
-                ctx.google_task_list_id.clone(),
-                OutboxStatus::Ready,
-                &ctx.now_iso,
-            )?;
-            TaskSyncStatus::Syncing
-        }
-        _ => TaskSyncStatus::Local,
-    };
     outcome_for(&final_path, TaskBucket::Active, sync_status, task_id)
 }
 
@@ -304,13 +320,19 @@ fn run_defer(ctx: TransitionContext, request: &TaskTransitionRequest) -> Result<
 }
 
 /// Apply an explicit task lifecycle transition. Concurrency: the note's
-/// sha256 must equal `expected_task_hash` or the transition is rejected.
+/// sha256 must equal `expected_task_hash` or the transition is rejected;
+/// the workspace lock serializes the hash-check-then-write against other
+/// in-app transitions and today mutations (external editors stay unguarded
+/// — their window is the ms between check and write).
 #[tauri::command]
 pub fn task_transition(
     work_path: String,
     request: TaskTransitionRequest,
 ) -> Result<TaskTransitionOutcome, String> {
     assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
+    let work = normalize_existing_dir(&work_path)?;
+    let lock = crate::today_store::work_lock_for(&work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
     let ctx = load_context(
         &work_path,
         &request.task_path,
@@ -386,6 +408,9 @@ pub fn task_trash(
     remote_delete: Option<bool>,
 ) -> Result<TaskTrashOutcome, String> {
     assert_maru_can_write(&work_path, WorkspaceWriteAction::Delete)?;
+    let work = normalize_existing_dir(&work_path)?;
+    let lock = crate::today_store::work_lock_for(&work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
     let ctx = load_context(&work_path, &task_path, &expected_task_hash, None, None)?;
     let trash_path = unique_task_trash_path(&ctx.work, &ctx.path)?;
     if let Some(parent) = trash_path.parent() {
@@ -518,6 +543,51 @@ mod tests {
         assert_eq!(records[0].status, OutboxStatus::Ready);
         assert_eq!(records[0].google_task_id, "g-1");
         assert_eq!(records[0].google_task_list_id.as_deref(), Some("list-1"));
+    }
+
+    #[test]
+    fn complete_marks_record_ready_before_move_and_survives_event_failure() {
+        // Regression for the crash window that dropped provider completions:
+        // `ready` must land before the archive move, and an unwritable
+        // events dir must not abort a committed completion.
+        let (tmp, hash, rel) = setup_task(
+            "---\nstatus: active\ngoogleTaskId: g-1\n---\n# Body\n",
+        );
+        // `.maru/today/events` as a FILE makes every event append fail.
+        let events_dir = tmp.path().join(".maru/today/events");
+        fs::create_dir_all(events_dir.parent().unwrap()).unwrap();
+        fs::write(&events_dir, "not a directory").unwrap();
+
+        let outcome = task_transition(work(&tmp), request(TaskTransitionKind::Complete, &hash, &rel))
+            .unwrap();
+        assert_eq!(outcome.sync_status, TaskSyncStatus::Syncing);
+        assert!(tmp.path().join("tasks/archive/task.md").exists());
+        let records = list_records(tmp.path()).unwrap();
+        assert_eq!(records[0].status, OutboxStatus::Ready);
+    }
+
+    #[test]
+    fn prepared_complete_recovers_when_patch_landed_before_ready() {
+        // Crash between the frontmatter patch and prepared->ready: the note
+        // is done at the RECORDED (pre-move) path, so recovery must promote
+        // the record, not drop it.
+        let (tmp, _hash, rel) = setup_task("---\nstatus: active\ngoogleTaskId: g-9\n---\n# Body\n");
+        let record = prepare_complete_op(tmp.path(), &rel, "g-9", None, NOW).unwrap();
+        let note = tmp.path().join(&rel);
+        let patched = update_frontmatter_content(
+            &fs::read_to_string(&note).unwrap(),
+            "status",
+            Some(FrontmatterValue::String("done".to_string())),
+        )
+        .unwrap();
+        fs::write(&note, patched).unwrap();
+
+        let recovery = today_outbox::recover_outbox(tmp.path()).unwrap();
+        assert_eq!(recovery.recovered, 1);
+        assert_eq!(recovery.dropped, 0);
+        let records = list_records(tmp.path()).unwrap();
+        assert_eq!(records[0].id, record.id);
+        assert_eq!(records[0].status, OutboxStatus::Ready);
     }
 
     #[test]

@@ -266,7 +266,6 @@ describe("capacity math", () => {
     const summary = computeCapacitySummary({
       dayStart: "03:30",
       sleepStart: "21:30",
-      logicalDay: DAY,
       busy: busy([
         [`${DAY}T09:30:00`, `${DAY}T10:30:00`],
         [`${DAY}T09:00:00`, `${DAY}T10:00:00`],
@@ -280,17 +279,19 @@ describe("capacity math", () => {
     expect(summary.focusCapMinutes).toBe(480);
   });
 
-  it("clips busy intervals to the day window", () => {
+  it("counts busy intervals as given (Rust pre-clips) and caps at the window", () => {
+    // Rust `today_calendar_commitments` clips to the tz-aware day window;
+    // the frontend must not re-clip with local-tz math. Busy time can still
+    // never exceed the window itself.
     const summary = computeCapacitySummary({
       dayStart: "09:00",
       sleepStart: "17:00",
-      logicalDay: DAY,
-      busy: busy([[`${DAY}T07:00:00`, `${DAY}T10:00:00`]]),
+      busy: busy([[`${DAY}T00:00:00`, `${DAY}T23:00:00`]]),
       focusCapMinutes: 480,
       plan: null,
     });
-    expect(summary.busyMinutes).toBe(60);
-    expect(summary.freeMinutes).toBe(420);
+    expect(summary.busyMinutes).toBe(480);
+    expect(summary.freeMinutes).toBe(0);
   });
 
   it("flags over-capacity when proposed minutes exceed the focus budget", () => {

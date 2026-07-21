@@ -102,6 +102,17 @@ export function TodayPane({
     async (mutation: TodayMutation): Promise<TodaySnapshot | null> => {
       const current = snapshotRef.current;
       if (!workPath || !current) return null; // degraded read-only mode
+      // Manual plan edits spread the stored plan, whose inputRevision is
+      // always one revision behind (the backend recomputes the revision after
+      // every mutation). Stamp the current revision here — the one chokepoint
+      // every setPlan flows through; expectedRevision still guards true
+      // concurrency and the auto-planner discards stale runs before calling.
+      if (mutation.type === "setPlan") {
+        mutation = {
+          ...mutation,
+          plan: { ...mutation.plan, inputRevision: current.revision },
+        };
+      }
       try {
         const next = await todayMutate(workPath, current.logicalDay, current.revision, mutation);
         applySnapshot(next);

@@ -346,7 +346,15 @@ export async function createTaskNote(
   draft: CreateTaskDraft,
   root?: string | null,
 ): Promise<TaskNoteRow> {
-  if (!isTauri()) return mockTaskNoteRows(workPath)[0];
+  if (!isTauri()) {
+    const override = await invokeE2EOverride<TaskNoteRow>("create_task_note", {
+      workPath,
+      draft,
+      root: root ?? null,
+    });
+    if (override) return override;
+    return mockTaskNoteRows(workPath)[0];
+  }
   return invoke<TaskNoteRow>("create_task_note", { workPath, draft, root: root ?? null });
 }
 

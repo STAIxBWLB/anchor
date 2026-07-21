@@ -448,7 +448,8 @@ function firstProjectAlias(value: unknown): string | null {
   return null;
 }
 
-function scalarStringList(value: unknown): string[] {  if (Array.isArray(value)) {
+function scalarStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
     return value
       .map(scalarString)
       .filter((item): item is string => item !== null);

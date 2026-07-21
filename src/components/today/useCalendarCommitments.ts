@@ -23,7 +23,7 @@ export function useCalendarCommitments(): CalendarCommitmentsState {
   const logicalDay = snapshot?.logicalDay ?? "";
   const dayStart = snapshot?.dayStart ?? settings.dayStart;
   const sleepStart = snapshot?.sleepStart ?? settings.sleepStart;
-  const calendarsKey = settings.availabilityCalendars.join("");
+  const calendarsKey = settings.availabilityCalendars.join("\n");
 
   useEffect(() => {
     if (!workPath || !logicalDay) {

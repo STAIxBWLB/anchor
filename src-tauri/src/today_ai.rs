@@ -8,12 +8,13 @@
 
 use crate::agent_host::contracts::{TODAY_CAPTURE_SCHEMA_VERSION, TODAY_PLAN_SCHEMA_VERSION};
 use crate::today::{
-    block_crosses_sleep, parse_sleep_start, CapacitySummary, CaptureCandidate, DailyPlanV1,
-    PlanItemRef, TodayMutation, TodaySnapshot, TOP_LANE_MAX,
+    block_crosses_sleep, parse_sleep_start, parse_timezone, CalendarSyncStatus, CapacitySummary,
+    CaptureCandidate, DailyPlanV1, PlanItemRef, TodayMutation, TodaySnapshot, TOP_LANE_MAX,
 };
 use crate::today_store::{load_snapshot, today_mutate};
 use crate::vault::normalize_existing_dir;
 use chrono::DateTime;
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashSet;
@@ -117,6 +118,7 @@ pub fn validate_plan_output(
     expected_input_revision: &str,
     valid_refs: &HashSet<PlanItemRef>,
     sleep_start: &str,
+    tz: Tz,
 ) -> Result<DailyPlanV1, String> {
     reject_destructive_fields(raw)?;
     let output: TodayPlanOutputV1 = serde_json::from_value(raw.clone())
@@ -153,6 +155,17 @@ pub fn validate_plan_output(
         if !seen_refs.insert(&item.item_ref) {
             return Err(format!("today_ai_duplicate_ref: {}", item.item_ref.id()));
         }
+        // A plan proposes; it never carries external-write state. The store's
+        // SetPlan reconciliation would neutralize this anyway — rejecting it
+        // here makes a forged `selected`/`synced` payload a hard error.
+        if item.calendar_sync.status != CalendarSyncStatus::None
+            || item.calendar_sync.event_id.is_some()
+        {
+            return Err(format!(
+                "today_ai_calendar_sync_forbidden: {}",
+                item.item_ref.id()
+            ));
+        }
         if let Some(minutes) = item.estimate_minutes {
             if minutes == 0 || minutes > MAX_ESTIMATE_MINUTES {
                 return Err(format!(
@@ -162,7 +175,7 @@ pub fn validate_plan_output(
             }
         }
         if let Some(block) = &item.proposed_block {
-            if block_crosses_sleep(block, sleep)? {
+            if block_crosses_sleep(block, sleep, tz)? {
                 return Err(format!(
                     "today_ai_block_past_sleep: {} {}-{}",
                     item.item_ref.id(),
@@ -265,12 +278,17 @@ pub fn today_apply_plan_result(
     let raw: JsonValue = serde_json::from_str(&output_json)
         .map_err(|err| format!("today_ai_invalid_payload: {err}"))?;
     let valid: HashSet<PlanItemRef> = valid_refs.into_iter().collect();
+    // The sleep boundary must resolve in the workspace timezone, not the
+    // blocks' own offsets — take it from the stored snapshot.
+    let work = normalize_existing_dir(&work_path)?;
+    let tz = parse_timezone(&load_snapshot(&work, &logical_day)?.timezone)?;
     let plan = validate_plan_output(
         &raw,
         &logical_day,
         &expected_revision,
         &valid,
         &sleep_start,
+        tz,
     )?;
     today_mutate(
         work_path,
@@ -311,6 +329,10 @@ mod tests {
 
     fn valid_refs(ids: &[&str]) -> Vec<PlanItemRef> {
         ids.iter().map(|id| task_ref(id)).collect()
+    }
+
+    fn tz() -> Tz {
+        parse_timezone(SEOUL).unwrap()
     }
 
     fn top_item(id: &str) -> JsonValue {
@@ -544,7 +566,7 @@ mod tests {
     ) -> String {
         let raw: JsonValue = serde_json::from_str(&output).unwrap();
         let valid: HashSet<PlanItemRef> = valid_refs(refs).into_iter().collect();
-        validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap_err()
+        validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap_err()
     }
 
     #[test]
@@ -639,7 +661,7 @@ mod tests {
         let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
         let raw: JsonValue = serde_json::from_str(&output).unwrap();
         let valid: HashSet<PlanItemRef> = valid_refs(&["a"]).into_iter().collect();
-        assert!(validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).is_ok());
+        assert!(validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).is_ok());
     }
 
     #[test]
@@ -663,7 +685,7 @@ mod tests {
         let output = plan_output_json(&snapshot.revision, vec![first, second], vec![]);
         let raw: JsonValue = serde_json::from_str(&output).unwrap();
         let valid: HashSet<PlanItemRef> = valid_refs(&["a", "b"]).into_iter().collect();
-        assert!(validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).is_ok());
+        assert!(validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).is_ok());
     }
 
     #[test]
@@ -677,6 +699,33 @@ mod tests {
         let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
         assert!(plan_validation_err(output, &snapshot, &["a"])
             .starts_with("today_ai_block_past_sleep"));
+        // Wholly inside the sleep window: equally rejected (the old
+        // straddle-only check let a 22:00-23:00 block through).
+        let mut item = top_item("a");
+        item["proposedBlock"] =
+            json!({"startIso": "2026-07-21T22:00:00+09:00", "endIso": "2026-07-21T23:00:00+09:00"});
+        let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
+        assert!(plan_validation_err(output, &snapshot, &["a"])
+            .starts_with("today_ai_block_past_sleep"));
+    }
+
+    #[test]
+    fn plan_output_rejects_forged_calendar_sync_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        let snapshot = open_day(&work);
+        // `selected` would smuggle a block past the per-item publish opt-in.
+        let mut item = top_item("a");
+        item["calendarSync"] = json!({"status": "selected", "destination": "primary"});
+        let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
+        assert!(plan_validation_err(output, &snapshot, &["a"])
+            .starts_with("today_ai_calendar_sync_forbidden"));
+        // A spoofed `synced` + eventId would fake publication.
+        let mut item = top_item("a");
+        item["calendarSync"] = json!({"status": "synced", "eventId": "evt-1"});
+        let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
+        assert!(plan_validation_err(output, &snapshot, &["a"])
+            .starts_with("today_ai_calendar_sync_forbidden"));
     }
 
     #[test]
@@ -693,7 +742,7 @@ mod tests {
         .unwrap();
         raw["status"] = json!("done");
         let valid: HashSet<PlanItemRef> = valid_refs(&["a"]).into_iter().collect();
-        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap_err();
+        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap_err();
         assert_eq!(err, "today_ai_destructive_field: status");
         // Nested inside a plan item.
         let mut raw: JsonValue = serde_json::from_str(&plan_output_json(
@@ -703,7 +752,7 @@ mod tests {
         ))
         .unwrap();
         raw["plan"]["top"][0]["status"] = json!("done");
-        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap_err();
+        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap_err();
         assert_eq!(err, "today_ai_destructive_field: status");
         // External-system write key.
         let mut raw: JsonValue = serde_json::from_str(&plan_output_json(
@@ -713,7 +762,7 @@ mod tests {
         ))
         .unwrap();
         raw["googleTaskId"] = json!("gt-123");
-        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap_err();
+        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap_err();
         assert_eq!(err, "today_ai_destructive_field: googleTaskId");
     }
 
@@ -727,7 +776,7 @@ mod tests {
         let output = plan_output_json(&snapshot.revision, vec![item], vec![]);
         let raw: JsonValue = serde_json::from_str(&output).unwrap();
         let valid: HashSet<PlanItemRef> = valid_refs(&["a"]).into_iter().collect();
-        let plan = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap();
+        let plan = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap();
         assert_eq!(plan.top.len(), 1);
     }
 
@@ -756,7 +805,7 @@ mod tests {
         .unwrap();
         raw["surprise"] = json!(true);
         let valid: HashSet<PlanItemRef> = valid_refs(&["a"]).into_iter().collect();
-        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP).unwrap_err();
+        let err = validate_plan_output(&raw, DAY, &snapshot.revision, &valid, SLEEP, tz()).unwrap_err();
         assert!(err.starts_with("today_ai_invalid_payload"));
     }
 }

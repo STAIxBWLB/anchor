@@ -5,8 +5,11 @@
 import type { MaruAppMode } from "./settings";
 import type { DayState, TodayRoute } from "./today";
 
-/** localStorage key remembering which logical day already auto-opened Today. */
-export const TODAY_LAST_AUTO_OPEN_KEY = "maru:today:lastAutoOpenDay:v1";
+/** localStorage key remembering which logical day already auto-opened Today.
+ *  Workspace-scoped: opening workspace B must not consume A's first launch. */
+export function todayAutoOpenKey(workPath: string): string {
+  return `maru:today:lastAutoOpenDay:v1:${workPath}`;
+}
 
 export interface LaunchRouteInput {
   enabled: boolean;

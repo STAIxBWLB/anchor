@@ -23,7 +23,7 @@ export function useActiveSection(
   // Guard against feedback loops: while a programmatic scroll settles, the
   // observer must not override the step the user just picked.
   const pinnedRef = useRef<{ id: string; until: number } | null>(null);
-  const stepKey = stepIds.join("");
+  const stepKey = stepIds.join("\n");
 
   const findSections = useCallback((): HTMLElement[] => {
     const root = rootRef?.current ?? document;

@@ -17,7 +17,7 @@ use crate::today::{
 };
 use crate::vault::normalize_existing_dir;
 use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
@@ -167,6 +167,27 @@ fn newest_valid_revision(
     None
 }
 
+// --- Locks -------------------------------------------------------------------
+
+/// Process-wide per-workspace mutex serializing every read-check-write on
+/// day state (mutations, rollover, lifecycle transitions, publish persist).
+/// The revision check alone is TOCTOU-racy: two concurrent commands reading
+/// the same revision would both pass and the first writer would be silently
+/// lost. Single-user desktop, ms-scale writes — one lock per workspace is
+/// plenty; never hold it across network calls.
+pub(crate) fn work_lock_for(work: &Path) -> Result<Arc<Mutex<()>>, String> {
+    static LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+    let key = work.to_path_buf();
+    let mut locks = LOCKS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "today_work_lock_registry_poisoned".to_string())?;
+    Ok(locks
+        .entry(key)
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone())
+}
+
 // --- Event log --------------------------------------------------------------
 
 fn append_lock_for(path: &Path) -> Result<Arc<Mutex<()>>, String> {
@@ -212,6 +233,7 @@ fn append_task_event(
 ) -> Result<(), String> {
     let event = TaskEvent {
         ts: Utc::now().to_rfc3339(),
+        day: Some(logical_day.to_string()),
         kind: kind.to_string(),
         task_id,
         payload,
@@ -231,6 +253,7 @@ pub(crate) fn append_task_event_for(
 ) -> Result<(), String> {
     let event = TaskEvent {
         ts,
+        day: Some(logical_day.to_string()),
         kind: kind.to_string(),
         task_id,
         payload,
@@ -242,7 +265,8 @@ pub(crate) fn append_task_event_for(
 /// snapshot. Only the yesterday list carries a per-task status, so plan
 /// membership is detected but only yesterday entries are patched. Returns
 /// `Ok(false)` when the day state is absent or the task appears nowhere;
-/// callers never fail a transition over this.
+/// callers never fail a transition over this. Callers must hold the
+/// workspace lock (`work_lock_for`) — task_transition does.
 pub(crate) fn note_task_transition(
     work: &Path,
     logical_day: &str,
@@ -334,7 +358,9 @@ pub(crate) fn check_revision(
 /// Load the snapshot for the logical day containing `now`, initializing and
 /// persisting a fresh one when missing. Corrupt state JSON falls back to the
 /// newest valid revision snapshot (logging `state_recovered`); with no valid
-/// revision the day starts fresh.
+/// revision the day starts fresh. Creating a fresh day runs the rollover
+/// (close + seed the newest prior day) first, so a failed or skipped
+/// `today_rollover` call at boot can never permanently orphan the prior day.
 #[tauri::command]
 pub fn today_open(
     work_path: String,
@@ -365,15 +391,22 @@ pub fn today_open(
             json!({ "error": err }),
         );
     }
+    let lock = work_lock_for(&work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
     if let Ok(raw) = fs::read_to_string(state_path(&work, &day)) {
         let parsed = serde_json::from_str::<TodaySnapshot>(&raw)
             .ok()
             .filter(|snapshot: &TodaySnapshot| snapshot.logical_day == day);
         if let Some(snapshot) = parsed {
+            // Repair a journal projection an earlier failure skipped.
+            if matches!(snapshot.day_state, DayState::Planned | DayState::Skipped) {
+                let _ = project_journal(&work, &work.join("tasks"), &snapshot);
+            }
             return Ok(snapshot);
         }
         // Corrupt (or stale-day) state: recover from the newest valid revision.
         if let Some((_, mut snapshot)) = newest_valid_revision(&work, &day, None) {
+            assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
             persist_snapshot(&work, &mut snapshot)?;
             append_task_event(
                 &work,
@@ -386,13 +419,14 @@ pub fn today_open(
         }
     }
     assert_maru_can_write(&work_path, WorkspaceWriteAction::Create)?;
-    let mut snapshot = TodaySnapshot::new(day, now_iso, timezone, day_start, sleep_start);
-    persist_snapshot(&work, &mut snapshot)?;
+    let (_, snapshot) = rollover_inner(&work, &day, now_iso, timezone, day_start, sleep_start)?;
     Ok(snapshot)
 }
 
 /// Apply a single mutation against the current day state. Optimistic
-/// concurrency: `expected_revision` must match the stored revision.
+/// concurrency: `expected_revision` must match the stored revision, and the
+/// whole read-check-write runs under the workspace lock so two concurrent
+/// callers with the same revision cannot both win.
 #[tauri::command]
 pub fn today_mutate(
     work_path: String,
@@ -403,6 +437,8 @@ pub fn today_mutate(
     validate_logical_day(&logical_day)?;
     assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
+    let lock = work_lock_for(&work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
     let raw = fs::read_to_string(state_path(&work, &logical_day))
         .map_err(|_| "today_state_missing".to_string())?;
     let mut snapshot: TodaySnapshot = serde_json::from_str(&raw)
@@ -435,10 +471,15 @@ pub fn today_mutate(
     }
     snapshot.generated_at = Utc::now().to_rfc3339();
     persist_snapshot(&work, &mut snapshot)?;
+    // The state is committed above; the event append and journal projection
+    // are best-effort so a full events dir or unwritable journal cannot
+    // report a committed mutation as failed (the caller would then retry
+    // with a now-stale revision and hit a bogus conflict). Missed journal
+    // projections are repaired on the next today_open.
     let (task_id, payload) = mutation_event_details(&logical_day, &mutation)?;
-    append_task_event(&work, &logical_day, event_kind, task_id, payload)?;
+    let _ = append_task_event(&work, &logical_day, event_kind, task_id, payload);
     if matches!(snapshot.day_state, DayState::Planned | DayState::Skipped) {
-        project_journal(&work, &work.join("tasks"), &snapshot)?;
+        let _ = project_journal(&work, &work.join("tasks"), &snapshot);
     }
     Ok(snapshot)
 }
@@ -471,7 +512,11 @@ fn apply_mutation(
                 ));
             }
             if let Some(plan) = &snapshot.plan {
-                validate_plan(plan, parse_sleep_start(&snapshot.sleep_start)?)?;
+                validate_plan(
+                    plan,
+                    parse_sleep_start(&snapshot.sleep_start)?,
+                    parse_timezone(&snapshot.timezone)?,
+                )?;
             }
             snapshot.day_state = DayState::Planned;
             snapshot.stage = Some(TodayStage::Execute);
@@ -518,8 +563,46 @@ fn apply_mutation(
                     plan.logical_day, snapshot.logical_day
                 ));
             }
-            validate_plan(plan, parse_sleep_start(&snapshot.sleep_start)?)?;
-            snapshot.plan = Some(plan.clone());
+            validate_plan(
+                plan,
+                parse_sleep_start(&snapshot.sleep_start)?,
+                parse_timezone(&snapshot.timezone)?,
+            )?;
+            // Calendar sync state is owned by SetCalendarSync and the publish
+            // command, never by the incoming plan (so an AI payload cannot
+            // forge Selected/Synced to smuggle external writes past the
+            // per-block opt-in). Reconcile from the stored plan by ref:
+            // - post-publish states (synced/syncing/error) reflect external
+            //   reality — the stored block AND sync survive any replan, or a
+            //   real calendar event would be orphaned invisibly;
+            // - a pre-publish Selected opt-in survives only while the block
+            //   is unchanged — a moved block needs a fresh opt-in;
+            // - everything else carries no sync state.
+            let mut next = plan.clone();
+            for item in next.items_mut() {
+                let stored = snapshot.plan.as_ref().and_then(|current| {
+                    current
+                        .items()
+                        .find(|existing| existing.item_ref == item.item_ref)
+                });
+                match stored {
+                    Some(existing)
+                        if !matches!(
+                            existing.calendar_sync.status,
+                            crate::today::CalendarSyncStatus::None
+                                | crate::today::CalendarSyncStatus::Selected
+                        ) =>
+                    {
+                        item.proposed_block = existing.proposed_block.clone();
+                        item.calendar_sync = existing.calendar_sync.clone();
+                    }
+                    Some(existing) if existing.proposed_block == item.proposed_block => {
+                        item.calendar_sync = existing.calendar_sync.clone();
+                    }
+                    _ => item.calendar_sync = CalendarSyncState::none(),
+                }
+            }
+            snapshot.plan = Some(next);
             if matches!(snapshot.day_state, DayState::Unstarted | DayState::Preparing) {
                 snapshot.day_state = DayState::Preparing;
             }
@@ -601,6 +684,22 @@ fn is_untouched(snapshot: &TodaySnapshot) -> bool {
         && snapshot.yesterday.iter().all(|item| item.resolution.is_none())
 }
 
+/// Newest persisted day state strictly before `new_day`. Rollover closes
+/// this day rather than exactly `new_day - 1`, so a multi-day gap (weekend,
+/// vacation) still closes the last touched day and seeds its carryovers.
+fn newest_prior_day(work: &Path, new_day: &str) -> Option<String> {
+    let entries = fs::read_dir(today_dir(work)).ok()?;
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let stem = name.strip_suffix(".json")?.to_string();
+            validate_logical_day(&stem).ok()?;
+            (stem.as_str() < new_day).then_some(stem)
+        })
+        .max()
+}
+
 /// Close the previous logical day (if it was touched) and initialize the
 /// new one. Idempotent: a second run for the same logical day is a no-op.
 #[tauri::command]
@@ -622,18 +721,40 @@ pub fn today_rollover(
     let new_day = logical_day(now, day_start_time)
         .format("%Y-%m-%d")
         .to_string();
-    if state_path(&work, &new_day).exists() {
-        return Ok(TodayRolloverOutcome {
-            closed_day: None,
-            new_day,
-            seeded: 0,
-        });
+    let lock = work_lock_for(&work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
+    let (outcome, _) = rollover_inner(&work, &new_day, now_iso, timezone, day_start, sleep_start)?;
+    Ok(outcome)
+}
+
+/// Rollover body shared by `today_rollover` and `today_open`'s fresh-day
+/// creation. Caller must hold the workspace lock.
+fn rollover_inner(
+    work: &Path,
+    new_day: &str,
+    now_iso: String,
+    timezone: String,
+    day_start: String,
+    sleep_start: String,
+) -> Result<(TodayRolloverOutcome, TodaySnapshot), String> {
+    if let Ok(raw) = fs::read_to_string(state_path(work, new_day)) {
+        if let Ok(existing) = serde_json::from_str::<TodaySnapshot>(&raw) {
+            if existing.logical_day == new_day {
+                return Ok((
+                    TodayRolloverOutcome {
+                        closed_day: None,
+                        new_day: new_day.to_string(),
+                        seeded: 0,
+                    },
+                    existing,
+                ));
+            }
+        }
+        // Unparseable or wrong-day content falls through and is overwritten
+        // (today_open's revision-based recovery already ran before this).
     }
-    let prior_day = (logical_day(now, day_start_time) - Duration::days(1))
-        .format("%Y-%m-%d")
-        .to_string();
     let mut snapshot = TodaySnapshot::new(
-        new_day.clone(),
+        new_day.to_string(),
         now_iso,
         timezone,
         day_start,
@@ -641,12 +762,17 @@ pub fn today_rollover(
     );
     let mut closed_day = None;
     let mut seeded = 0;
-    if let Ok(raw) = fs::read_to_string(state_path(&work, &prior_day)) {
+    let prior_day = newest_prior_day(work, new_day);
+    if let Some(raw) = prior_day
+        .as_ref()
+        .and_then(|day| fs::read_to_string(state_path(work, day)).ok())
+    {
+        let prior_day = prior_day.expect("read implies a prior day");
         if let Ok(prior) = serde_json::from_str::<TodaySnapshot>(&raw) {
             if !is_untouched(&prior) {
                 // Journal first: projection only happens for planned/skipped
                 // days and must see the pre-close state.
-                project_journal(&work, &work.join("tasks"), &prior)?;
+                project_journal(work, &work.join("tasks"), &prior)?;
                 if let Some(plan) = &prior.plan {
                     for item in plan.items() {
                         snapshot.carryovers.push(CarryoverRef {
@@ -670,7 +796,20 @@ pub fn today_rollover(
                     && !matches!(prior.day_state, DayState::Planned | DayState::Skipped);
                 if unconfirmed {
                     snapshot.brain_dump = prior.brain_dump.clone();
-                    snapshot.plan = prior.plan.clone();
+                    // The carried plan is preserved for the new day's Prepare,
+                    // but re-identified: yesterday's logicalDay/inputRevision
+                    // would fail SetPlan's own checks, and past-dated blocks
+                    // plus published sync markers do not belong to a day that
+                    // was never confirmed.
+                    snapshot.plan = prior.plan.clone().map(|mut plan| {
+                        plan.logical_day = new_day.to_string();
+                        plan.input_revision = String::new();
+                        for item in plan.items_mut() {
+                            item.proposed_block = None;
+                            item.calendar_sync = CalendarSyncState::none();
+                        }
+                        plan
+                    });
                     snapshot.unconfirmed_content = true;
                 }
                 let mut closing = prior.clone();
@@ -678,9 +817,9 @@ pub fn today_rollover(
                     closing.day_state = DayState::Reviewed;
                 }
                 closing.generated_at = Utc::now().to_rfc3339();
-                persist_snapshot(&work, &mut closing)?;
+                persist_snapshot(work, &mut closing)?;
                 append_task_event(
-                    &work,
+                    work,
                     &prior_day,
                     "day_closed",
                     None,
@@ -688,8 +827,8 @@ pub fn today_rollover(
                 )?;
                 closed_day = Some(prior_day.clone());
                 append_task_event(
-                    &work,
-                    &new_day,
+                    work,
+                    new_day,
                     "rollover",
                     None,
                     json!({
@@ -700,8 +839,8 @@ pub fn today_rollover(
                 )?;
                 if unconfirmed {
                     append_task_event(
-                        &work,
-                        &new_day,
+                        work,
+                        new_day,
                         "boundary-unconfirmed",
                         None,
                         json!({ "from": prior_day }),
@@ -710,16 +849,20 @@ pub fn today_rollover(
             }
         }
     }
-    persist_snapshot(&work, &mut snapshot)?;
-    Ok(TodayRolloverOutcome {
-        closed_day,
-        new_day,
-        seeded,
-    })
+    persist_snapshot(work, &mut snapshot)?;
+    Ok((
+        TodayRolloverOutcome {
+            closed_day,
+            new_day: new_day.to_string(),
+            seeded,
+        },
+        snapshot,
+    ))
 }
 
 /// Read appended task events for a month (`YYYY-MM`) or, when `day` is
-/// given, only events whose UTC timestamp falls on that day.
+/// given, only events belonging to that logical day (falling back to the
+/// UTC timestamp prefix for legacy records without a `day` field).
 #[tauri::command]
 pub fn read_task_events(
     work_path: String,
@@ -746,7 +889,10 @@ pub fn read_task_events(
     Ok(match day_filter {
         Some(day) => events
             .into_iter()
-            .filter(|event| event.ts.starts_with(&day))
+            .filter(|event| match &event.day {
+                Some(event_day) => event_day == &day,
+                None => event.ts.starts_with(&day),
+            })
             .collect(),
         None => events,
     })
@@ -1222,6 +1368,214 @@ mod tests {
     }
 
     #[test]
+    fn rollover_after_multi_day_gap_closes_last_touched_day() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        // Friday: plan and confirm, then nothing all weekend.
+        let snapshot = open_day(&work, "2026-07-17T09:00:00+09:00");
+        let planned = mutate(
+            &work,
+            &snapshot,
+            TodayMutation::SetPlan {
+                plan: plan_for(&snapshot, &["a", "b"]),
+            },
+        );
+        mutate(&work, &planned, TodayMutation::ConfirmSetup);
+        // Monday boot: prior_day - 1 (Sunday) has no state, but Friday must
+        // still be closed and seeded from.
+        let outcome = today_rollover(
+            work,
+            "2026-07-20T08:00:00+09:00".to_string(),
+            SEOUL.to_string(),
+            DAY_START.to_string(),
+            SLEEP_START.to_string(),
+        )
+        .unwrap();
+        assert_eq!(outcome.closed_day.as_deref(), Some("2026-07-17"));
+        assert_eq!(outcome.seeded, 2);
+        let closed: TodaySnapshot = serde_json::from_str(
+            &fs::read_to_string(state_path(tmp.path(), "2026-07-17")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(closed.day_state, DayState::Reviewed);
+        let monday: TodaySnapshot = serde_json::from_str(
+            &fs::read_to_string(state_path(tmp.path(), "2026-07-20")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(monday.yesterday.len(), 2);
+        assert_eq!(monday.carryovers[0].carried_from, "2026-07-17");
+    }
+
+    #[test]
+    fn open_alone_runs_rollover_for_a_fresh_day() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        let snapshot = open_day(&work, "2026-07-21T09:00:00+09:00");
+        let planned = mutate(
+            &work,
+            &snapshot,
+            TodayMutation::SetPlan {
+                plan: plan_for(&snapshot, &["a"]),
+            },
+        );
+        mutate(&work, &planned, TodayMutation::ConfirmSetup);
+        // No today_rollover call — a failed/skipped boot rollover must not
+        // orphan the prior day, so today_open closes and seeds it itself.
+        let next = open_day(&work, "2026-07-22T09:00:00+09:00");
+        assert_eq!(next.logical_day, "2026-07-22");
+        assert_eq!(next.yesterday.len(), 1);
+        assert_eq!(next.carryovers.len(), 1);
+        let closed: TodaySnapshot = serde_json::from_str(
+            &fs::read_to_string(state_path(tmp.path(), "2026-07-21")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(closed.day_state, DayState::Reviewed);
+    }
+
+    #[test]
+    fn rollover_sanitizes_carried_unconfirmed_plan() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        let snapshot = open_day(&work, "2026-07-21T09:00:00+09:00");
+        let mut plan = plan_for(&snapshot, &["a"]);
+        plan.top[0].proposed_block = Some(ProposedBlock {
+            start_iso: "2026-07-21T10:00:00+09:00".to_string(),
+            end_iso: "2026-07-21T11:00:00+09:00".to_string(),
+        });
+        let planned = mutate(&work, &snapshot, TodayMutation::SetPlan { plan });
+        mutate(
+            &work,
+            &planned,
+            TodayMutation::SetCalendarSync {
+                item_ref: PlanItemRef::Task {
+                    task_id: "a".to_string(),
+                },
+                selected: true,
+                destination: None,
+            },
+        );
+        // Never confirmed: the plan carries over, but re-identified for the
+        // new day — yesterday's identity/revision would fail SetPlan, and
+        // past blocks/sync markers do not belong to the new day.
+        today_rollover(
+            work,
+            "2026-07-22T04:00:00+09:00".to_string(),
+            SEOUL.to_string(),
+            DAY_START.to_string(),
+            SLEEP_START.to_string(),
+        )
+        .unwrap();
+        let new_day: TodaySnapshot = serde_json::from_str(
+            &fs::read_to_string(state_path(tmp.path(), "2026-07-22")).unwrap(),
+        )
+        .unwrap();
+        assert!(new_day.unconfirmed_content);
+        let carried = new_day.plan.as_ref().unwrap();
+        assert_eq!(carried.logical_day, "2026-07-22");
+        assert_eq!(carried.input_revision, "");
+        assert!(carried.top[0].proposed_block.is_none());
+        assert_eq!(
+            carried.top[0].calendar_sync.status,
+            crate::today::CalendarSyncStatus::None
+        );
+    }
+
+    #[test]
+    fn set_plan_preserves_stored_calendar_sync_and_ignores_forged_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        let snapshot = open_day(&work, "2026-07-21T09:00:00+09:00");
+        let block = ProposedBlock {
+            start_iso: "2026-07-21T10:00:00+09:00".to_string(),
+            end_iso: "2026-07-21T11:00:00+09:00".to_string(),
+        };
+        let mut plan = plan_for(&snapshot, &["a"]);
+        plan.top[0].proposed_block = Some(block.clone());
+        let planned = mutate(&work, &snapshot, TodayMutation::SetPlan { plan });
+        let selected = mutate(
+            &work,
+            &planned,
+            TodayMutation::SetCalendarSync {
+                item_ref: PlanItemRef::Task {
+                    task_id: "a".to_string(),
+                },
+                selected: true,
+                destination: Some("work-cal".to_string()),
+            },
+        );
+        // Replan with the same item+block, but the incoming payload forges a
+        // Synced state: the stored Selected state wins, the forgery is
+        // discarded.
+        let mut replan = plan_for(&selected, &["a"]);
+        replan.top[0].proposed_block = Some(block);
+        replan.top[0].calendar_sync = CalendarSyncState {
+            status: crate::today::CalendarSyncStatus::Synced,
+            message: None,
+            event_id: Some("evt-forged".to_string()),
+            destination: Some("attacker-cal".to_string()),
+        };
+        let after = mutate(&work, &selected, TodayMutation::SetPlan { plan: replan });
+        let item = &after.plan.as_ref().unwrap().top[0];
+        assert_eq!(
+            item.calendar_sync.status,
+            crate::today::CalendarSyncStatus::Selected
+        );
+        assert_eq!(item.calendar_sync.destination.as_deref(), Some("work-cal"));
+        assert!(item.calendar_sync.event_id.is_none());
+        // Replan that CHANGES the block: the selection no longer applies to
+        // what the user opted into, so sync resets to none.
+        let mut moved = plan_for(&after, &["a"]);
+        moved.top[0].proposed_block = Some(ProposedBlock {
+            start_iso: "2026-07-21T14:00:00+09:00".to_string(),
+            end_iso: "2026-07-21T15:00:00+09:00".to_string(),
+        });
+        let after_move = mutate(&work, &after, TodayMutation::SetPlan { plan: moved });
+        assert_eq!(
+            after_move.plan.as_ref().unwrap().top[0].calendar_sync.status,
+            crate::today::CalendarSyncStatus::None
+        );
+    }
+
+    #[test]
+    fn set_plan_preserves_published_block_and_sync_across_replans() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path().to_string_lossy().to_string();
+        let snapshot = open_day(&work, "2026-07-21T09:00:00+09:00");
+        let block = ProposedBlock {
+            start_iso: "2026-07-21T10:00:00+09:00".to_string(),
+            end_iso: "2026-07-21T11:00:00+09:00".to_string(),
+        };
+        let mut plan = plan_for(&snapshot, &["a"]);
+        plan.top[0].proposed_block = Some(block.clone());
+        let planned = mutate(&work, &snapshot, TodayMutation::SetPlan { plan });
+        // Simulate a completed publish by writing the synced state the way
+        // the publish command does (directly into the stored snapshot).
+        let (raw, mut stored) = load_snapshot_with_raw(tmp.path(), "2026-07-21").unwrap();
+        stored.plan.as_mut().unwrap().top[0].calendar_sync = CalendarSyncState {
+            status: crate::today::CalendarSyncStatus::Synced,
+            message: None,
+            event_id: Some("evt-42".to_string()),
+            destination: Some("primary".to_string()),
+        };
+        snapshot_revision(tmp.path(), &stored, &raw).unwrap();
+        persist_snapshot(tmp.path(), &mut stored).unwrap();
+        let _ = planned;
+        // A replan that drops the block entirely (the auto-planner emits
+        // null blocks) must not orphan the published event: block + Synced
+        // state both survive.
+        let replan = plan_for(&stored, &["a"]);
+        assert!(replan.top[0].proposed_block.is_none());
+        let after = mutate(&work, &stored, TodayMutation::SetPlan { plan: replan });
+        let item = &after.plan.as_ref().unwrap().top[0];
+        assert_eq!(item.proposed_block.as_ref(), Some(&block));
+        assert_eq!(
+            item.calendar_sync.status,
+            crate::today::CalendarSyncStatus::Synced
+        );
+        assert_eq!(item.calendar_sync.event_id.as_deref(), Some("evt-42"));
+    }
+
+    #[test]
     fn apply_yesterday_decision_updates_item() {
         let tmp = tempfile::tempdir().unwrap();
         let work = tmp.path().to_string_lossy().to_string();
@@ -1288,9 +1642,27 @@ mod tests {
         assert!(month_events
             .iter()
             .any(|event| event.kind == "brain_dump_set"));
-        let today = Utc::now().format("%Y-%m-%d").to_string();
-        let day_events = read_task_events(work, None, Some(today)).unwrap();
-        assert_eq!(day_events.len(), month_events.len());
+        // Day filtering follows the event's logical day, not its UTC ts: an
+        // early-morning completion (04:00 KST = 19:00Z on the PRIOR UTC
+        // date) must still land in the logical day it was made on.
+        append_task_event_for(
+            tmp.path(),
+            "2026-07-21",
+            "task_completed",
+            Some("t-early".to_string()),
+            json!({}),
+            "2026-07-20T19:00:00Z".to_string(),
+        )
+        .unwrap();
+        let day_events =
+            read_task_events(work.clone(), None, Some("2026-07-21".to_string())).unwrap();
+        assert_eq!(day_events.len(), month_events.len() + 1);
+        assert!(day_events
+            .iter()
+            .any(|event| event.task_id.as_deref() == Some("t-early")));
+        assert!(read_task_events(work, None, Some("2026-07-20".to_string()))
+            .unwrap()
+            .is_empty());
         assert!(read_task_events(
             tmp.path().to_string_lossy().to_string(),
             None,

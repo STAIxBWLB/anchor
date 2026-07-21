@@ -387,6 +387,11 @@ impl TodaySnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct TaskEvent {
     pub ts: String,
+    /// Logical day the event belongs to. `ts` is UTC, so a timestamp-prefix
+    /// filter misattributes early-morning events (03:30-09:00 KST land on the
+    /// prior UTC date); day queries must use this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub day: Option<String>,
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<String>,
@@ -623,37 +628,56 @@ pub fn compute_capacity(
     })
 }
 
-/// True when the proposed block straddles the sleep boundary of its start
-/// date (start < sleep < end). A block ending exactly at sleep is fine.
-pub fn block_crosses_sleep(block: &ProposedBlock, sleep_start: NaiveTime) -> Result<bool, String> {
+/// True when the proposed block violates the sleep boundary of its start
+/// date: any block ending past the boundary (straddling it or lying wholly
+/// inside the sleep window). A block ending exactly at sleep is fine. The
+/// boundary is resolved in the configured timezone, not the block's own
+/// offset, so a DST transition or a wrong AI-supplied offset cannot shift
+/// the cutoff.
+/// ponytail: early-morning blocks on the next civil day (before dayStart)
+/// still pass; reject via a full day-window check if that ever matters.
+pub fn block_crosses_sleep(
+    block: &ProposedBlock,
+    sleep_start: NaiveTime,
+    tz: Tz,
+) -> Result<bool, String> {
     let start = DateTime::parse_from_rfc3339(&block.start_iso)
-        .map_err(|err| format!("today_invalid_block: {err}"))?;
+        .map_err(|err| format!("today_invalid_block: {err}"))?
+        .with_timezone(&tz);
     let end = DateTime::parse_from_rfc3339(&block.end_iso)
-        .map_err(|err| format!("today_invalid_block: {err}"))?;
+        .map_err(|err| format!("today_invalid_block: {err}"))?
+        .with_timezone(&tz);
     if end <= start {
         return Err("today_invalid_block: end must be after start".to_string());
     }
     let sleep_naive = start.date_naive().and_time(sleep_start);
-    let sleep = start
-        .offset()
+    let sleep = tz
         .from_local_datetime(&sleep_naive)
-        .single()
+        .earliest()
         .ok_or_else(|| "today_invalid_block: unresolvable sleep boundary".to_string())?;
-    Ok(start < sleep && sleep < end)
+    Ok(end > sleep)
 }
 
-/// Validate a plan before it is stored: top lane cap and sleep-boundary
-/// guard on every proposed block.
-pub fn validate_plan(plan: &DailyPlanV1, sleep_start: NaiveTime) -> Result<(), String> {
+/// Validate a plan before it is stored: top lane cap, no duplicate item
+/// refs, and the sleep-boundary guard on every proposed block.
+pub fn validate_plan(plan: &DailyPlanV1, sleep_start: NaiveTime, tz: Tz) -> Result<(), String> {
     if plan.top.len() > TOP_LANE_MAX {
         return Err(format!(
             "today_plan_top_exceeded: {} > {TOP_LANE_MAX}",
             plan.top.len()
         ));
     }
+    let mut seen: Vec<&PlanItemRef> = Vec::new();
     for item in plan.items() {
+        if seen.contains(&&item.item_ref) {
+            return Err(format!(
+                "today_plan_duplicate_ref: {}",
+                item.item_ref.id()
+            ));
+        }
+        seen.push(&item.item_ref);
         if let Some(block) = &item.proposed_block {
-            if block_crosses_sleep(block, sleep_start)? {
+            if block_crosses_sleep(block, sleep_start, tz)? {
                 return Err(format!(
                     "today_block_crosses_sleep: {} {}-{}",
                     item.item_ref.id(),
@@ -892,21 +916,36 @@ mod tests {
     #[test]
     fn block_crossing_sleep_start_is_rejected() {
         let sleep = parse_sleep_start("21:30").unwrap();
+        let tz = parse_timezone("Asia/Seoul").unwrap();
         let crossing = ProposedBlock {
             start_iso: "2026-07-21T21:00:00+09:00".to_string(),
             end_iso: "2026-07-21T22:00:00+09:00".to_string(),
         };
-        assert!(block_crosses_sleep(&crossing, sleep).unwrap());
+        assert!(block_crosses_sleep(&crossing, sleep, tz).unwrap());
+        // Wholly inside the sleep window: also rejected, not just straddles.
+        let inside = ProposedBlock {
+            start_iso: "2026-07-21T22:00:00+09:00".to_string(),
+            end_iso: "2026-07-21T23:00:00+09:00".to_string(),
+        };
+        assert!(block_crosses_sleep(&inside, sleep, tz).unwrap());
         let ok = ProposedBlock {
             start_iso: "2026-07-21T20:00:00+09:00".to_string(),
             end_iso: "2026-07-21T21:30:00+09:00".to_string(),
         };
-        assert!(!block_crosses_sleep(&ok, sleep).unwrap());
+        assert!(!block_crosses_sleep(&ok, sleep, tz).unwrap());
+        // The boundary follows the configured timezone, not the block's own
+        // offset: 12:00Z is 21:00 KST, so ending at 13:30Z (22:30 KST) is
+        // past the KST boundary even though the UTC-naive reading is not.
+        let utc_offset = ProposedBlock {
+            start_iso: "2026-07-21T12:00:00+00:00".to_string(),
+            end_iso: "2026-07-21T13:30:00+00:00".to_string(),
+        };
+        assert!(block_crosses_sleep(&utc_offset, sleep, tz).unwrap());
         let backwards = ProposedBlock {
             start_iso: "2026-07-21T22:00:00+09:00".to_string(),
             end_iso: "2026-07-21T21:00:00+09:00".to_string(),
         };
-        assert!(block_crosses_sleep(&backwards, sleep)
+        assert!(block_crosses_sleep(&backwards, sleep, tz)
             .unwrap_err()
             .starts_with("today_invalid_block"));
     }
@@ -925,6 +964,7 @@ mod tests {
             calendar_sync: CalendarSyncState::none(),
         };
         let sleep = parse_sleep_start("21:30").unwrap();
+        let tz = parse_timezone("Asia/Seoul").unwrap();
         let mut plan = DailyPlanV1 {
             logical_day: "2026-07-21".to_string(),
             input_revision: String::new(),
@@ -934,7 +974,7 @@ mod tests {
             reasons: vec![],
             warnings: vec![],
         };
-        assert!(validate_plan(&plan, sleep)
+        assert!(validate_plan(&plan, sleep, tz)
             .unwrap_err()
             .starts_with("today_plan_top_exceeded"));
         plan.top.truncate(3);
@@ -942,11 +982,16 @@ mod tests {
             start_iso: "2026-07-21T21:00:00+09:00".to_string(),
             end_iso: "2026-07-21T22:00:00+09:00".to_string(),
         });
-        assert!(validate_plan(&plan, sleep)
+        assert!(validate_plan(&plan, sleep, tz)
             .unwrap_err()
             .starts_with("today_block_crosses_sleep"));
         plan.top[0].proposed_block = None;
-        assert!(validate_plan(&plan, sleep).is_ok());
+        assert!(validate_plan(&plan, sleep, tz).is_ok());
+        // Same ref in two lanes: rejected regardless of lane.
+        plan.flexible = vec![item("a", None)];
+        assert!(validate_plan(&plan, sleep, tz)
+            .unwrap_err()
+            .starts_with("today_plan_duplicate_ref"));
     }
 
     #[test]

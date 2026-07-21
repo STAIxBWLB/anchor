@@ -124,7 +124,6 @@ export function useTodayPlanner({ getCaptureCandidates, commitments }: UseTodayP
         focusCapMinutes: settings.dailyFocusCapMinutes,
         plan: existing,
         provisionalEstimateMinutes: settings.provisionalEstimateMinutes,
-        logicalDay: snap.logicalDay,
       });
       const proposed = buildDeterministicPlan({
         logicalDay: snap.logicalDay,
@@ -183,23 +182,35 @@ export function useTodayPlanner({ getCaptureCandidates, commitments }: UseTodayP
     [settings.autoPlan],
   );
 
+  // Single-flight manual run: a click while one is in flight marks a rerun
+  // instead of starting a concurrent run.
+  const manualRunRef = useRef<"idle" | "running" | "rerun">("idle");
   const runPlanNow = useCallback(async () => {
+    if (manualRunRef.current !== "idle") {
+      manualRunRef.current = "rerun";
+      return;
+    }
+    manualRunRef.current = "running";
     plannerRef.current?.cancel();
-    const snap = snapshotRef.current;
-    if (!snap) return;
     setPlanning(true);
     try {
-      const plan = await invokePlanRef.current({
-        workPath: workPath ?? "",
-        logicalDay: snap.logicalDay,
-        inputRevision: snap.revision,
-        reason: "brainDump",
-      });
-      if (plan) {
-        const next = await mutate({ type: "setPlan", plan });
-        if (next) announceDiff(snap.plan ?? null, next.plan ?? null);
-      }
+      do {
+        manualRunRef.current = "running";
+        const snap = snapshotRef.current;
+        if (!snap) break;
+        const plan = await invokePlanRef.current({
+          workPath: workPath ?? "",
+          logicalDay: snap.logicalDay,
+          inputRevision: snap.revision,
+          reason: "brainDump",
+        });
+        if (plan) {
+          const next = await mutate({ type: "setPlan", plan });
+          if (next) announceDiff(snap.plan ?? null, next.plan ?? null);
+        }
+      } while ((manualRunRef.current as string) === "rerun");
     } finally {
+      manualRunRef.current = "idle";
       setPlanning(false);
     }
   }, [workPath, mutate, announceDiff]);

@@ -325,7 +325,7 @@ import {
   resolveLaunchRoute,
   resolveNewDayNotice,
   resolveRouteForDayState,
-  TODAY_LAST_AUTO_OPEN_KEY,
+  todayAutoOpenKey,
 } from "./lib/todayRouting";
 import { onAction as onNotificationAction } from "@tauri-apps/plugin-notification";
 import { applyThemePreference, applyThemeVars, buildThemeVars } from "./lib/theme";
@@ -1080,6 +1080,11 @@ function MainApp() {
   const [todayBannerVisible, setTodayBannerVisible] = useState(false);
   // Last logical day seen by the new-day watcher (boot seeds it too).
   const todayLogicalDayRef = useRef<string | null>(null);
+  // Workspace whose boot auto-opened Today this launch. The settings-load
+  // effect re-applies the persisted mode after boot (and again when `booting`
+  // flips) — it must keep the auto-open decision instead of clobbering it.
+  // Cleared on the first explicit user mode change.
+  const todayAutoOpenPathRef = useRef<string | null>(null);
   const e2eFlowEnabled = useMemo(() => isE2EFlowEnabled(), []);
   const diagramEnabled = useMemo(() => isDiagramEnabled(), []);
   // Graph mode focus target (NeighborhoodPane "그래프에서 보기" → k-hop focus).
@@ -1677,7 +1682,13 @@ function MainApp() {
       .then((settings) => {
         if (!cancelled) {
           setMaruSettings(settings);
-          setAppMode(settings.ui.activeAppMode);
+          // A boot-time Today auto-open beat this load; keep it instead of
+          // re-applying the persisted mode over it.
+          setAppMode(
+            todayAutoOpenPathRef.current === settingsWorkPath
+              ? "tasks"
+              : settings.ui.activeAppMode,
+          );
           setEditorViewMode(settings.ui.editorViewMode);
           setRightPaneTab(settings.ui.rightPaneTab);
           setSettingsLoaded(true);
@@ -1697,17 +1708,20 @@ function MainApp() {
   useEffect(() => {
     let dispose: (() => void) | null = null;
     void listenMaruSettingsUpdated((payload) => {
+      // Unrelated settings saves (layout, outline, …) echo back here with the
+      // stored activeAppMode; they must not clobber a boot Today auto-open.
+      const keepAutoOpenMode = () => todayAutoOpenPathRef.current === settingsWorkPath;
       if (payload.workPath === settingsWorkPath) {
         const next = normalizeMaruSettings(payload.settings);
         setMaruSettings(next);
-        setAppMode(next.ui.activeAppMode);
+        if (!keepAutoOpenMode()) setAppMode(next.ui.activeAppMode);
         setEditorViewMode(next.ui.editorViewMode);
         setRightPaneTab(next.ui.rightPaneTab);
       } else if (payload.globalChanged && settingsWorkPath) {
         void readMaruSettings(settingsWorkPath)
           .then((next) => {
             setMaruSettings(next);
-            setAppMode(next.ui.activeAppMode);
+            if (!keepAutoOpenMode()) setAppMode(next.ui.activeAppMode);
             setEditorViewMode(next.ui.editorViewMode);
             setRightPaneTab(next.ui.rightPaneTab);
           })
@@ -2111,6 +2125,7 @@ function MainApp() {
 
   const setPersistedAppMode = useCallback(
     (activeAppMode: AppMode) => {
+      todayAutoOpenPathRef.current = null; // explicit user choice from here on
       setAppMode(activeAppMode);
       updateSettings((current) => ({
         ...current,
@@ -4059,7 +4074,11 @@ function MainApp() {
               readMaruSettings(bootSettingsPath),
             );
             setMaruSettings(bootSettings);
-            setAppMode(bootSettings.ui.activeAppMode);
+            // A prior boot pass (StrictMode double-run) may already have
+            // auto-opened Today — keep that over the persisted mode.
+            if (todayAutoOpenPathRef.current === null) {
+              setAppMode(bootSettings.ui.activeAppMode);
+            }
             setEditorViewMode(bootSettings.ui.editorViewMode);
             setRightPaneTab(bootSettings.ui.rightPaneTab);
           } catch {
@@ -4088,7 +4107,7 @@ function MainApp() {
                 todaySettings.dayStart,
               );
               todayLogicalDayRef.current = info.logicalDay;
-              const lastAutoOpenDay = window.localStorage.getItem(TODAY_LAST_AUTO_OPEN_KEY);
+              const lastAutoOpenDay = window.localStorage.getItem(todayAutoOpenKey(initialPath));
               if (lastAutoOpenDay !== info.logicalDay) {
                 // Close out a missed day boundary before inspecting the day.
                 await todayRollover(
@@ -4119,7 +4138,8 @@ function MainApp() {
                 if (decision) {
                   setTodayRoute(decision.route);
                   setAppMode("tasks");
-                  window.localStorage.setItem(TODAY_LAST_AUTO_OPEN_KEY, info.logicalDay);
+                  todayAutoOpenPathRef.current = initialPath;
+                  window.localStorage.setItem(todayAutoOpenKey(initialPath), info.logicalDay);
                 }
               }
             } catch (err) {

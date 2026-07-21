@@ -207,11 +207,18 @@ describe("TodayPrepare", () => {
     expect(container.querySelector(".today-braindump-counter")?.textContent).toBe("2000/2000");
   });
 
-  it("disables undo after the backend reports nothing to undo", async () => {
+  it("enables undo only after a save lands, then disables it when the backend reports nothing to undo", async () => {
     const { container, mutate } = await renderPrepare();
     const undo = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((b) =>
       b.textContent?.includes(translate("ko", "today.prepare.braindump.undo")),
     )!;
+    // Fresh session: nothing to undo yet.
+    expect(undo.disabled).toBe(true);
+    const textarea = container.querySelector<HTMLTextAreaElement>(".today-braindump-textarea")!;
+    await act(async () => {
+      typeText(textarea, "메모");
+      await sleep(900);
+    });
     expect(undo.disabled).toBe(false);
     mutate.mockResolvedValueOnce(null);
     await act(async () => {

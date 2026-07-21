@@ -335,15 +335,13 @@ export interface ComputeCapacityArgs {
   dayStart: string;
   /** HH:MM local time the day window ends (next civil day when <= dayStart). */
   sleepStart: string;
+  /** Busy intervals, already clipped to the tz-aware day window by the Rust
+   *  side (`today_calendar_commitments`) — no re-clipping happens here. */
   busy: CalendarCommitment[];
   /** Caller-side focus cap; effective budget is min(freeMinutes, cap). */
   focusCapMinutes: number;
   plan: DailyPlanV1 | null;
   provisionalEstimateMinutes?: number;
-  /** Logical day (YYYY-MM-DD). When provided, busy intervals are clipped to
-   *  the day window (window bounds are parsed in the local JS timezone — see
-   *  the Rust side for the authoritative tz-aware computation). */
-  logicalDay?: string | null;
 }
 
 /** Free/busy/focus math for one logical day. Mirrors `compute_capacity`:
@@ -355,19 +353,11 @@ export function computeCapacitySummary(args: ComputeCapacityArgs): CapacitySumma
   const windowMinutes =
     endMinutes > startMinutes ? endMinutes - startMinutes : endMinutes + 24 * 60 - startMinutes;
 
-  let windowStartMs: number | null = null;
-  if (args.logicalDay) {
-    const parsed = Date.parse(`${args.logicalDay}T${args.dayStart}:00`);
-    windowStartMs = Number.isFinite(parsed) ? parsed : null;
-  }
-  const windowEndMs = windowStartMs === null ? null : windowStartMs + windowMinutes * 60_000;
-
   const busyMinutes = Math.min(
-    mergeBusyIntervals(args.busy).reduce((total, interval) => {
-      const clippedStart = windowStartMs === null ? interval.startMs : Math.max(interval.startMs, windowStartMs);
-      const clippedEnd = windowEndMs === null ? interval.endMs : Math.min(interval.endMs, windowEndMs);
-      return total + Math.max(0, clippedEnd - clippedStart);
-    }, 0) / 60_000,
+    mergeBusyIntervals(args.busy).reduce(
+      (total, interval) => total + (interval.endMs - interval.startMs),
+      0,
+    ) / 60_000,
     windowMinutes,
   );
   const freeMinutes = windowMinutes - Math.floor(busyMinutes);
@@ -582,24 +572,32 @@ export function createAutoPlanner(deps: AutoPlannerDeps): AutoPlanner {
     result: DailyPlanV1 | null | void,
     runGeneration: number,
     startRevision: string | null,
+    reason: AutoPlanTriggerKind,
   ) => {
-    running = false;
     // Stale discard: a newer schedule/cancel superseded this run, or the
     // snapshot moved on while the run was in flight — drop the result.
     const stale =
       runGeneration !== generation || (deps.getSnapshot()?.revision ?? null) !== startRevision;
     if (!stale && result && startRevision !== null) {
       try {
+        // `running` stays true until the apply lands so a debounced schedule
+        // firing mid-apply queues a rerun instead of racing the mutation.
         await deps.mutate({ type: "setPlan", plan: result }, startRevision);
       } catch {
         // Apply failures (e.g. revision conflict) are non-fatal; the next
         // scheduled run replans from the newer snapshot.
       }
     }
-    if (rerunReason !== null && runGeneration === generation) {
-      const reason = rerunReason;
+    running = false;
+    if (runGeneration !== generation) return; // cancelled/superseded
+    if (rerunReason !== null) {
+      const rerun = rerunReason;
       rerunReason = null;
-      startRun(reason);
+      startRun(rerun);
+    } else if (stale) {
+      // Revision moved mid-run: the triggering change is still unplanned —
+      // replan once (debounced) from the fresh snapshot instead of dropping.
+      schedule(reason);
     }
   };
 
@@ -617,28 +615,30 @@ export function createAutoPlanner(deps: AutoPlannerDeps): AutoPlanner {
           reason,
         }),
       )
-      .then((result) => finish(result, runGeneration, startRevision))
-      .catch(() => finish(null, runGeneration, startRevision));
+      .then((result) => finish(result, runGeneration, startRevision, reason))
+      .catch(() => finish(null, runGeneration, startRevision, reason));
+  };
+
+  const schedule = (reason: AutoPlanTriggerKind) => {
+    pendingReason = reason;
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      const runReason = pendingReason;
+      pendingReason = null;
+      if (runReason === null) return;
+      if (running) {
+        rerunReason = runReason;
+        return;
+      }
+      startRun(runReason);
+    }, debounceMs);
   };
 
   return {
-    schedule(reason) {
-      pendingReason = reason;
-      clearTimer();
-      timer = setTimeout(() => {
-        timer = null;
-        const runReason = pendingReason;
-        pendingReason = null;
-        if (runReason === null) return;
-        if (running) {
-          rerunReason = runReason;
-          return;
-        }
-        startRun(runReason);
-      }, debounceMs);
-    },
+    schedule,
     notifyChange(kind) {
-      if (isAutoPlanTrigger(kind)) this.schedule(kind);
+      if (isAutoPlanTrigger(kind)) schedule(kind);
     },
     cancel() {
       clearTimer();

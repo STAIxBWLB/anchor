@@ -4,7 +4,7 @@ import {
   resolveLaunchRoute,
   resolveNewDayNotice,
   resolveRouteForDayState,
-  TODAY_LAST_AUTO_OPEN_KEY,
+  todayAutoOpenKey,
   type LaunchRouteInput,
 } from "./todayRouting";
 
@@ -87,8 +87,9 @@ describe("resolveNewDayNotice", () => {
   });
 });
 
-describe("TODAY_LAST_AUTO_OPEN_KEY", () => {
-  it("is the versioned auto-open marker key", () => {
-    expect(TODAY_LAST_AUTO_OPEN_KEY).toBe("maru:today:lastAutoOpenDay:v1");
+describe("todayAutoOpenKey", () => {
+  it("scopes the versioned auto-open marker key per workspace", () => {
+    expect(todayAutoOpenKey("/work/a")).toBe("maru:today:lastAutoOpenDay:v1:/work/a");
+    expect(todayAutoOpenKey("/work/a")).not.toBe(todayAutoOpenKey("/work/b"));
   });
 });

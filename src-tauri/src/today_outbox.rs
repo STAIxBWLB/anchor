@@ -7,9 +7,10 @@
 //
 // Crash-recovery semantics:
 // - `prepared`: written BEFORE the local task mutation. On recovery, a
-//   prepared record whose task note is already `status: done` is marked
-//   `ready` (the mutation landed; sync is still owed); one whose note is not
-//   done is dropped (the mutation never happened, so nothing to sync).
+//   prepared record whose task note shows the local mutation landed (op-
+//   aware: complete → note done, reopen → note no longer done, delete →
+//   note gone) is marked `ready` (sync is still owed); otherwise it is
+//   dropped (the mutation never happened, so nothing to sync).
 // - `syncing`: set while a gws call is in flight. A crash leaves it behind;
 //   recovery/drain treat it as `ready` (gws ops are idempotent, so a repeat
 //   is safe).
@@ -198,7 +199,7 @@ pub fn recover_outbox(work: &Path) -> Result<OutboxRecovery, String> {
                 outcome.recovered += 1;
             }
             OutboxStatus::Prepared => {
-                if task_note_is_done(work, &record.task_path) {
+                if local_mutation_landed(work, &record) {
                     set_record_status(work, &mut record, OutboxStatus::Ready, &now)?;
                     outcome.recovered += 1;
                 } else {
@@ -213,15 +214,28 @@ pub fn recover_outbox(work: &Path) -> Result<OutboxRecovery, String> {
     Ok(outcome)
 }
 
-fn task_note_is_done(work: &Path, task_path: &str) -> bool {
-    let Ok(raw) = fs::read_to_string(work.join(task_path)) else {
-        return false;
-    };
+/// Op-aware "did the local mutation land" predicate for prepared records.
+/// The record path is the pre-move note path (ready lands before any bucket
+/// move), so the note is expected there in every prepared crash window.
+fn local_mutation_landed(work: &Path, record: &OutboxRecord) -> bool {
+    match record.op {
+        OutboxOp::Complete => matches!(
+            task_note_status(work, &record.task_path),
+            Some(status) if status.eq_ignore_ascii_case("done")
+        ),
+        OutboxOp::Reopen => matches!(
+            task_note_status(work, &record.task_path),
+            Some(status) if !status.eq_ignore_ascii_case("done")
+        ),
+        OutboxOp::Delete => !work.join(&record.task_path).exists(),
+    }
+}
+
+fn task_note_status(work: &Path, task_path: &str) -> Option<String> {
+    let raw = fs::read_to_string(work.join(task_path)).ok()?;
     let parts = parse_frontmatter(&raw);
     let frontmatter = crate::tasks::yaml_to_json(&parts.meta);
     crate::tasks::string_field(&frontmatter, "status")
-        .map(|status| status.eq_ignore_ascii_case("done"))
-        .unwrap_or(false)
 }
 
 // --- gws spawning -------------------------------------------------------------
@@ -299,6 +313,16 @@ pub(crate) fn is_auth_error(detail: &str) -> bool {
     classify_gws_auth_state(detail) == "auth_required"
 }
 
+/// Provider failures that no amount of retrying can fix — the remote task
+/// (or its list) no longer exists, so the op is moot and the record must be
+/// discharged instead of retrying hourly forever.
+/// ponytail: substring match on gws output; switch to structured error codes
+/// if gws ever emits them.
+pub(crate) fn is_terminal_error(detail: &str) -> bool {
+    let lower = detail.to_lowercase();
+    lower.contains("404") || lower.contains("not found") || lower.contains("notfound")
+}
+
 // --- Commands -----------------------------------------------------------------
 
 fn parse_now(now_iso: &str) -> Result<DateTime<chrono::FixedOffset>, String> {
@@ -355,6 +379,21 @@ fn drain_record(
             if is_auth_error(&detail) {
                 record.last_error = Some(detail);
                 OutboxStatus::AuthBlocked
+            } else if is_terminal_error(&detail) {
+                // Remote task/list is gone: the op is moot. Discharge the
+                // record (delete + event) instead of retrying forever; count
+                // it as drained.
+                fs::remove_file(record_path(work, &record.id))
+                    .map_err(|err| format!("Cannot drop terminal outbox record: {err}"))?;
+                let _ = crate::today_store::append_task_event_for(
+                    work,
+                    now_iso.get(..10).unwrap_or(now_iso),
+                    "outbox_dropped_terminal",
+                    None,
+                    json!({ "id": record.id, "op": record.op, "error": detail }),
+                    now_iso.to_string(),
+                );
+                return Ok(OutboxStatus::Synced);
             } else {
                 record.attempts = record.attempts.saturating_add(1);
                 let retry_at = now + Duration::minutes(backoff_minutes(record.attempts));
@@ -654,6 +693,55 @@ mod tests {
             record.next_retry_at.as_deref(),
             Some("2026-07-21T09:06:00+09:00")
         );
+    }
+
+    #[test]
+    fn drain_terminal_failure_drops_record_instead_of_retrying() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work_path = tmp.path().to_string_lossy().to_string();
+        let fake = write_fake_gws(
+            tmp.path(),
+            "gws-404",
+            "#!/bin/sh\necho 'Error 404: task not found' >&2\nexit 1\n",
+        );
+        sample_record(tmp.path(), OutboxOp::Complete, OutboxStatus::Ready);
+
+        let outcome = task_integrations_drain(
+            work_path.clone(),
+            NOW.to_string(),
+            Some(fake.to_string_lossy().to_string()),
+        )
+        .unwrap();
+        // Remote task is gone: the op is moot — discharged, not retried.
+        assert_eq!(outcome.drained, 1);
+        assert_eq!(outcome.failed, 0);
+        assert!(list_records(tmp.path()).unwrap().is_empty());
+        let events = fs::read_to_string(
+            tmp.path().join(".maru/today/events/2026-07.jsonl"),
+        )
+        .unwrap();
+        assert!(events.contains("outbox_dropped_terminal"));
+    }
+
+    #[test]
+    fn recovery_predicate_is_op_aware_for_reopen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let work = tmp.path();
+        let note = work.join("tasks/active/task.md");
+        fs::create_dir_all(note.parent().unwrap()).unwrap();
+        // Reopen prepared + note still done: the local reopen never landed,
+        // so the record must be dropped (the done-note predicate that is
+        // correct for complete would wrongly mark this ready).
+        fs::write(&note, "---\nstatus: done\n---\n").unwrap();
+        sample_record(work, OutboxOp::Reopen, OutboxStatus::Prepared);
+        let outcome = recover_outbox(work).unwrap();
+        assert_eq!(outcome, OutboxRecovery { recovered: 0, dropped: 1 });
+        // Reopen prepared + note active: the reopen landed — sync is owed.
+        fs::write(&note, "---\nstatus: active\n---\n").unwrap();
+        sample_record(work, OutboxOp::Reopen, OutboxStatus::Prepared);
+        let outcome = recover_outbox(work).unwrap();
+        assert_eq!(outcome, OutboxRecovery { recovered: 1, dropped: 0 });
+        assert_eq!(list_records(work).unwrap()[0].status, OutboxStatus::Ready);
     }
 
     #[test]

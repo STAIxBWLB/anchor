@@ -60,18 +60,26 @@ export function TodayTop3({ tasks, captures, markManualOrder, onChanged, onOpenT
   const displayTitle = (item: DailyPlanItem) =>
     item.outcome || resolveRefTitle(item.itemRef, tasks, captures);
 
-  const pickerTasks = useMemo(
-    () =>
-      tasks.filter(
-        (task) =>
-          task.bucket !== "archive" &&
-          task.bucket !== "backlog" &&
-          task.status !== "done" &&
-          task.status !== "cancelled" &&
-          task.status !== "backlog",
-      ),
-    [tasks],
-  );
+  const pickerTasks = useMemo(() => {
+    // Already-planned tasks (any lane) are excluded — adding one again would
+    // duplicate its plan ref (React key collision, double-counted capacity).
+    const plan = snapshot?.plan;
+    const planned = new Set(
+      [...(plan?.top ?? []), ...(plan?.flexible ?? []), ...(plan?.overflow ?? [])]
+        .map((item) => item.itemRef)
+        .filter((ref): ref is Extract<PlanItemRef, { kind: "task" }> => ref.kind === "task")
+        .map((ref) => ref.taskId),
+    );
+    return tasks.filter(
+      (task) =>
+        task.bucket !== "archive" &&
+        task.bucket !== "backlog" &&
+        task.status !== "done" &&
+        task.status !== "cancelled" &&
+        task.status !== "backlog" &&
+        !planned.has(taskKeyOf(task)),
+    );
+  }, [tasks, snapshot]);
 
   const applyMutation = async (mutation: TodayMutation) => {
     await mutate(mutation);
@@ -134,6 +142,8 @@ export function TodayTop3({ tasks, captures, markManualOrder, onChanged, onOpenT
 
   const confirmAdd = () => {
     if (!snapshot || !addTaskId || top.length >= TOP_LANE_SIZE) return;
+    // Stale picker selection guard: never add a ref already in the plan.
+    if (!pickerTasks.some((task) => taskKeyOf(task) === addTaskId)) return;
     const item: DailyPlanItem = {
       itemRef: { kind: "task", taskId: addTaskId },
       lane: "top",

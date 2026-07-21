@@ -5,7 +5,7 @@
 import { format } from "date-fns";
 import { enUS } from "date-fns/locale/en-US";
 import { ko } from "date-fns/locale/ko";
-import { MoonStar, SkipForward, Sun, Sunrise } from "lucide-react";
+import { CheckCheck, MoonStar, SkipForward, Sun, Sunrise } from "lucide-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "../../lib/i18n";
 import { useToday } from "./todayContext";
@@ -17,6 +17,10 @@ interface TodayStageScaffoldProps {
   onSelectStep: (id: string) => void;
   /** Render the quick-skip affordance (Prepare stage only). */
   onQuickSkip?: () => void;
+  /** Render the primary "Finish setup" action (Prepare stage only):
+   *  materialize accepted captures, confirmSetup, land on Execute. */
+  onFinishSetup?: () => void;
+  finishSetupBusy?: boolean;
   children: ReactNode;
 }
 
@@ -25,6 +29,8 @@ export function TodayStageScaffold({
   activeStepId,
   onSelectStep,
   onQuickSkip,
+  onFinishSetup,
+  finishSetupBusy = false,
   children,
 }: TodayStageScaffoldProps) {
   const { t, locale } = useTranslation();
@@ -56,12 +62,25 @@ export function TodayStageScaffold({
               {t(greetingKey)} · {dateLabel} · {dayStart}
             </span>
           </p>
-          {onQuickSkip ? (
-            <button type="button" className="today-quick-skip" onClick={onQuickSkip}>
-              {t("today.header.quickSkip")}
-              <SkipForward size={14} strokeWidth={1.9} aria-hidden="true" />
-            </button>
-          ) : null}
+          <div className="today-header-actions">
+            {onQuickSkip ? (
+              <button type="button" className="today-quick-skip" onClick={onQuickSkip}>
+                {t("today.header.quickSkip")}
+                <SkipForward size={14} strokeWidth={1.9} aria-hidden="true" />
+              </button>
+            ) : null}
+            {onFinishSetup ? (
+              <button
+                type="button"
+                className="today-button-primary today-finish-setup"
+                onClick={onFinishSetup}
+                disabled={finishSetupBusy}
+              >
+                <CheckCheck size={14} strokeWidth={1.9} aria-hidden="true" />
+                {t("today.header.finishSetup")}
+              </button>
+            ) : null}
+          </div>
         </div>
         <TodayStepper steps={steps} activeId={activeStepId} onSelect={onSelectStep} />
       </header>

@@ -17,6 +17,10 @@ interface TaskFormFieldsProps {
   loading: boolean;
   onSaveDetails: (entry: TaskEntry, fields: TaskDetailsPatch) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
+  /** Hide done/cancelled in the status picker. The Today sheet sets this:
+   *  completion/cancellation must flow through `task_transition` (hash guard,
+   *  outbox, events), never through this generic details save. */
+  lifecycleStatusLocked?: boolean;
 }
 
 interface TaskDetailDraft {
@@ -38,6 +42,7 @@ export function TaskFormFields({
   loading,
   onSaveDetails,
   onDirtyChange,
+  lifecycleStatusLocked = false,
 }: TaskFormFieldsProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState("");
@@ -154,8 +159,16 @@ export function TaskFormFields({
             <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)}>
               <option value="active">{t("tasks.status.active")}</option>
               <option value="in-progress">{t("tasks.status.inProgress")}</option>
-              <option value="done">{t("tasks.status.done")}</option>
-              <option value="cancelled">{t("tasks.status.cancelled")}</option>
+              {!lifecycleStatusLocked || status === "done" ? (
+                <option value="done" disabled={lifecycleStatusLocked}>
+                  {t("tasks.status.done")}
+                </option>
+              ) : null}
+              {!lifecycleStatusLocked || status === "cancelled" ? (
+                <option value="cancelled" disabled={lifecycleStatusLocked}>
+                  {t("tasks.status.cancelled")}
+                </option>
+              ) : null}
               <option value="backlog">{t("tasks.status.backlog")}</option>
             </select>
           </label>

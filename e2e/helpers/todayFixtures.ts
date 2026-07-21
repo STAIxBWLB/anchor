@@ -19,7 +19,8 @@ import type { Page } from "@playwright/test";
 export const FIXTURE_DAY = "2026-07-21";
 export const FIXTURE_PREV_DAY = "2026-07-20";
 export const FIXTURE_WORK_PATH = "mock://maru-sample-workspace";
-export const TODAY_LAST_AUTO_OPEN_KEY = "maru:today:lastAutoOpenDay:v1";
+// Workspace-scoped marker key (mirrors todayAutoOpenKey in todayRouting.ts).
+export const TODAY_LAST_AUTO_OPEN_KEY = `maru:today:lastAutoOpenDay:v1:${FIXTURE_WORK_PATH}`;
 
 export const TASK_A = "tasks/active/260720-plan-draft.md";
 export const TASK_B = "tasks/active/260720-budget-review.md";
@@ -405,6 +406,7 @@ export function buildTodaySeed(overrides: TodaySeedOverrides = {}) {
     workPath: FIXTURE_WORK_PATH,
     logicalDay: FIXTURE_DAY,
     previousLogicalDay: FIXTURE_PREV_DAY,
+    markerKey: TODAY_LAST_AUTO_OPEN_KEY,
     markerDay: overrides.markerDay === undefined ? FIXTURE_DAY : overrides.markerDay,
     locale: overrides.locale ?? "ko",
     settings: {
@@ -471,7 +473,7 @@ export async function installTodayMocks(page: Page, seed: TodaySeed): Promise<vo
         JSON.stringify(injected.settings),
       );
       if (injected.markerDay) {
-        window.localStorage.setItem("maru:today:lastAutoOpenDay:v1", injected.markerDay);
+        window.localStorage.setItem(injected.markerKey, injected.markerDay);
       }
       window.sessionStorage.setItem("maru:e2e:today-seeded", "true");
     }
@@ -585,8 +587,41 @@ export async function installTodayMocks(page: Page, seed: TodaySeed): Promise<vo
       }),
       today_open: () => ({ ...clone(state.snapshot), logicalDay: state.logicalDay }),
       today_mutate: (args) => {
+        // Mirror the Rust optimistic-concurrency guards (today_store.rs):
+        // stale expectedRevision and stale setPlan inputRevision both reject
+        // with the same today_conflict error shape.
+        const snapRevision = String((state.snapshot as { revision?: unknown }).revision ?? "");
+        const expected = String(args.expectedRevision ?? "");
+        if (expected !== snapRevision) {
+          throw new Error(
+            `today_conflict: expected revision ${expected}, found ${snapRevision}`,
+          );
+        }
+        const mutation = args.mutation as { type?: string; plan?: { inputRevision?: string } };
+        if (mutation.type === "setPlan" && mutation.plan?.inputRevision !== snapRevision) {
+          throw new Error(
+            `today_conflict: expected revision ${mutation.plan?.inputRevision ?? ""}, found ${snapRevision}`,
+          );
+        }
         applyMutation(args.mutation as never);
         return clone(state.snapshot);
+      },
+      create_task_note: (args) => {
+        const draft = args.draft as {
+          title?: string;
+          frontmatter?: Record<string, unknown>;
+        };
+        const title = String(draft.title ?? "새 작업");
+        const relPath = `tasks/active/e2e-created-${(state.transitionCounter += 1)}.md`;
+        return {
+          path: `${injected.workPath}/${relPath}`,
+          relPath,
+          fileName: relPath.split("/").pop(),
+          bucket: "active",
+          sizeBytes: 128,
+          updatedAt: "2026-07-21T09:00:00+09:00",
+          frontmatter: { title, status: "active", ...(draft.frontmatter ?? {}) },
+        };
       },
       today_rollover: () => ({
         closedDay: state.previousLogicalDay,
@@ -668,11 +703,25 @@ export async function installTodayMocks(page: Page, seed: TodaySeed): Promise<vo
         return handler(args ?? {});
       };
     }
+    // Record EVERY invoked command, registered or not — "command never fired"
+    // assertions must be able to fail. Unregistered commands record the call
+    // and return null, which invokeE2EOverride treats as "no handler" so the
+    // caller's normal browser fallback still runs.
+    const recordingMap = new Proxy(invokeMap, {
+      get(target, command) {
+        if (typeof command !== "string") return undefined;
+        if (command in target) return target[command];
+        return (args: Record<string, unknown>) => {
+          calls.push({ command, args: clone(args ?? {}) });
+          return null;
+        };
+      },
+    });
     (
       window as unknown as {
         __MARU_E2E_INVOKE__: Record<string, (args: Record<string, unknown>) => unknown>;
       }
-    ).__MARU_E2E_INVOKE__ = invokeMap;
+    ).__MARU_E2E_INVOKE__ = recordingMap;
 
     // Test control handle (rollover driving, state inspection).
     (

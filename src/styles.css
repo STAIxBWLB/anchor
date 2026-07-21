@@ -7898,6 +7898,13 @@ button.git-badge:hover {
   color: var(--accent);
 }
 
+.today-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
 .today-quick-skip {
   display: inline-flex;
   flex: none;

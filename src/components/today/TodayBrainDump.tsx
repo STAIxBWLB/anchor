@@ -34,9 +34,11 @@ export function TodayBrainDump({
 
   const [text, setText] = useState(snapshot?.brainDump ?? "");
   const [status, setStatus] = useState<SaveStatus>("idle");
-  const [undoAvailable, setUndoAvailable] = useState(true);
+  // Nothing to undo until a mutation lands in this session.
+  const [undoAvailable, setUndoAvailable] = useState(false);
   const lastSavedRef = useRef(snapshot?.brainDump ?? "");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTextRef = useRef<string | null>(null);
 
   // External snapshot changes (undo, conflict reload, planner) resync the
   // editor — but not our own in-flight saves, which would clobber typing.
@@ -62,16 +64,10 @@ export function TodayBrainDump({
     wasPlanningRef.current = planning;
   }, [planning]);
 
-  useEffect(
-    () => () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-    },
-    [],
-  );
-
   const save = useCallback(
     async (value: string) => {
       if (!snapshot) return;
+      pendingTextRef.current = null;
       setStatus("saving");
       const next = await mutate({ type: "setBrainDump", brainDump: value });
       if (next) {
@@ -86,10 +82,28 @@ export function TodayBrainDump({
     [snapshot, mutate, onSaved],
   );
 
+  // Flush (not drop) a pending debounced save on unmount — stage/route
+  // switches within the debounce window must not lose the typed tail.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      if (pendingTextRef.current !== null) void saveRef.current(pendingTextRef.current);
+    },
+    [],
+  );
+
   const handleChange = (value: string) => {
-    const capped = value.slice(0, MAX_BRAIN_DUMP_CHARS);
+    // Code-point cap: String.slice counts UTF-16 units and can split a
+    // surrogate pair on paste-truncate.
+    const capped =
+      value.length > MAX_BRAIN_DUMP_CHARS
+        ? [...value].slice(0, MAX_BRAIN_DUMP_CHARS).join("")
+        : value;
     setText(capped);
     setStatus("idle");
+    pendingTextRef.current = capped;
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
@@ -102,6 +116,7 @@ export function TodayBrainDump({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    pendingTextRef.current = null; // undo supersedes any unsaved typing
     const next = await mutate({ type: "undo" });
     // The backend returns today_undo_unavailable for a second undo in a row;
     // a null result here means the undo stack was empty.

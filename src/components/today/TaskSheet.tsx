@@ -107,6 +107,7 @@ export function TaskSheet({ entry, open, onClose, onSaved }: TaskSheetProps) {
               loading={loading}
               onSaveDetails={saveDetails}
               onDirtyChange={() => {}}
+              lifecycleStatusLocked
             />
           )}
         </div>

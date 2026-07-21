@@ -33,7 +33,6 @@ export function TodayCapacityCards({ onNavigate, commitments = [] }: TodayCapaci
     focusCapMinutes: settings.dailyFocusCapMinutes,
     plan: snapshot?.plan ?? null,
     provisionalEstimateMinutes: settings.provisionalEstimateMinutes,
-    logicalDay: snapshot?.logicalDay ?? null,
   });
 
   const formatMinutes = (minutes: number): string => {

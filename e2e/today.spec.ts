@@ -35,19 +35,18 @@ async function gotoTodayPrepare(page: Page) {
   await expect(page.locator(".today-panel-braindump")).toBeVisible();
 }
 
-// Dev-mode note: React StrictMode double-runs the boot effect, and the
-// second boot re-applies the persisted mode AFTER the first boot's
-// auto-open decision called setAppMode("tasks"). Seeding the persisted mode
-// as "tasks" keeps the outcome deterministic; the auto-open path is still
-// pinned by the prepare-route and marker assertions (a plain tasks-mode
-// restore would land on route "all", never on the Prepare stage).
-const AUTO_OPEN_SEED = { markerDay: null, persistedMode: "tasks" } as const;
+// First-launch seed: marker absent, persisted mode left at the "pkm"
+// default. The auto-open decision must win over the settings-load effect
+// re-applying the persisted mode (App keeps the boot auto-open via
+// todayAutoOpenPathRef) — including under React StrictMode double-boot.
+const AUTO_OPEN_SEED = { markerDay: null } as const;
 
 test("first eligible daily launch auto-opens Today; later launches restore the persisted mode", async ({
   page,
 }) => {
-  // Marker absent → the first launch of the logical day auto-opens Today on
-  // the Prepare route (dayState "preparing" in the fixture).
+  // Marker absent + persisted mode "pkm" → the first launch of the logical
+  // day still auto-opens Today on the Prepare route (dayState "preparing"),
+  // i.e. the auto-open survives the persisted-mode restore.
   await installTodayMocks(page, buildTodaySeed(AUTO_OPEN_SEED));
   await gotoTodayPrepare(page);
 
@@ -113,9 +112,8 @@ test("prepare: brain dump autosave, capture add-to-today, keyboard reorder, quic
   expect(lastBrainDump?.brainDump).toBe("오늘 집중할 일을 정리한다");
 
   // Capture row "add to today" persists a setPlan mutation only — no task
-  // creation commands (create_task_note & friends must never fire here;
-  // they are not even registered in the fixture map, so any call would
-  // reject instead of being recorded).
+  // creation commands. The fixture records EVERY invoked command (registered
+  // or not), so these absence assertions can genuinely fail.
   const firstCapture = page.locator(".today-capture-row").first();
   await expect(firstCapture).toBeVisible();
   await firstCapture.getByRole("button", { name: "오늘에 추가" }).click();
@@ -154,6 +152,48 @@ test("prepare: brain dump autosave, capture add-to-today, keyboard reorder, quic
     .toBe(1);
   await expect(page.locator(".today-panel-done")).toBeVisible();
   await expect(page.locator(".today-panel-done")).toContainText("오늘 완료한 항목");
+});
+
+test("finish setup materializes accepted captures as local task notes and confirms the day", async ({
+  page,
+}) => {
+  await installTodayMocks(page, buildTodaySeed(AUTO_OPEN_SEED));
+  await gotoTodayPrepare(page);
+
+  // Accept one capture into the plan — a reversible plan ref only, still no
+  // task creation at this point.
+  const firstCapture = page.locator(".today-capture-row").first();
+  await firstCapture.getByRole("button", { name: "오늘에 추가" }).click();
+  await expect(firstCapture.locator(".today-capture-state")).toHaveText("오늘 계획에 추가됨");
+  expect((await readTodayCalls(page)).map((call) => call.command)).not.toContain(
+    "create_task_note",
+  );
+
+  // Finish setup: the accepted capture materializes as ONE local task note,
+  // its plan ref is rewritten to the new task, and the day is confirmed.
+  await page.locator(".today-finish-setup").click();
+  await expect
+    .poll(async () => callsOf(await readTodayCalls(page), "create_task_note").length)
+    .toBe(1);
+  const created = callsOf(await readTodayCalls(page), "create_task_note")[0];
+  const draft = created.args.draft as {
+    title?: string;
+    bucket?: string;
+    frontmatter?: Record<string, unknown>;
+  };
+  expect(draft.title).toBeTruthy();
+  expect(draft.bucket).toBe("active");
+  expect(draft.frontmatter?.status).toBe("active");
+
+  await expect
+    .poll(async () => mutationCalls(await readTodayCalls(page), "confirmSetup").length)
+    .toBe(1);
+  const setPlans = mutationCalls(await readTodayCalls(page), "setPlan");
+  const finalPlan = setPlans.at(-1)?.args.mutation as { plan?: unknown };
+  expect(JSON.stringify(finalPlan?.plan ?? {})).not.toContain('"kind":"capture"');
+
+  // Confirmed day lands on Execute.
+  await expect(page.locator(".today-panel-done")).toBeVisible();
 });
 
 test("execute: Top 3 completion flows through task_transition with a syncing badge", async ({

@@ -28,12 +28,12 @@
 use crate::cli_path::augmented_path;
 use crate::today::{
     parse_day_start, parse_sleep_start, parse_timezone, CalendarCommitment, CalendarSyncState,
-    CalendarSyncStatus, PlanItemRef, TodayMutation, TodaySnapshot,
+    CalendarSyncStatus, PlanItemRef, ProposedBlock, TodayMutation, TodaySnapshot,
 };
 use crate::today_outbox::{is_auth_error, resolve_gws};
 use crate::today_store::{
     append_task_event_for, check_revision, load_snapshot_with_raw, persist_snapshot,
-    snapshot_revision,
+    snapshot_revision, work_lock_for,
 };
 use crate::vault::{load_maruignore, matches_maruignore, normalize_existing_dir, parse_frontmatter};
 use crate::vault_list::{assert_maru_can_write, WorkspaceWriteAction};
@@ -44,7 +44,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use walkdir::WalkDir;
 
@@ -334,12 +334,74 @@ fn event_id_from_stdout(stdout: &[u8]) -> Option<String> {
         .map(ToString::to_string)
 }
 
+/// A queue item re-read from the stored snapshot just before its insert.
+fn selected_item_detail(
+    work: &Path,
+    logical_day: &str,
+    item_ref: &PlanItemRef,
+) -> Result<Option<(String, ProposedBlock, Option<String>)>, String> {
+    let (_, snapshot) = load_snapshot_with_raw(work, logical_day)?;
+    Ok(snapshot.plan.as_ref().and_then(|plan| {
+        plan.items()
+            .find(|item| item.item_ref == *item_ref)
+            .filter(|item| item.calendar_sync.status == CalendarSyncStatus::Selected)
+            .and_then(|item| {
+                item.proposed_block.clone().map(|block| {
+                    (
+                        item.outcome
+                            .clone()
+                            .unwrap_or_else(|| item_ref.id().to_string()),
+                        block,
+                        item.calendar_sync.destination.clone(),
+                    )
+                })
+            })
+    }))
+}
+
+/// Persist one item's sync-state change against the FRESH stored snapshot,
+/// under the workspace lock. Returns false when the item vanished from the
+/// plan (concurrent edit) — the caller decides what that means.
+fn persist_item_sync(
+    work: &Path,
+    logical_day: &str,
+    item_ref: &PlanItemRef,
+    state: CalendarSyncState,
+    now_iso: &str,
+) -> Result<bool, String> {
+    let lock = work_lock_for(work)?;
+    let _guard = lock.lock().map_err(|_| "today_work_lock_poisoned".to_string())?;
+    let (raw, mut snapshot) = load_snapshot_with_raw(work, logical_day)?;
+    let mut found = false;
+    if let Some(plan) = snapshot.plan.as_mut() {
+        if let Some(item) = plan.items_mut().find(|item| item.item_ref == *item_ref) {
+            item.calendar_sync = state;
+            found = true;
+        }
+    }
+    if !found {
+        return Ok(false);
+    }
+    snapshot_revision(work, &snapshot, &raw)?;
+    snapshot.generated_at = now_iso.to_string();
+    persist_snapshot(work, &mut snapshot)?;
+    Ok(true)
+}
+
 /// Publish every plan item flagged `selected` (with a `proposedBlock`) to the
 /// destination calendar via `gws calendar events insert`. Explicit policy:
 /// items at `none` are never touched. Auth failure stops the run with
 /// `blocked: true` and leaves remaining items `selected`; a non-auth failure
-/// marks only that item `error` and the run continues. State changes persist
-/// in one revision bump plus a `calendar_blocks_published` event.
+/// marks only that item `error` and the run continues.
+///
+/// Concurrency/durability: each item is re-read from the stored snapshot
+/// right before its insert (a concurrent edit that unselects or removes it
+/// skips the insert) and its resulting state persists immediately after,
+/// against the then-current snapshot under the workspace lock — a long
+/// publish run can no longer clobber mutations that landed mid-run, and a
+/// crash loses at most the one in-flight item.
+/// ponytail: that one-item crash window can still duplicate a calendar
+/// event on republish; closing it needs a durable per-event intent record.
 #[tauri::command]
 pub fn today_calendar_publish(
     work_path: String,
@@ -352,11 +414,11 @@ pub fn today_calendar_publish(
     assert_maru_can_write(&work_path, WorkspaceWriteAction::Modify)?;
     let work = normalize_existing_dir(&work_path)?;
     DateTime::parse_from_rfc3339(&now_iso).map_err(|err| format!("now_iso must be RFC3339: {err}"))?;
-    let (raw, mut snapshot) = load_snapshot_with_raw(&work, &logical_day)?;
-    check_revision(&snapshot, &expected_revision)?;
+    let (_, entry_snapshot) = load_snapshot_with_raw(&work, &logical_day)?;
+    check_revision(&entry_snapshot, &expected_revision)?;
 
     // Collect the publish queue up front: only `selected` items with a block.
-    let queue: Vec<PlanItemRef> = snapshot
+    let queue: Vec<PlanItemRef> = entry_snapshot
         .plan
         .as_ref()
         .map(|plan| {
@@ -373,26 +435,20 @@ pub fn today_calendar_publish(
         published: 0,
         failed: 0,
         blocked: false,
-        snapshot: snapshot.clone(),
+        snapshot: entry_snapshot.clone(),
     };
     if queue.is_empty() {
         return Ok(outcome);
     }
     let gws_bin = resolve_gws(gws_path.as_deref())?;
-    let timezone = snapshot.timezone.clone();
+    let timezone = entry_snapshot.timezone.clone();
 
     for item_ref in &queue {
-        let (summary, block, item_destination) = {
-            let plan = snapshot.plan.as_ref().expect("queue implies a plan");
-            let item = plan
-                .items()
-                .find(|item| item.item_ref == *item_ref)
-                .expect("queue item must exist");
-            (
-                item.outcome.clone().unwrap_or_else(|| item_ref.id().to_string()),
-                item.proposed_block.clone().expect("queue items have a block"),
-                item.calendar_sync.destination.clone(),
-            )
+        let Some((summary, block, item_destination)) =
+            selected_item_detail(&work, &logical_day, item_ref)?
+        else {
+            // Concurrent edit unselected or removed the item — skip.
+            continue;
         };
         let destination_id = destination
             .as_deref()
@@ -405,20 +461,15 @@ pub fn today_calendar_publish(
             .args(publish_args(destination_id, &summary, &block, &timezone))
             .no_window()
             .output();
-        let plan = snapshot.plan.as_mut().expect("queue implies a plan");
-        let item = plan
-            .items_mut()
-            .find(|item| item.item_ref == *item_ref)
-            .expect("queue item must exist");
-        match output {
+        let state = match output {
             Ok(output) if output.status.success() => {
-                item.calendar_sync = CalendarSyncState {
+                outcome.published += 1;
+                CalendarSyncState {
                     status: CalendarSyncStatus::Synced,
                     message: None,
                     event_id: event_id_from_stdout(&output.stdout),
                     destination: Some(destination_id.to_string()),
-                };
-                outcome.published += 1;
+                }
             }
             Ok(output) => {
                 let detail = [output.stderr.as_slice(), output.stdout.as_slice()]
@@ -433,31 +484,41 @@ pub fn today_calendar_publish(
                     outcome.blocked = true;
                     break;
                 }
-                item.calendar_sync = CalendarSyncState {
+                outcome.failed += 1;
+                CalendarSyncState {
                     status: CalendarSyncStatus::Error,
                     message: Some(detail),
                     event_id: None,
                     destination: Some(destination_id.to_string()),
-                };
-                outcome.failed += 1;
+                }
             }
             Err(err) => {
-                item.calendar_sync = CalendarSyncState {
+                outcome.failed += 1;
+                CalendarSyncState {
                     status: CalendarSyncStatus::Error,
                     message: Some(format!("gws_spawn_failed: {err}")),
                     event_id: None,
                     destination: Some(destination_id.to_string()),
-                };
-                outcome.failed += 1;
+                }
             }
+        };
+        let inserted_event_id = state.event_id.clone();
+        if !persist_item_sync(&work, &logical_day, item_ref, state, &now_iso)? {
+            // The item vanished mid-publish; the inserted event (if any) is
+            // orphaned — record that instead of resurrecting the item.
+            let _ = append_task_event_for(
+                &work,
+                &logical_day,
+                "calendar_publish_orphan",
+                None,
+                json!({ "itemRef": item_ref, "eventId": inserted_event_id }),
+                now_iso.clone(),
+            );
         }
     }
 
     if outcome.published > 0 || outcome.failed > 0 {
-        snapshot_revision(&work, &snapshot, &raw)?;
-        snapshot.generated_at = now_iso.clone();
-        persist_snapshot(&work, &mut snapshot)?;
-        append_task_event_for(
+        let _ = append_task_event_for(
             &work,
             &logical_day,
             "calendar_blocks_published",
@@ -467,10 +528,11 @@ pub fn today_calendar_publish(
                 "failed": outcome.failed,
                 "blocked": outcome.blocked,
             }),
-            now_iso,
-        )?;
+            now_iso.clone(),
+        );
     }
-    outcome.snapshot = snapshot;
+    let (_, final_snapshot) = load_snapshot_with_raw(&work, &logical_day)?;
+    outcome.snapshot = final_snapshot;
     Ok(outcome)
 }
 
@@ -481,6 +543,7 @@ mod tests {
         CalendarSyncStatus, DailyPlanItem, DailyPlanV1, PlanLane, ProposedBlock, TodayMutation,
     };
     use crate::today_store::{today_mutate, today_open};
+    use std::path::PathBuf;
 
     const SEOUL: &str = "Asia/Seoul";
     const DAY: &str = "2026-07-21";

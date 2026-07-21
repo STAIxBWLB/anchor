@@ -172,6 +172,8 @@ export interface TodaySnapshot {
 /** Append-only event line in `<work>/.maru/today/events/YYYY-MM.jsonl`. */
 export interface TaskEvent {
   ts: string;
+  /** Logical day the event belongs to; `ts` is UTC and can differ. */
+  day?: string | null;
   kind: string;
   taskId?: string | null;
   payload: unknown;
