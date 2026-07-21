@@ -389,7 +389,8 @@ export function moveFocus(
 // TSV copy / paste
 // ---------------------------------------------------------------------------
 
-function escapeTsvCell(text: string): string {
+/** Escape a cell for TSV (backslash, tab, newline). Exported for the TSV codec. */
+export function escapeTsvCell(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
     .replace(/\t/g, "\\t")

@@ -1,4 +1,15 @@
-import { Clock, FilePlus2, FolderOpen, ImportIcon, LayoutTemplate, Save, Share } from "lucide-react";
+import {
+  ClipboardCopy,
+  Clock,
+  FilePlus2,
+  FileImage,
+  FolderOpen,
+  ImportIcon,
+  LayoutTemplate,
+  Save,
+  Share,
+  Table2,
+} from "lucide-react";
 
 import { RibbonButton, RibbonGroup, RibbonSeparator } from "./ribbonPrimitives";
 
@@ -9,7 +20,11 @@ export interface RibbonFileProps {
   onExport: () => void;
   onTemplates: () => void;
   onHistory: () => void;
-  onImportMermaid: () => void;
+  onImport: () => void;
+  onCopyPng: () => void;
+  onCopySvg: () => void;
+  onCopyTableHtml: () => void;
+  onCopyTableMarkdown: () => void;
   saving: boolean;
   canSave: boolean;
 }
@@ -21,7 +36,11 @@ export function RibbonFile({
   onExport,
   onTemplates,
   onHistory,
-  onImportMermaid,
+  onImport,
+  onCopyPng,
+  onCopySvg,
+  onCopyTableHtml,
+  onCopyTableMarkdown,
   saving,
   canSave,
 }: RibbonFileProps) {
@@ -61,9 +80,29 @@ export function RibbonFile({
           icon={<Share size={14} />}
         />
         <RibbonButton
-          labelKey="diagram.ribbon.importMermaid"
-          onClick={onImportMermaid}
+          labelKey="diagram.ribbon.import"
+          onClick={onImport}
           icon={<ImportIcon size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyPng"
+          onClick={onCopyPng}
+          icon={<FileImage size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copySvg"
+          onClick={onCopySvg}
+          icon={<ClipboardCopy size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyTableHtml"
+          onClick={onCopyTableHtml}
+          icon={<Table2 size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyTableMarkdown"
+          onClick={onCopyTableMarkdown}
+          icon={<ClipboardCopy size={14} />}
         />
       </RibbonGroup>
       <RibbonGroup labelKey="diagram.ribbon.history">

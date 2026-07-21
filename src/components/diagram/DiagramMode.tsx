@@ -37,11 +37,40 @@ import {
   pasteClipboard,
   setCellText,
   setTableSelection,
+  updateMatrix,
 } from "../../lib/diagram/tableActions";
-import { cellAtAddr, cellRect, computeTableLayout, moveFocus } from "../../lib/diagram/tableEditing";
+import {
+  cellAtAddr,
+  cellRect,
+  computeTableLayout,
+  moveFocus,
+  parseTsv,
+  pasteTextGridAt,
+} from "../../lib/diagram/tableEditing";
 import { nextTableKeyAction } from "../../lib/diagram/tableKeys";
 import { isInEditable, matchesShortcut } from "../../lib/diagram/shortcuts";
 import { fitView } from "../../lib/diagram/geometry";
+import {
+  clipboardWriteHtml,
+  clipboardWriteImagePng,
+  clipboardWriteText,
+} from "../../lib/clipboard";
+import {
+  expandMatrixToGrid,
+  htmlTableToMatrix,
+  matrixExceedsLimits,
+  matrixFromTextGrid,
+  parseMarkdownTable,
+  serializeMatrixToHtml,
+  serializeMatrixToMarkdown,
+} from "../../lib/diagram/codecs";
+import { readClipboardCandidate } from "../../lib/diagram/clipboardImport";
+import { blobToUint8Array, exportPng, exportSvg } from "../../lib/diagram/export";
+import {
+  TABLE_PATTERN_ID,
+  type MatrixDataset,
+  type ReportDataset,
+} from "../../lib/diagram/reportTypes";
 import { readMaruSettings, saveMaruSettings } from "../../lib/maruDir";
 import {
   DIAGRAM_FAVORITE_PATTERNS_CAP,
@@ -101,8 +130,7 @@ import { InlineTextEditor, type InlineEditField } from "./canvas/InlineTextEdito
 import { LeftPanel } from "./panels/LeftPanel";
 import { RightPanel } from "./panels/RightPanel";
 import { Ribbon } from "./ribbon/Ribbon";
-import { ExportDialog } from "./modals/ExportDialog";
-import { ImportMermaidDialog } from "./modals/ImportMermaidDialog";
+import { ImportExportDialog } from "./modals/ImportExportDialog";
 import { MappingPreviewDialog } from "./modals/MappingPreviewDialog";
 import { MemoDialog } from "./modals/MemoDialog";
 import {
@@ -247,12 +275,11 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     sourceViewId: string;
     targetPatternId: string;
   } | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [ioDialog, setIoDialog] = useState<"import" | "export" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoOpen, setMemoOpen] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [specialOpen, setSpecialOpen] = useState(false);
-  const [importMermaidOpen, setImportMermaidOpen] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<{ nodeId: NodeId; field: InlineEditField } | null>(null);
   // Cell editing: which cell the overlay editor is attached to (+ optional
   // quick-entry seed character). Null when no cell editor is open.
@@ -572,6 +599,170 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
       reportError(result.warnings.length > 0 ? result.warnings.join(" / ") : null);
     },
     [coalescer, mappingPreview, recordRecentPattern, reportError, store],
+  );
+
+  // --- Phase 3: OS clipboard paste + copy-as-format actions ----------------
+
+  /** Selected table's matrix, else the first matrix dataset in the doc. */
+  const activeMatrix = useCallback((): MatrixDataset | null => {
+    const state = store.getState();
+    for (const id of state.ephemeral.selection.nodes) {
+      const node = state.doc.nodes.find((n) => n.id === id);
+      const matrix = matrixForTableNode(node, state.doc.datasets);
+      if (matrix) return matrix;
+    }
+    return (state.doc.datasets ?? []).find((ds) => ds.kind === "matrix") as MatrixDataset ?? null;
+  }, [store]);
+
+  /** Insert a matrix as a new table view at the last pointer position. */
+  const insertMatrixAtPointer = useCallback(
+    (matrix: MatrixDataset) => {
+      if (matrixExceedsLimits(matrix)) {
+        reportError(t("diagram.clipboard.tooLarge"));
+        return;
+      }
+      store.setState(
+        withSnapshot(
+          insertPatternAtAction(TABLE_PATTERN_ID, lastPointerRef.current, {
+            datasetSeed: matrix,
+            t,
+          }),
+          gestureCoalescers.paste,
+        ),
+      );
+      reportError(null);
+    },
+    [gestureCoalescers, reportError, store, t],
+  );
+
+  /**
+   * Cmd/Ctrl+V with no internal clipboard entry: read the OS clipboard in
+   * priority order (HTML table → TSV → Markdown table → plain text). With an
+   * active table cell selection the parsed grid pastes into that table;
+   * otherwise a new table is inserted at the pointer. One paste = one undo
+   * entry (the paste gesture coalescer).
+   */
+  const handleOsClipboardPaste = useCallback(async () => {
+    const candidate = await readClipboardCandidate();
+    if (!candidate) {
+      reportError(t("diagram.clipboard.unavailable"));
+      return;
+    }
+    const state = store.getState();
+    const ts = state.ephemeral.tableSelection;
+
+    let grid: string[][];
+    let parsed: MatrixDataset | null = null;
+    try {
+      if (candidate.codecId === "html-table") {
+        parsed = htmlTableToMatrix(candidate.text);
+        grid = expandMatrixToGrid(parsed);
+      } else if (candidate.codecId === "markdown-table") {
+        grid = parseMarkdownTable(candidate.text);
+      } else if (candidate.codecId === "tsv") {
+        grid = parseTsv(candidate.text);
+      } else {
+        grid = [[candidate.text]];
+      }
+    } catch (err) {
+      reportError(
+        t("diagram.dialog.ie.parseFailed", { message: (err as Error).message ?? "unknown" }),
+      );
+      return;
+    }
+
+    if (ts) {
+      const node = state.doc.nodes.find((n) => n.id === ts.nodeId);
+      const matrix = matrixForTableNode(node, state.doc.datasets);
+      if (matrix) {
+        store.setState(
+          withSnapshot(
+            updateMatrix(matrix.id, (m) => pasteTextGridAt(m, ts.focus, grid)),
+            gestureCoalescers.paste,
+          ),
+        );
+        reportError(null);
+        return;
+      }
+    }
+
+    if (parsed) {
+      insertMatrixAtPointer(parsed);
+      return;
+    }
+    const header = candidate.codecId === "markdown-table";
+    insertMatrixAtPointer(matrixFromTextGrid(grid, { header }));
+  }, [gestureCoalescers, insertMatrixAtPointer, reportError, store, t]);
+
+  const handleCopyPng = useCallback(async () => {
+    try {
+      const doc = store.getState().doc;
+      // The live-svg parameter is deprecated — exports derive from the model.
+      const result = await exportPng(null as unknown as SVGSVGElement, doc);
+      await clipboardWriteImagePng(await blobToUint8Array(result.blob));
+      reportError(null);
+    } catch (err) {
+      reportError(t("diagram.clipboard.copyFailed", { message: (err as Error).message ?? "unknown" }));
+    }
+  }, [reportError, store, t]);
+
+  const handleCopySvg = useCallback(async () => {
+    try {
+      const doc = store.getState().doc;
+      const result = exportSvg(null as unknown as SVGSVGElement, doc);
+      await clipboardWriteText(await result.blob.text());
+      reportError(null);
+    } catch (err) {
+      reportError(t("diagram.clipboard.copyFailed", { message: (err as Error).message ?? "unknown" }));
+    }
+  }, [reportError, store, t]);
+
+  const handleCopyTableHtml = useCallback(async () => {
+    const matrix = activeMatrix();
+    if (!matrix) return;
+    try {
+      const html = serializeMatrixToHtml(matrix);
+      const tsv = expandMatrixToGrid(matrix)
+        .map((row) => row.join("\t"))
+        .join("\n");
+      await clipboardWriteHtml(html, tsv);
+      reportError(null);
+    } catch (err) {
+      reportError(t("diagram.clipboard.copyFailed", { message: (err as Error).message ?? "unknown" }));
+    }
+  }, [activeMatrix, reportError, t]);
+
+  const handleCopyTableMarkdown = useCallback(async () => {
+    const matrix = activeMatrix();
+    if (!matrix) return;
+    try {
+      const { text } = serializeMatrixToMarkdown(matrix);
+      await clipboardWriteText(text);
+      reportError(null);
+    } catch (err) {
+      reportError(t("diagram.clipboard.copyFailed", { message: (err as Error).message ?? "unknown" }));
+    }
+  }, [activeMatrix, reportError, t]);
+
+  const handleImportDataset = useCallback(
+    (dataset: ReportDataset) => {
+      if (dataset.kind !== "matrix") return;
+      insertMatrixAtPointer(dataset as MatrixDataset);
+      setIoDialog(null);
+    },
+    [insertMatrixAtPointer],
+  );
+
+  const handleImportDoc = useCallback(
+    (next: Parameters<typeof replaceDoc>[0]) => {
+      store.setState(replaceDoc(next));
+      setActiveName(null);
+      setLastSavedBody(null);
+      void persistLastDocument(null);
+      setIoDialog(null);
+      reportError(null);
+    },
+    [persistLastDocument, reportError, setActiveName, setLastSavedBody, store],
   );
 
   const refreshList = useCallback(async () => {
@@ -932,8 +1123,16 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         }
       }
       if (matchesShortcut(event, { key: "v", mod: true })) {
-        if (!inField && !store.getState().ephemeral.tableSelection) {
-          if (store.getState().ephemeral.clipboard?.kind === "nodes") {
+        if (!inField) {
+          const clip = store.getState().ephemeral.clipboard;
+          if (!clip) {
+            // No internal clipboard entry — fall through to the OS clipboard
+            // (HTML table → TSV → Markdown table → plain text).
+            event.preventDefault();
+            void handleOsClipboardPaste();
+            return;
+          }
+          if (!store.getState().ephemeral.tableSelection && clip.kind === "nodes") {
             event.preventDefault();
             store.setState(withSnapshot(pasteClipboard(), gestureCoalescers.paste));
             return;
@@ -1057,7 +1256,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [cellEdit, coalescer, findOpen, gestureCoalescers, handleSave, hasSelection, openCellEditor, openInlineEditor, store, t]);
+  }, [cellEdit, coalescer, findOpen, gestureCoalescers, handleOsClipboardPaste, handleSave, hasSelection, openCellEditor, openInlineEditor, store, t]);
 
   const statusLabel = saving
     ? t("diagram.status.saving")
@@ -1217,10 +1416,14 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onNew: handleNew,
           onOpen: () => setListOpen((o) => !o),
           onSave: handleSave,
-          onExport: () => setExportOpen(true),
+          onExport: () => setIoDialog("export"),
           onTemplates: () => openGallery("apply"),
           onHistory: () => setHistoryOpen(true),
-          onImportMermaid: () => setImportMermaidOpen(true),
+          onImport: () => setIoDialog("import"),
+          onCopyPng: () => void handleCopyPng(),
+          onCopySvg: () => void handleCopySvg(),
+          onCopyTableHtml: () => void handleCopyTableHtml(),
+          onCopyTableMarkdown: () => void handleCopyTableMarkdown(),
           saving,
           canSave: Boolean(workPath),
         }}
@@ -1390,14 +1593,15 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onCancel={() => setMappingPreview(null)}
         />
       ) : null}
-      <ExportDialog
-        open={exportOpen}
+      <ImportExportDialog
+        open={ioDialog !== null}
+        mode={ioDialog ?? "export"}
         doc={store.getState().doc}
         workspace={workPath}
-        getSvg={() =>
-          viewportRef.current?.querySelector<SVGSVGElement>(".maru-diagram-canvas") ?? null
-        }
-        onClose={() => setExportOpen(false)}
+        dirty={dirty}
+        onImportDoc={handleImportDoc}
+        onImportDataset={handleImportDataset}
+        onClose={() => setIoDialog(null)}
       />
       <VersionHistoryDialog
         open={historyOpen}
@@ -1430,18 +1634,6 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           setMemoOpen(null);
         }}
         onClose={() => setMemoOpen(null)}
-      />
-      <ImportMermaidDialog
-        open={importMermaidOpen}
-        onApply={(doc) => {
-          store.setState(replaceDoc(doc));
-          setActiveName(null);
-          setLastSavedBody(null);
-          void persistLastDocument(null);
-          setImportMermaidOpen(false);
-          reportError(null);
-        }}
-        onCancel={() => setImportMermaidOpen(false)}
       />
       <SpecialCharsPicker
         open={specialOpen}

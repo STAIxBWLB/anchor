@@ -89,9 +89,15 @@ test("exercises templates, Mermaid import/export, and filled ribbon tabs", async
   await expect(page.locator(".maru-diagram-node")).toHaveCount(7);
 
   await page.getByRole("tab", { name: "파일" }).click();
-  await page.getByRole("button", { name: "Mermaid 가져오기" }).click();
-  const importDialog = page.locator(".dialog-content", { hasText: "Mermaid 다이어그램 가져오기" });
-  await importDialog.locator("textarea").fill("flowchart TD\n  A[Start] --> B[Finish]");
+  await page.getByRole("button", { name: "가져오기" }).click();
+  const importDialog = page.locator(".dialog-content", { hasText: "가져오기" });
+  // Doc-kind imports replace the dirty document — accept the confirm dialog.
+  page.on("dialog", (d) => void d.accept());
+  await importDialog.locator('[data-testid="ie-file-input"]').setInputFiles({
+    name: "flow.mmd",
+    mimeType: "text/plain",
+    buffer: Buffer.from("flowchart TD\n  A[Start] --> B[Finish]"),
+  });
   await importDialog.getByRole("button", { name: "가져오기" }).click();
   await expect(page.locator(".maru-diagram-node")).toHaveCount(2);
 

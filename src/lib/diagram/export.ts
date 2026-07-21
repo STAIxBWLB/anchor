@@ -8,10 +8,10 @@
  * `<foreignObject>` rich-text export reveals platform gaps.
  *
  * The `liveSvg` parameters on the export entry points are deprecated: they
- * are accepted for API compatibility with existing callers (ExportDialog) but
- * no longer read — exports derive purely from the {@link DiagramDoc} model so
- * off-screen (culled) nodes and interactive chrome can no longer leak or go
- * missing.
+ * are accepted for API compatibility with existing callers (the unified
+ * ImportExportDialog passes null) but no longer read — exports derive purely
+ * from the {@link DiagramDoc} model so off-screen (culled) nodes and
+ * interactive chrome can no longer leak or go missing.
  *
  * All helpers return a Blob (or Uint8Array for the Tauri bridge) so callers
  * can hand the bytes to a save dialog without further conversion.

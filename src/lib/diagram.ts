@@ -128,10 +128,23 @@ export async function diagramDeleteDocument(
   return invoke<boolean>("diagram_delete_document", { workspace, name });
 }
 
+/** Export kinds accepted by the Rust `diagram_export_blob*` whitelist. */
+export type DiagramExportKind =
+  | "png"
+  | "jpg"
+  | "svg"
+  | "json"
+  | "pdf"
+  | "mmd"
+  | "csv"
+  | "tsv"
+  | "md"
+  | "html";
+
 export async function diagramExportBlob(
   workspace: string,
   name: string,
-  kind: "png" | "jpg" | "svg" | "json" | "pdf" | "mmd",
+  kind: DiagramExportKind,
   bytes: Uint8Array,
 ): Promise<string> {
   if (!isTauri()) throw new Error("diagram_export_blob_requires_tauri");
@@ -145,7 +158,7 @@ export async function diagramExportBlob(
 
 export async function diagramExportBlobToPath(
   targetPath: string,
-  kind: "png" | "jpg" | "svg" | "json" | "pdf" | "mmd",
+  kind: DiagramExportKind,
   bytes: Uint8Array,
 ): Promise<string> {
   if (!isTauri()) throw new Error("diagram_export_blob_to_path_requires_tauri");

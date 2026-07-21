@@ -193,6 +193,10 @@ fn validate_export_kind(kind: &str) -> Result<&'static str, String> {
         "json" => Ok("json"),
         "pdf" => Ok("pdf"),
         "mmd" | "mermaid" => Ok("mmd"),
+        "csv" => Ok("csv"),
+        "tsv" => Ok("tsv"),
+        "md" | "markdown" => Ok("md"),
+        "html" | "htm" => Ok("html"),
         _ => Err(format!("Unsupported export kind: {kind}")),
     }
 }
@@ -221,6 +225,8 @@ fn validate_export_target_path(target_path: &str, kind: &str) -> Result<PathBuf,
     let ext_ok = match expected {
         "jpg" => ext == "jpg" || ext == "jpeg",
         "mmd" => ext == "mmd" || ext == "mermaid",
+        "md" => ext == "md" || ext == "markdown",
+        "html" => ext == "html" || ext == "htm",
         _ => ext == expected,
     };
     if !ext_ok {
@@ -561,8 +567,31 @@ mod tests {
     }
 
     #[test]
-    fn validate_name_rejects_traversal() {
-        assert!(validate_name("../bad").is_err());
+    fn export_kind_whitelist_includes_tabular_codecs() {
+        assert_eq!(validate_export_kind("csv").unwrap(), "csv");
+        assert_eq!(validate_export_kind("tsv").unwrap(), "tsv");
+        assert_eq!(validate_export_kind("md").unwrap(), "md");
+        assert_eq!(validate_export_kind("markdown").unwrap(), "md");
+        assert_eq!(validate_export_kind("html").unwrap(), "html");
+        assert_eq!(validate_export_kind("htm").unwrap(), "html");
+        assert!(validate_export_kind("xlsx").is_err());
+    }
+
+    #[test]
+    fn export_target_path_matches_tabular_extensions() {
+        assert!(validate_export_target_path("/tmp/out/report.csv", "csv").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.tsv", "tsv").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.md", "md").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.markdown", "md").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.html", "html").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.htm", "html").is_ok());
+        assert!(validate_export_target_path("/tmp/out/report.csv", "tsv").is_err());
+        assert!(validate_export_target_path("/tmp/out/report.txt", "md").is_err());
+        assert!(validate_export_target_path("/tmp/out/report.png", "html").is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_traversal() {        assert!(validate_name("../bad").is_err());
         assert!(validate_name("..").is_err());
         assert!(validate_name("a/b").is_err());
         assert!(validate_name("a\\b").is_err());
