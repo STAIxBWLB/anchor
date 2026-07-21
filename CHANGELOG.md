@@ -8,6 +8,36 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
+## v0.4.8 — 2026-07-22 — Today surface + HTML editing
+
+- **Today: a daily operating surface.** The Tasks mode is now presented as
+  **Today** (the existing list/calendar lives on under **All Tasks**) with
+  three stages: Prepare (Yesterday Review, Brain Dump, normalized captures,
+  Top 3, capacity/sleep cards), Execute (Top 3, flexible queue, fixed
+  events, always-visible Done Today), and Review. A Rust logical-day model
+  (03:30 boundary, tz-aware capacity with a 480-minute focus cap and 21:30
+  sleep guard) drives atomic per-day state with revisions/Undo, a daily
+  journal projection that preserves hand-written text, and idempotent
+  rollover that seeds Yesterday Review without touching task status. AI may
+  plan and replan (validated, reversible) but completion, cancellation,
+  deletion, Google Task creation, and calendar publication stay explicit
+  user actions, with a durable crash-safe Google Tasks outbox. Post-review
+  hardening: crash-safe completion ordering, multi-day-gap rollover,
+  logical-day event attribution, per-workspace write locks, and calendar
+  publish that cannot clobber concurrent edits.
+- **Safe WYSIWYG HTML editing.** `.html`/`.htm` documents open in a Visual
+  (sandboxed-iframe contenteditable), Source, or Preview mode, routed away
+  from the Markdown pipeline. The document shell, frontmatter, and head are
+  preserved byte-for-byte; opening Visual without editing leaves the source
+  identical. Scripts never execute (sandbox without `allow-scripts`, plus
+  script/handler stripping and an injected CSP). Post-review hardening:
+  documents with unpreservable body markup redirect to Source instead of
+  silently dropping it, pasted HTML is sanitized, relative asset URLs are
+  confined to the document directory, the asset-loading IPC refuses to
+  expose the workspace root or `.maru` secrets and re-asserts symlink
+  containment, rename preserves the HTML extension, and save returns a
+  revision conflict instead of recreating an externally deleted file.
+
 ## v0.4.7 — 2026-07-18 — completeness hardening
 
 - **Update + close safety.** The startup update check no longer downloads,
