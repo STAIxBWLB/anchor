@@ -1,8 +1,16 @@
-import { memo, useCallback, type PointerEvent, type ReactElement } from "react";
+import { memo, useCallback, type MouseEvent, type PointerEvent, type ReactElement } from "react";
 
 import { portPoint } from "../../../lib/diagram/geometry";
-import type { DiagramNode, EdgePort, NodeId } from "../../../lib/diagram/types";
+import type { MatrixDataset } from "../../../lib/diagram/reportTypes";
+import type {
+  DiagramNode,
+  EdgePort,
+  NodeId,
+  TableCellAddress,
+  TableSelection,
+} from "../../../lib/diagram/types";
 import { useTranslation } from "../../../lib/i18n";
+import { TableView } from "./TableView";
 
 export interface NodeViewProps {
   node: DiagramNode;
@@ -12,6 +20,18 @@ export interface NodeViewProps {
   onPointerDown: (event: PointerEvent<SVGGElement>, nodeId: NodeId) => void;
   onPortPointerDown: (event: PointerEvent<SVGCircleElement>, nodeId: NodeId, port: EdgePort) => void;
   onMemoOpen?: (nodeId: NodeId) => void;
+  /** Matrix dataset linked via `meta.memberId` — present only for view-linked tables. */
+  tableMatrix?: MatrixDataset | null;
+  /** Cell selection for this node (null when another/no table is cell-focused). */
+  tableSelection?: TableSelection | null;
+  onCellPointerDown?: (event: PointerEvent<SVGRectElement>, nodeId: NodeId, addr: TableCellAddress) => void;
+  onCellDoubleClick?: (event: MouseEvent<SVGRectElement>, nodeId: NodeId, addr: TableCellAddress) => void;
+  onTableResizeHandlePointerDown?: (
+    event: PointerEvent<SVGRectElement>,
+    nodeId: NodeId,
+    axis: "col" | "row",
+    index: number,
+  ) => void;
 }
 
 type NodeStatus = "todo" | "doing" | "done" | "blocked";
@@ -200,9 +220,15 @@ function NodeBody({ node }: { node: DiagramNode }) {
 }
 
 function NodeLabel({ node }: { node: DiagramNode }) {
-  if (!node.title && !node.body) return null;
+  const headered = node.kind === "section" || node.kind === "titled-box";
+  // Headered kinds paint the title in the dark SectionHeader band, so the
+  // content area only carries body + bullets.
+  const title = headered ? null : (node.title ?? null);
+  const body = node.body ?? null;
+  const bullets = node.bullets ?? [];
+  if (!title && !body && bullets.length === 0) return null;
   const s = shapeFor(node);
-  const headerH = node.kind === "section" || node.kind === "titled-box" ? 26 : 0;
+  const headerH = headered ? 26 : 0;
   const padTop = node.kind === "numbered" ? 24 : 0;
   return (
     <foreignObject
@@ -219,9 +245,18 @@ function NodeLabel({ node }: { node: DiagramNode }) {
           fontSize: s.fs,
           fontWeight: s.fw,
           textAlign: node.style?.align ?? "center",
+          flexDirection: "column",
         }}
       >
-        {node.title ?? ""}
+        {title ? <div className="maru-diagram-node-label-title">{title}</div> : null}
+        {body ? <div className="maru-diagram-node-label-body">{body}</div> : null}
+        {bullets.length > 0 ? (
+          <ul className="maru-diagram-node-label-bullets">
+            {bullets.map((bullet, idx) => (
+              <li key={idx}>{bullet}</li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </foreignObject>
   );
@@ -254,6 +289,11 @@ function NodeViewBase({
   onPointerDown,
   onPortPointerDown,
   onMemoOpen,
+  tableMatrix,
+  tableSelection,
+  onCellPointerDown,
+  onCellDoubleClick,
+  onTableResizeHandlePointerDown,
 }: NodeViewProps) {
   const { t } = useTranslation();
   const s = shapeFor(node);
@@ -261,6 +301,9 @@ function NodeViewBase({
     (event: PointerEvent<SVGGElement>) => onPointerDown(event, node.id),
     [node.id, onPointerDown],
   );
+  // View-linked tables render the matrix dataset; legacy meta.rows/cols
+  // tables (should not exist post-migration) keep the grid-line fallback.
+  const matrixTable = node.kind === "table" && tableMatrix != null && tableMatrix !== undefined;
 
   const portsVisible = showPorts || pendingConnectActive || selected;
 
@@ -282,11 +325,36 @@ function NodeViewBase({
       data-node-id={node.id}
       onPointerDown={handlePointerDown}
     >
-      <NodeBody node={node} />
+      {matrixTable && tableMatrix ? (
+        <TableView
+          node={node}
+          matrix={tableMatrix}
+          selection={tableSelection ?? null}
+          nodeSelected={selected}
+          onCellPointerDown={
+            onCellPointerDown
+              ? (event, addr) => onCellPointerDown(event, node.id, addr)
+              : undefined
+          }
+          onCellDoubleClick={
+            onCellDoubleClick
+              ? (event, addr) => onCellDoubleClick(event, node.id, addr)
+              : undefined
+          }
+          onResizeHandlePointerDown={
+            onTableResizeHandlePointerDown
+              ? (event, axis, index) => onTableResizeHandlePointerDown(event, node.id, axis, index)
+              : undefined
+          }
+        />
+      ) : (
+        <NodeBody node={node} />
+      )}
       <SectionHeader node={node} />
-      <NodeLabel node={node} />
+      {matrixTable ? null : <NodeLabel node={node} />}
       {selected ? (
         <rect
+          data-export-ignore
           x={-3}
           y={-3}
           width={node.w + 6}
@@ -372,6 +440,7 @@ function NodeViewBase({
               <circle
                 key={port}
                 className="maru-diagram-port"
+                data-export-ignore
                 data-port={port}
                 data-node-id={node.id}
                 cx={pt.x - node.x}

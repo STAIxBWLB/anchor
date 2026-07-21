@@ -25,6 +25,8 @@
     "core:window:allow-start-dragging",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
+    "clipboard-manager:allow-write-html",
     "dialog:default",
     "notification:default",
     "notification:allow-notify",

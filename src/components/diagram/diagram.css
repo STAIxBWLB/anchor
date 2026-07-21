@@ -672,6 +672,50 @@
   cursor: pointer;
 }
 
+.maru-diagram-report-targets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.maru-diagram-report-targets button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.maru-diagram-report-targets button:hover {
+  background: var(--maru-hover, #f3f4f6);
+  border-color: var(--maru-border, #e5e7eb);
+}
+
+.maru-diagram-report-target-title {
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.maru-diagram-report-target-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--maru-muted, #6b7280);
+  font-size: 11px;
+}
+
 .maru-diagram-template-dialog {
   max-width: 760px;
   width: 92vw;
@@ -770,6 +814,187 @@
   cursor: pointer;
 }
 
+.maru-diagram-template-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Pattern gallery (Phase 2b) — reuses the template card styles above. */
+
+.maru-diagram-gallery-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.maru-diagram-gallery-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--maru-muted, #6b7280);
+  margin: 0 0 6px;
+}
+
+.maru-diagram-gallery-empty {
+  font-size: 12px;
+  color: var(--maru-muted, #6b7280);
+  text-align: center;
+  padding: 24px 0;
+}
+
+.maru-diagram-template-card {
+  position: relative;
+}
+
+.maru-diagram-gallery-star,
+.maru-diagram-gallery-delete {
+  position: absolute;
+  top: 6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--maru-muted, #6b7280);
+  cursor: pointer;
+}
+
+.maru-diagram-gallery-star {
+  right: 6px;
+}
+
+.maru-diagram-gallery-star.is-starred {
+  color: #d97706;
+}
+
+.maru-diagram-gallery-delete {
+  left: 6px;
+}
+
+.maru-diagram-gallery-star:hover,
+.maru-diagram-gallery-delete:hover {
+  background: #e5e7eb;
+  color: inherit;
+}
+
+.maru-diagram-gallery-preset-save {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.maru-diagram-gallery-preset-save input {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--maru-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--maru-surface, #ffffff);
+  color: inherit;
+}
+
+.maru-diagram-gallery-preset-save button {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 1px solid var(--maru-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--maru-surface, #ffffff);
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Cross-family conversion preview */
+
+.maru-diagram-mapping-dialog {
+  max-width: 560px;
+  width: 92vw;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.maru-diagram-mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.maru-diagram-mapping-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--maru-muted, #6b7280);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--maru-border, #e5e7eb);
+}
+
+.maru-diagram-mapping-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--maru-border, #f3f4f6);
+}
+
+.maru-diagram-mapping-source-tag {
+  margin-left: 8px;
+  font-size: 10.5px;
+  color: var(--maru-muted, #6b7280);
+}
+
+.maru-diagram-mapping-table select {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--maru-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--maru-surface, #ffffff);
+  color: inherit;
+}
+
+.maru-diagram-mapping-warnings {
+  border: 1px solid #fbbf24;
+  background: #fffbeb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 4px 0;
+}
+
+.maru-diagram-mapping-warnings h3 {
+  font-size: 11px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: #92400e;
+}
+
+.maru-diagram-mapping-warnings ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #78350f;
+}
+
+/* Detached ex-view content badge (RightPanel) */
+
+.maru-diagram-snippet-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--maru-soft, #f3f4f6);
+  color: var(--maru-muted, #6b7280);
+  border: 1px solid var(--maru-border, #e5e7eb);
+  margin-bottom: 6px;
+}
+
 .maru-diagram-export-dialog {
   max-width: 480px;
 }
@@ -813,6 +1038,133 @@
 .maru-diagram-export-status.is-err {
   background: var(--maru-danger-bg);
   color: var(--maru-danger-fg);
+}
+
+/* Unified import/export dialog (Phase 3) */
+.maru-diagram-ie-dialog {
+  max-width: 520px;
+}
+
+.maru-diagram-ie-direction {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.maru-diagram-ie-direction button {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--maru-border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--maru-surface, #ffffff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.maru-diagram-ie-direction button.is-active {
+  border-color: #3b82f6;
+  background: var(--maru-soft, #eff6ff);
+  font-weight: 600;
+}
+
+.maru-diagram-ie-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.maru-diagram-ie-field select {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.maru-diagram-ie-fidelity {
+  margin: 8px 0 0;
+}
+
+.maru-diagram-ie-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--maru-soft, #f3f4f6);
+}
+
+.maru-diagram-ie-badge.is-lossless {
+  background: var(--maru-ok-bg);
+  color: var(--maru-ok-fg);
+}
+
+.maru-diagram-ie-badge.is-structural {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.maru-diagram-ie-badge.is-visual {
+  background: var(--maru-soft, #f3f4f6);
+  color: var(--maru-muted, #6b7280);
+}
+
+.maru-diagram-ie-warnings {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: #92400e;
+}
+
+.maru-diagram-ie-ignored,
+.maru-diagram-ie-hint,
+.maru-diagram-ie-filename {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--maru-muted, #6b7280);
+}
+
+.maru-diagram-ie-preview {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--maru-border, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 11.5px;
+}
+
+.maru-diagram-ie-preview-grid {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.maru-diagram-ie-preview-grid td {
+  border: 1px solid var(--maru-border, #e5e7eb);
+  padding: 2px 6px;
+  white-space: pre-wrap;
+}
+
+.maru-diagram-ie-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.maru-diagram-ie-range-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.maru-diagram-ie-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .maru-diagram-history-dialog {
@@ -1235,6 +1587,41 @@
   word-break: break-word;
   white-space: pre-wrap;
   pointer-events: none;
+  box-sizing: border-box;
+}
+
+.maru-diagram-node-label-body {
+  font-weight: 400;
+}
+
+.maru-diagram-node-label-bullets {
+  margin: 2px 0 0;
+  padding-left: 1.2em;
+  font-weight: 400;
+  text-align: left;
+  align-self: stretch;
+}
+
+.maru-diagram-node-label-bullets li {
+  margin: 1px 0;
+}
+
+.maru-diagram-inline-editor {
+  position: absolute;
+  z-index: 30;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  resize: none;
+  overflow: hidden;
+  border: 1.5px solid #2563eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  outline: none;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
 }
 
 .maru-diagram-node-header {

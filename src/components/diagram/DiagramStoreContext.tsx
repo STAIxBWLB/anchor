@@ -15,6 +15,14 @@ import { type Coalescer } from "../../lib/diagram/history";
 interface DiagramStoreContextValue {
   store: DiagramStore;
   coalescer: Coalescer;
+  /** Persistent per-gesture-type coalescers (typing / resize / paste) — created once per workspace. */
+  gestureCoalescers: GestureCoalescers;
+}
+
+export interface GestureCoalescers {
+  typing: Coalescer;
+  resize: Coalescer;
+  paste: Coalescer;
 }
 
 const Ctx = createContext<DiagramStoreContextValue | null>(null);
@@ -32,6 +40,7 @@ const Ctx = createContext<DiagramStoreContextValue | null>(null);
 interface WorkspaceDiagramContext {
   store: DiagramStore;
   coalescer: Coalescer;
+  gestureCoalescers: GestureCoalescers;
   session: DiagramSession;
 }
 
@@ -49,9 +58,16 @@ function getWorkspaceContext(key?: string | null): WorkspaceDiagramContext {
     ctx = {
       store: createDiagramStore(),
       coalescer: defaultCoalescer(),
+      gestureCoalescers: {
+        typing: defaultCoalescer(),
+        resize: defaultCoalescer(),
+        paste: defaultCoalescer(),
+      },
       session: {
         activeName: null,
         lastSavedBody: null,
+        migratedFromLegacy: false,
+        legacyBackupAttempted: false,
       },
     };
     contexts.set(normalized, ctx);
@@ -83,7 +99,7 @@ export function DiagramStoreProvider({ initial, storeKey, children }: DiagramSto
         ephemeral: initial.ephemeral ?? current.ephemeral,
       }));
     }
-    return { store, coalescer: ctx.coalescer };
+    return { store, coalescer: ctx.coalescer, gestureCoalescers: ctx.gestureCoalescers };
   }, [initial, storeKey]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -98,6 +114,13 @@ export function useDiagramCoalescer(): Coalescer {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useDiagramCoalescer must be used inside <DiagramStoreProvider>");
   return ctx.coalescer;
+}
+
+/** Persistent per-gesture-type coalescers (typing / resize / paste). */
+export function useDiagramGestureCoalescers(): GestureCoalescers {
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useDiagramGestureCoalescers must be used inside <DiagramStoreProvider>");
+  return ctx.gestureCoalescers;
 }
 
 /**
@@ -123,6 +146,13 @@ export function useDiagram<T>(selector: (state: DiagramStateRoot) => T): T {
 export interface DiagramSession {
   activeName: string | null;
   lastSavedBody: string | null;
+  /**
+   * Set when the active document was loaded from a pre-v8 body. The first
+   * save after that triggers a one-time v7 backup (see DiagramMode persistSave).
+   */
+  migratedFromLegacy: boolean;
+  /** True once the v7 backup has been attempted for the active document. */
+  legacyBackupAttempted: boolean;
 }
 
 export function getDiagramSession(storeKey?: string | null): DiagramSession {
@@ -136,11 +166,15 @@ export function setDiagramSession(
   const session = getWorkspaceContext(storeKey).session;
   if (patch.activeName !== undefined) session.activeName = patch.activeName;
   if (patch.lastSavedBody !== undefined) session.lastSavedBody = patch.lastSavedBody;
+  if (patch.migratedFromLegacy !== undefined) session.migratedFromLegacy = patch.migratedFromLegacy;
+  if (patch.legacyBackupAttempted !== undefined) session.legacyBackupAttempted = patch.legacyBackupAttempted;
 }
 
 export function _resetDiagramSessionForTests(): void {
   for (const ctx of contexts.values()) {
     ctx.session.activeName = null;
     ctx.session.lastSavedBody = null;
+    ctx.session.migratedFromLegacy = false;
+    ctx.session.legacyBackupAttempted = false;
   }
 }

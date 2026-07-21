@@ -2,11 +2,12 @@
  * Maru diagram-mode domain types.
  *
  * The schema number {@link DIAGRAM_SCHEMA_VERSION} continues the source
- * standalone editor's numbering (last was v:6, this is v:7) so legacy JSON can
- * be migrated forward. See `persistence.ts` for the migrator chain.
+ * standalone editor's numbering (v:6 → v:7 post-localhost boundary, v:8 adds
+ * report datasets + pattern views) so legacy JSON can be migrated forward.
+ * See `persistence.ts` for the migrator chain.
  */
 
-export const DIAGRAM_SCHEMA_VERSION = 7 as const;
+export const DIAGRAM_SCHEMA_VERSION = 8 as const;
 
 export type DiagramId = string;
 export type NodeId = string;
@@ -87,6 +88,28 @@ export interface DiagramLayer {
   order: number;
 }
 
+export type DiagramPageFormat = "free" | "a4-portrait" | "a4-landscape" | "16:9";
+
+/**
+ * Page-frame dimensions in canvas units (96dpi-ish, matching typical node
+ * sizes). `free` has no frame and is stored as an absent `page` field.
+ */
+export const DIAGRAM_PAGE_SIZES: Record<
+  Exclude<DiagramPageFormat, "free">,
+  { w: number; h: number }
+> = {
+  "a4-portrait": { w: 794, h: 1123 },
+  "a4-landscape": { w: 1123, h: 794 },
+  "16:9": { w: 1280, h: 720 },
+};
+
+export const DIAGRAM_PAGE_FORMATS: readonly DiagramPageFormat[] = [
+  "free",
+  "a4-portrait",
+  "a4-landscape",
+  "16:9",
+];
+
 export interface DiagramDoc {
   v: typeof DIAGRAM_SCHEMA_VERSION;
   id: DiagramId;
@@ -96,6 +119,12 @@ export interface DiagramDoc {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
   layers: DiagramLayer[];
+  /** Page-frame guide; absent/`free` = no frame (default for migrated docs). */
+  page?: DiagramPageFormat;
+  /** Report Pattern Studio datasets (v8+); normalized to [] on load. */
+  datasets?: import("./reportTypes").ReportDataset[];
+  /** Pattern views binding datasets to canvas patterns (v8+). */
+  views?: import("./reportTypes").PatternView[];
   meta?: { author?: string; tags?: string[] };
 }
 
@@ -119,6 +148,28 @@ export interface DragState {
   movedY: number;
   nodeIds: NodeId[];
 }
+
+/** Stable-address pointer to a matrix anchor cell (rowId/colId pair). */
+export interface TableCellAddress {
+  rowId: string;
+  colId: string;
+}
+
+/**
+ * Active cell + rectangular range for the table node currently being edited.
+ * `anchor` is where the range started; `focus` is the moving end (and the
+ * active cell when the range is 1×1).
+ */
+export interface TableSelection {
+  nodeId: NodeId;
+  anchor: TableCellAddress;
+  focus: TableCellAddress;
+}
+
+/** Session clipboard: whole nodes (with internal edges) or a cell range (TSV grid). */
+export type DiagramClipboard =
+  | { kind: "nodes"; nodes: DiagramNode[]; edges: DiagramEdge[] }
+  | { kind: "cells"; texts: string[][] };
 
 export interface UiState {
   gridOn: boolean;
@@ -147,7 +198,9 @@ export interface EphemeralState {
   tool: Tool;
   drag: DragState | null;
   pendingConnect: { fromNodeId: NodeId; fromPort: EdgePort } | null;
-  clipboard: { nodes: DiagramNode[]; edges: DiagramEdge[] } | null;
+  /** Active cell / range inside a selected table node (null when not editing a table). */
+  tableSelection: TableSelection | null;
+  clipboard: DiagramClipboard | null;
   history: { past: string[]; future: string[] };
   ui: UiState;
 }
@@ -187,6 +240,7 @@ export function createInitialEphemeral(): EphemeralState {
     tool: "select",
     drag: null,
     pendingConnect: null,
+    tableSelection: null,
     clipboard: null,
     history: { past: [], future: [] },
     ui: {

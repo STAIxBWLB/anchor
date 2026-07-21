@@ -27,6 +27,7 @@ import {
   type Coalescer,
 } from "./history";
 import { mkNode, type MkNodeOpts } from "./nodeKinds";
+import { relinkClonedNodes } from "./tableActions";
 import type {
   DiagramEdge,
   DiagramNode,
@@ -119,6 +120,10 @@ export function removeNodes(ids: Iterable<NodeId>): StateTransformer {
           nodes: new Set([...state.ephemeral.selection.nodes].filter((id) => !removable.has(id))),
           edges: new Set(),
         },
+        tableSelection:
+          state.ephemeral.tableSelection && !removable.has(state.ephemeral.tableSelection.nodeId)
+            ? state.ephemeral.tableSelection
+            : null,
       },
     };
   };
@@ -185,13 +190,22 @@ export function setSelection(
   nodes: Iterable<NodeId>,
   edges: Iterable<string> = [],
 ): StateTransformer {
-  return (state) => ({
-    ...state,
-    ephemeral: {
-      ...state.ephemeral,
-      selection: { nodes: new Set(nodes), edges: new Set(edges) },
-    },
-  });
+  return (state) => {
+    const nextNodes = new Set(nodes);
+    // A table's cell selection is only meaningful while its node is selected.
+    const tableSelection =
+      state.ephemeral.tableSelection && nextNodes.has(state.ephemeral.tableSelection.nodeId)
+        ? state.ephemeral.tableSelection
+        : null;
+    return {
+      ...state,
+      ephemeral: {
+        ...state.ephemeral,
+        selection: { nodes: nextNodes, edges: new Set(edges) },
+        tableSelection,
+      },
+    };
+  };
 }
 
 export function setViewport(viewport: Viewport): StateTransformer {
@@ -311,17 +325,24 @@ export function duplicateSelection(offsetX = 24, offsetY = 24): StateTransformer
         });
       }
     }
+    const relinked = relinkClonedNodes(state.doc, cloned);
     return {
       ...state,
       doc: {
         ...state.doc,
-        nodes: [...state.doc.nodes, ...cloned],
+        nodes: [...state.doc.nodes, ...relinked.nodes],
         edges: [...state.doc.edges, ...clonedEdges],
+        ...(relinked.datasets.length > 0
+          ? { datasets: [...(state.doc.datasets ?? []), ...relinked.datasets] }
+          : {}),
+        ...(relinked.views.length > 0
+          ? { views: [...(state.doc.views ?? []), ...relinked.views] }
+          : {}),
       },
       ephemeral: {
         ...state.ephemeral,
         selection: {
-          nodes: new Set(cloned.map((n) => n.id)),
+          nodes: new Set(relinked.nodes.map((n) => n.id)),
           edges: new Set(),
         },
       },
@@ -356,6 +377,7 @@ export function replaceDoc(doc: DiagramStateRoot["doc"]): StateTransformer {
     ephemeral: {
       ...state.ephemeral,
       selection: { nodes: new Set(), edges: new Set() },
+      tableSelection: null,
       history: { past: [], future: [] },
     } satisfies EphemeralState,
   });

@@ -433,6 +433,44 @@ describe("normalizeMaruSettings", () => {
     expect(normalizeMaruSettings({ diagram: { lastDocument: "" } }).diagram.lastDocument).toBeNull();
   });
 
+  it("normalizes diagram pattern favorites/recents", () => {
+    const settings = normalizeMaruSettings({
+      diagram: {
+        favoritePatterns: ["report.raci", "report.raci", 42, "swot"],
+        recentPatterns: ["table", "report.timeline"],
+      },
+    });
+
+    expect(settings.diagram.favoritePatterns).toEqual(["report.raci", "swot"]);
+    expect(settings.diagram.recentPatterns).toEqual(["table", "report.timeline"]);
+  });
+
+  it("defaults diagram pattern favorites/recents when missing or malformed", () => {
+    const settings = normalizeMaruSettings({
+      diagram: {
+        favoritePatterns: "report.raci",
+        recentPatterns: 7,
+      },
+    });
+
+    expect(settings.diagram.favoritePatterns).toEqual([]);
+    expect(settings.diagram.recentPatterns).toEqual([]);
+    const defaults = normalizeMaruSettings({});
+    expect(defaults.diagram.favoritePatterns).toEqual([]);
+    expect(defaults.diagram.recentPatterns).toEqual([]);
+  });
+
+  it("caps diagram recents at 12 entries", () => {
+    const settings = normalizeMaruSettings({
+      diagram: {
+        recentPatterns: Array.from({ length: 20 }, (_, i) => `pattern-${i}`),
+      },
+    });
+
+    expect(settings.diagram.recentPatterns).toHaveLength(12);
+    expect(settings.diagram.recentPatterns[0]).toBe("pattern-0");
+  });
+
   it("round-trips graph view/filter settings", () => {
     const settings = normalizeMaruSettings({
       graph: {

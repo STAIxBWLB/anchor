@@ -1,4 +1,16 @@
-import { Clock, FilePlus2, FolderOpen, ImportIcon, LayoutTemplate, Save, Share } from "lucide-react";
+import {
+  ClipboardCopy,
+  Clock,
+  FilePlus2,
+  FileImage,
+  FileInput,
+  FolderOpen,
+  ImportIcon,
+  LayoutTemplate,
+  Save,
+  Share,
+  Table2,
+} from "lucide-react";
 
 import { RibbonButton, RibbonGroup, RibbonSeparator } from "./ribbonPrimitives";
 
@@ -9,7 +21,16 @@ export interface RibbonFileProps {
   onExport: () => void;
   onTemplates: () => void;
   onHistory: () => void;
-  onImportMermaid: () => void;
+  onImport: () => void;
+  onCopyPng: () => void;
+  onCopySvg: () => void;
+  onCopyTableHtml: () => void;
+  onCopyTableMarkdown: () => void;
+  /** "Insert/Update in report" — splices a managed block into a Markdown doc. */
+  onInsertInReport: () => void;
+  /** Dynamic label: insert vs update vs unknown (checked lazily on tab open). */
+  insertInReportLabelKey: string;
+  insertInReportBusy?: boolean;
   saving: boolean;
   canSave: boolean;
 }
@@ -21,7 +42,14 @@ export function RibbonFile({
   onExport,
   onTemplates,
   onHistory,
-  onImportMermaid,
+  onImport,
+  onCopyPng,
+  onCopySvg,
+  onCopyTableHtml,
+  onCopyTableMarkdown,
+  onInsertInReport,
+  insertInReportLabelKey,
+  insertInReportBusy = false,
   saving,
   canSave,
 }: RibbonFileProps) {
@@ -61,9 +89,35 @@ export function RibbonFile({
           icon={<Share size={14} />}
         />
         <RibbonButton
-          labelKey="diagram.ribbon.importMermaid"
-          onClick={onImportMermaid}
+          labelKey="diagram.ribbon.import"
+          onClick={onImport}
           icon={<ImportIcon size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyPng"
+          onClick={onCopyPng}
+          icon={<FileImage size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copySvg"
+          onClick={onCopySvg}
+          icon={<ClipboardCopy size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyTableHtml"
+          onClick={onCopyTableHtml}
+          icon={<Table2 size={14} />}
+        />
+        <RibbonButton
+          labelKey="diagram.ribbon.copyTableMarkdown"
+          onClick={onCopyTableMarkdown}
+          icon={<ClipboardCopy size={14} />}
+        />
+        <RibbonButton
+          labelKey={insertInReportLabelKey}
+          onClick={onInsertInReport}
+          disabled={insertInReportBusy || !canSave}
+          icon={<FileInput size={14} />}
         />
       </RibbonGroup>
       <RibbonGroup labelKey="diagram.ribbon.history">

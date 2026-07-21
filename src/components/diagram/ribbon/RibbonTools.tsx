@@ -1,4 +1,4 @@
-import { Clock, Maximize2, Search } from "lucide-react";
+import { ArrowLeftRight, Clock, Maximize2, Search } from "lucide-react";
 
 import type { RibbonToolsProps } from "./Ribbon";
 import { RibbonButton, RibbonGroup, RibbonSeparator } from "./ribbonPrimitives";
@@ -8,6 +8,7 @@ export function RibbonTools({
   onHistory,
   onSpecialChars,
   onToggleFocus,
+  onConvertView,
 }: RibbonToolsProps) {
   return (
     <>
@@ -16,6 +17,18 @@ export function RibbonTools({
         <RibbonButton labelKey="diagram.tools.specialChars" onClick={onSpecialChars}>Ω</RibbonButton>
       </RibbonGroup>
       <RibbonSeparator />
+      {onConvertView ? (
+        <>
+          <RibbonGroup labelKey="diagram.ribbon.convertView">
+            <RibbonButton
+              labelKey="diagram.ribbon.convertView"
+              onClick={onConvertView}
+              icon={<ArrowLeftRight size={14} />}
+            />
+          </RibbonGroup>
+          <RibbonSeparator />
+        </>
+      ) : null}
       <RibbonGroup labelKey="diagram.ribbon.group.history">
         <RibbonButton
           labelKey="diagram.tools.history"

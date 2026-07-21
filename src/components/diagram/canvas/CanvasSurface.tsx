@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type PointerEvent,
   type WheelEvent,
 } from "react";
@@ -24,16 +25,31 @@ import {
   snap,
   type Rect,
 } from "../../../lib/diagram/geometry";
+import {
+  analyzeViewDrag,
+  detachViewMembersSnippetAction,
+  offsetViewBoundsAction,
+} from "../../../lib/diagram/patternStudio";
+import type { MatrixDataset } from "../../../lib/diagram/reportTypes";
+import {
+  matrixForTableNode,
+  setColumnWidth,
+  setRowHeight,
+  setTableSelection,
+} from "../../../lib/diagram/tableActions";
+import { addrAtCanvasPoint } from "../../../lib/diagram/tableEditing";
 import { visibleSubset } from "../../../lib/diagram/viewportCulling";
 import type { Coalescer } from "../../../lib/diagram/history";
 import {
   computeSmartGuides,
   type GuideLine,
 } from "../../../lib/diagram/smartGuides";
-import type {
-  DiagramNode,
-  EdgePort,
-  NodeId,
+import {
+  DIAGRAM_PAGE_SIZES,
+  type DiagramNode,
+  type EdgePort,
+  type NodeId,
+  type TableCellAddress,
 } from "../../../lib/diagram/types";
 import { useTranslation } from "../../../lib/i18n";
 import {
@@ -55,6 +71,8 @@ interface DragState {
   ids: NodeId[];
   /** Original positions of dragged nodes, keyed by id. */
   origins: Map<NodeId, { x: number; y: number; w: number; h: number }>;
+  /** Views whose ENTIRE membership is dragged — stay linked (bounds offset on drop). */
+  linkedViewIds: string[];
   coalescer: Coalescer;
 }
 
@@ -85,10 +103,35 @@ interface ConnectState {
   pointerCanvasY: number;
 }
 
-type Gesture = DragState | PanState | MarqueeState | ConnectState | null;
+/** Drag-extend of a table cell range (ephemeral only — no snapshots). */
+interface CellRangeState {
+  kind: "cell-range";
+  nodeId: NodeId;
+}
+
+/** Row-height / column-width drag on a table's resize handles. */
+interface TableResizeState {
+  kind: "table-resize";
+  nodeId: NodeId;
+  datasetId: string;
+  axis: "col" | "row";
+  trackId: string;
+  startCanvasPos: number;
+  origSize: number;
+  coalescer: Coalescer;
+}
+
+type Gesture = DragState | PanState | MarqueeState | ConnectState | CellRangeState | TableResizeState | null;
 
 export interface CanvasSurfaceProps {
   onMemoOpen?: (nodeId: NodeId) => void;
+  onNodeDoubleClick?: (nodeId: NodeId) => void;
+  /** Double-click on blank canvas (no node hit) — opens the pattern gallery. */
+  onBlankDoubleClick?: () => void;
+  /** Tracks the last canvas-space pointer position (insert-at-pointer target). */
+  onPointerCanvasMove?: (point: { x: number; y: number }) => void;
+  /** Double-click / quick-entry request for a table cell. */
+  onCellEditRequest?: (nodeId: NodeId, addr: TableCellAddress) => void;
 }
 
 const MIN_ZOOM = 0.2;
@@ -131,7 +174,7 @@ function findPortTarget(event: PointerEvent<SVGSVGElement>): {
   return null; // Body-drop without explicit port — skip for Phase 2.
 }
 
-export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
+export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onBlankDoubleClick, onPointerCanvasMove, onCellEditRequest }: CanvasSurfaceProps = {}) {
   const { t } = useTranslation();
   const store = useDiagramStore();
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -139,6 +182,9 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
 
   const nodes = useDiagram((s) => s.doc.nodes);
   const edges = useDiagram((s) => s.doc.edges);
+  const datasets = useDiagram((s) => s.doc.datasets);
+  const page = useDiagram((s) => s.doc.page);
+  const tableSelection = useDiagram((s) => s.ephemeral.tableSelection);
   const viewport = useDiagram((s) => s.ephemeral.viewport);
   const selection = useDiagram((s) => s.ephemeral.selection);
   const snapOn = useDiagram((s) => s.ephemeral.ui.snapOn);
@@ -177,6 +223,18 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
     for (const n of nodes) map.set(n.id, n);
     return map;
   }, [nodes]);
+
+  // View-linked tables: node id → matrix dataset (via meta.memberId).
+  const matrixByNodeId = useMemo(() => {
+    const map = new Map<NodeId, MatrixDataset>();
+    for (const n of nodes) {
+      const matrix = matrixForTableNode(n, datasets);
+      if (matrix) map.set(n.id, matrix);
+    }
+    return map;
+  }, [nodes, datasets]);
+
+  const pageSize = page && page !== "free" ? DIAGRAM_PAGE_SIZES[page] : null;
 
   // Culling: pick only the visible subset of nodes + edges. Selection is
   // forced-visible so an off-screen drag target doesn't disappear mid-gesture.
@@ -221,6 +279,21 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
             return [nodeId];
           })();
       if (ids.length === 0) return;
+      // Detach prompt (Phase 2b): dragging a strict subset of a view's
+      // generated members breaks the projection link, so ask first. A
+      // whole-membership drag stays linked (bounds offset on drop).
+      const analysis = analyzeViewDrag(state.doc, ids);
+      if (analysis.subsets.length > 0) {
+        if (!window.confirm(t("diagram.detach.confirm"))) return;
+        for (const subset of analysis.subsets) {
+          store.setState(
+            withSnapshot(
+              detachViewMembersSnippetAction(subset.viewId, subset.memberIds),
+              defaultCoalescer(),
+            ),
+          );
+        }
+      }
       const origins = new Map<NodeId, { x: number; y: number; w: number; h: number }>();
       for (const id of ids) {
         const n = nodeById.get(id);
@@ -234,10 +307,11 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
         lastDy: 0,
         ids,
         origins,
+        linkedViewIds: analysis.full,
         coalescer: defaultCoalescer(),
       };
     },
-    [nodeById, store, viewport],
+    [nodeById, store, t, viewport],
   );
 
   const beginConnect = useCallback(
@@ -272,8 +346,75 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
     [nodeById, viewport],
   );
 
-  const onEdgeSelect = useCallback(
-    (event: PointerEvent<SVGGElement>, edgeId: string) => {
+  // Cell click: only takes over when the table node is already selected
+  // (otherwise the pointerdown falls through to the node-drag handler, which
+  // selects the node first). Starts a range-extend drag gesture.
+  const beginCellSelect = useCallback(
+    (event: PointerEvent<SVGRectElement>, nodeId: NodeId, addr: TableCellAddress) => {
+      const state = store.getState();
+      const node = state.doc.nodes.find((n) => n.id === nodeId);
+      if (!node || node.locked) return;
+      if (!state.ephemeral.selection.nodes.has(nodeId)) return;
+      event.stopPropagation();
+      const svg = svgRef.current;
+      if (!svg) return;
+      svg.setPointerCapture(event.pointerId);
+      const existing = state.ephemeral.tableSelection;
+      if (event.shiftKey && existing && existing.nodeId === nodeId) {
+        store.setState(setTableSelection({ ...existing, focus: addr }));
+      } else {
+        store.setState(setTableSelection({ nodeId, anchor: addr, focus: addr }));
+      }
+      gestureRef.current = { kind: "cell-range", nodeId };
+    },
+    [store],
+  );
+
+  const onCellDoubleClick = useCallback(
+    (event: MouseEvent<SVGRectElement>, nodeId: NodeId, addr: TableCellAddress) => {
+      event.stopPropagation();
+      const node = store.getState().doc.nodes.find((n) => n.id === nodeId);
+      if (!node || node.locked) return;
+      onCellEditRequest?.(nodeId, addr);
+    },
+    [onCellEditRequest, store],
+  );
+
+  // Row/column resize: mirrors the node-drag pattern — live updates through
+  // withSnapshot with a fresh per-gesture coalescer → one undo entry per drag.
+  const beginTableResize = useCallback(
+    (event: PointerEvent<SVGRectElement>, nodeId: NodeId, axis: "col" | "row", index: number) => {
+      event.stopPropagation();
+      const svg = svgRef.current;
+      if (!svg) return;
+      const state = store.getState();
+      const node = state.doc.nodes.find((n) => n.id === nodeId);
+      if (!node || node.locked) return;
+      const matrix = matrixForTableNode(node, state.doc.datasets);
+      if (!matrix) return;
+      const track = axis === "col" ? matrix.columns[index] : matrix.rows[index];
+      if (!track) return;
+      svg.setPointerCapture(event.pointerId);
+      const rect = svg.getBoundingClientRect();
+      const canvas = screenToCanvas(event.clientX - rect.left, event.clientY - rect.top, viewport);
+      gestureRef.current = {
+        kind: "table-resize",
+        nodeId,
+        datasetId: matrix.id,
+        axis,
+        trackId: track.id,
+        startCanvasPos: axis === "col" ? canvas.x : canvas.y,
+        origSize:
+          axis === "col"
+            ? (matrix.columns[index]?.width ?? node.w / Math.max(1, matrix.columns.length))
+            : (matrix.rows[index]?.height ?? node.h / Math.max(1, matrix.rows.length)),
+        coalescer: defaultCoalescer(),
+      };
+    },
+    [store, viewport],
+  );
+
+  const onEdgeSelect = useCallback(    (event: PointerEvent<SVGGElement>, edgeId: string) => {
       event.stopPropagation();
       const additive = event.shiftKey || event.metaKey || event.ctrlKey;
       const state = store.getState();
@@ -336,13 +477,18 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
 
   const onSurfacePointerMove = useCallback(
     (event: PointerEvent<SVGSVGElement>) => {
-      const gesture = gestureRef.current;
-      if (!gesture) return;
       const svg = svgRef.current;
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
+      // Last-pointer tracking for the gallery's "insert at pointer" action.
+      if (onPointerCanvasMove) {
+        const point = screenToCanvas(screenX, screenY, viewport);
+        onPointerCanvasMove(point);
+      }
+      const gesture = gestureRef.current;
+      if (!gesture) return;
 
       if (gesture.kind === "pan") {
         updateViewport({
@@ -371,6 +517,36 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
           x2: canvas.x,
           y2: canvas.y,
         });
+        return;
+      }
+
+      if (gesture.kind === "cell-range") {
+        const canvas = screenToCanvas(screenX, screenY, viewport);
+        const state = store.getState();
+        const node = state.doc.nodes.find((n) => n.id === gesture.nodeId);
+        const matrix = node ? matrixForTableNode(node, state.doc.datasets) : null;
+        const current = state.ephemeral.tableSelection;
+        if (!node || !matrix || !current || current.nodeId !== gesture.nodeId) return;
+        const addr = addrAtCanvasPoint(matrix, node, canvas.x, canvas.y);
+        if (!addr) return;
+        if (addr.rowId === current.focus.rowId && addr.colId === current.focus.colId) return;
+        store.setState(setTableSelection({ ...current, focus: addr }));
+        return;
+      }
+
+      if (gesture.kind === "table-resize") {
+        const canvas = screenToCanvas(screenX, screenY, viewport);
+        const pos = gesture.axis === "col" ? canvas.x : canvas.y;
+        const size = Math.max(16, gesture.origSize + (pos - gesture.startCanvasPos));
+        store.setState(
+          withSnapshot(
+            gesture.axis === "col"
+              ? setColumnWidth(gesture.datasetId, gesture.trackId, size)
+              : setRowHeight(gesture.datasetId, gesture.trackId, size),
+            gesture.coalescer,
+            { coalesce: true },
+          ),
+        );
         return;
       }
 
@@ -425,7 +601,7 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
         setGuides(smartGuideOut);
       }
     },
-    [nodes, snapOn, snapSize, smartGuideOn, store, updateViewport, viewport],
+    [nodes, onPointerCanvasMove, snapOn, snapSize, smartGuideOn, store, updateViewport, viewport],
   );
 
   const onSurfacePointerUp = useCallback(
@@ -451,6 +627,20 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
       }
       if (gesture.kind === "node") {
         setGuides([]);
+        // Whole-membership drags stay linked: offset the view bounds by the
+        // same delta so the projection hash follows the moved members.
+        if (
+          gesture.linkedViewIds.length > 0 &&
+          (gesture.lastDx !== 0 || gesture.lastDy !== 0)
+        ) {
+          store.setState(
+            withSnapshot(
+              offsetViewBoundsAction(gesture.linkedViewIds, gesture.lastDx, gesture.lastDy),
+              gesture.coalescer,
+              { coalesce: true },
+            ),
+          );
+        }
       }
       if (gesture.kind === "connect") {
         const target = findPortTarget(event);
@@ -507,6 +697,18 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
   const onNodeEnter = useCallback((nodeId: NodeId) => setHoverNodeId(nodeId), []);
   const onNodeLeave = useCallback(() => setHoverNodeId(null), []);
 
+  // Blank-canvas double-click (svg background or page frame, not a node).
+  const onSurfaceDoubleClick = useCallback(
+    (event: MouseEvent<SVGSVGElement>) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      if (target === svgRef.current || target.hasAttribute("data-page-frame")) {
+        onBlankDoubleClick?.();
+      }
+    },
+    [onBlankDoubleClick],
+  );
+
   return (
     <svg
       ref={svgRef}
@@ -517,10 +719,26 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
       onPointerMove={onSurfacePointerMove}
       onPointerUp={onSurfacePointerUp}
       onPointerCancel={onSurfacePointerUp}
+      onDoubleClick={onSurfaceDoubleClick}
       onWheel={onWheel}
     >
       <EdgeMarkers />
       <g transform={transform}>
+        {pageSize ? (
+          <g data-export-ignore pointerEvents="none">
+            <rect
+              data-page-frame
+              x={0}
+              y={0}
+              width={pageSize.w}
+              height={pageSize.h}
+              fill="#ffffff"
+              stroke="#cbd5e1"
+              strokeWidth={1.5}
+              strokeDasharray="8 4"
+            />
+          </g>
+        ) : null}
         {visible.edges.map((edge) => (
           <EdgeView
             key={edge.id}
@@ -536,6 +754,7 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
             key={n.id}
             onPointerEnter={() => onNodeEnter(n.id)}
             onPointerLeave={onNodeLeave}
+            onDoubleClick={() => onNodeDoubleClick?.(n.id)}
           >
             <NodeView
               node={n}
@@ -545,12 +764,20 @@ export function CanvasSurface({ onMemoOpen }: CanvasSurfaceProps = {}) {
               onPointerDown={beginNodeDrag}
               onPortPointerDown={beginConnect}
               onMemoOpen={onMemoOpen}
+              tableMatrix={matrixByNodeId.get(n.id) ?? null}
+              tableSelection={
+                tableSelection && tableSelection.nodeId === n.id ? tableSelection : null
+              }
+              onCellPointerDown={beginCellSelect}
+              onCellDoubleClick={onCellDoubleClick}
+              onTableResizeHandlePointerDown={beginTableResize}
             />
           </g>
         ))}
         <SmartGuides guides={guides} />
         {connectGhost ? (
           <line
+            data-export-ignore
             x1={connectGhost.x1}
             y1={connectGhost.y1}
             x2={connectGhost.x2}
