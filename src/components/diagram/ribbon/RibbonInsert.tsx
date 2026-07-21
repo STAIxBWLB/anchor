@@ -1,4 +1,4 @@
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, LayoutTemplate } from "lucide-react";
 import { useRef, type ChangeEvent } from "react";
 
 import type { NodeKind } from "../../../lib/diagram/types";
@@ -7,6 +7,8 @@ import { RibbonButton, RibbonGroup } from "./ribbonPrimitives";
 export interface RibbonInsertProps {
   onInsert: (kind: NodeKind) => void;
   onImageFile: (event: ChangeEvent<HTMLInputElement>) => void;
+  /** Opens the pattern gallery (Report Pattern Studio). */
+  onInsertPattern?: () => void;
 }
 
 const BASIC: NodeKind[] = ["simple", "text", "numbered", "section", "titled-box", "split-box"];
@@ -28,7 +30,7 @@ const KIND_TO_KEY: Record<NodeKind, string> = {
   image: "diagram.toolbar.addImage",
 };
 
-export function RibbonInsert({ onInsert, onImageFile }: RibbonInsertProps) {
+export function RibbonInsert({ onInsert, onImageFile, onInsertPattern }: RibbonInsertProps) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
@@ -57,6 +59,15 @@ export function RibbonInsert({ onInsert, onImageFile }: RibbonInsertProps) {
           onChange={onImageFile}
         />
       </RibbonGroup>
+      {onInsertPattern ? (
+        <RibbonGroup labelKey="diagram.ribbon.insertPattern">
+          <RibbonButton
+            labelKey="diagram.ribbon.insertPattern"
+            onClick={onInsertPattern}
+            icon={<LayoutTemplate size={14} />}
+          />
+        </RibbonGroup>
+      ) : null}
     </>
   );
 }

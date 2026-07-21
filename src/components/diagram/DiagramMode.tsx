@@ -43,6 +43,25 @@ import { nextTableKeyAction } from "../../lib/diagram/tableKeys";
 import { isInEditable, matchesShortcut } from "../../lib/diagram/shortcuts";
 import { fitView } from "../../lib/diagram/geometry";
 import { readMaruSettings, saveMaruSettings } from "../../lib/maruDir";
+import {
+  DIAGRAM_FAVORITE_PATTERNS_CAP,
+  DIAGRAM_RECENT_PATTERNS_CAP,
+} from "../../lib/settings";
+import {
+  classifyConversion,
+  switchViewPatternAction,
+  type CrossConversionResult,
+} from "../../lib/diagram/convert";
+import { getPattern } from "../../lib/diagram/patterns";
+import {
+  analyzeViewDrag,
+  detachViewMembersSnippetAction,
+  insertPatternAt,
+  insertPatternAtAction,
+  newDocumentFromPattern,
+  presetApplyOpts,
+  singleLinkedViewId,
+} from "../../lib/diagram/patternStudio";
 import type { MkNodeOpts } from "../../lib/diagram/nodeKinds";
 import {
   deleteDiagram,
@@ -54,7 +73,6 @@ import {
   writeDiagram,
 } from "../../lib/diagram/persistence";
 import { diagramBackupDocument } from "../../lib/diagram";
-import type { TemplateDefinition } from "../../lib/diagram/templates";
 import {
   createAutoSnapshotScheduler,
   saveSnapshotForDoc,
@@ -63,7 +81,6 @@ import {
 import {
   createDiagramId,
   createEmptyDoc,
-  type DiagramDoc,
   type NodeId,
   type NodeKind,
   type RibbonTab,
@@ -86,10 +103,14 @@ import { RightPanel } from "./panels/RightPanel";
 import { Ribbon } from "./ribbon/Ribbon";
 import { ExportDialog } from "./modals/ExportDialog";
 import { ImportMermaidDialog } from "./modals/ImportMermaidDialog";
+import { MappingPreviewDialog } from "./modals/MappingPreviewDialog";
 import { MemoDialog } from "./modals/MemoDialog";
+import {
+  PatternGalleryDialog,
+  type GallerySelection,
+} from "./modals/PatternGalleryDialog";
 import { SaveAsDialog } from "./modals/SaveAsDialog";
 import { SpecialCharsPicker } from "./modals/SpecialCharsPicker";
-import { TemplatePickerDialog } from "./modals/TemplatePickerDialog";
 import { VersionHistoryDialog } from "./modals/VersionHistoryDialog";
 import { FindBar } from "./canvas/FindBar";
 import "./diagram.css";
@@ -220,7 +241,12 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   const [listOpen, setListOpen] = useState(false);
   const [files, setFiles] = useState<DiagramFile[]>([]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [templateOpen, setTemplateOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryMode, setGalleryMode] = useState<"apply" | "convert">("apply");
+  const [mappingPreview, setMappingPreview] = useState<{
+    sourceViewId: string;
+    targetPatternId: string;
+  } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoOpen, setMemoOpen] = useState<string | null>(null);
@@ -244,6 +270,8 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const insertOffsetRef = useRef(0);
+  /** Last canvas-space pointer position — the gallery's "insert at pointer" target. */
+  const lastPointerRef = useRef({ x: 400, y: 300 });
   const titleCoalescerRef = useRef(defaultCoalescer());
   const inlineEditCoalescerRef = useRef(defaultCoalescer());
   const cellEditCoalescerRef = useRef(defaultCoalescer());
@@ -363,6 +391,188 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
       cancelled = true;
     };
   }, [sessionKey, setActiveName, setLastSavedBody, store, workPath]);
+
+  // --- Pattern gallery (Phase 2b) ------------------------------------------
+  // Favorites + recents persist in DiagramSettings (.maru/settings.json).
+
+  const [patternPrefs, setPatternPrefs] = useState<{ favorites: string[]; recents: string[] }>({
+    favorites: [],
+    recents: [],
+  });
+
+  useEffect(() => {
+    if (!workPath) return;
+    let cancelled = false;
+    void readMaruSettings(workPath)
+      .then((settings) => {
+        if (cancelled) return;
+        setPatternPrefs({
+          favorites: settings.diagram.favoritePatterns,
+          recents: settings.diagram.recentPatterns,
+        });
+      })
+      .catch(() => {
+        /* best effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workPath]);
+
+  const persistPatternPrefs = useCallback(
+    async (next: { favorites: string[]; recents: string[] }) => {
+      setPatternPrefs(next);
+      if (!workPath) return;
+      try {
+        const base = await readMaruSettings(workPath);
+        await saveMaruSettings(
+          workPath,
+          {
+            ...base,
+            diagram: {
+              ...base.diagram,
+              favoritePatterns: next.favorites,
+              recentPatterns: next.recents,
+            },
+          },
+          base,
+        );
+      } catch {
+        /* Favorites/recents are convenience state, not a save blocker. */
+      }
+    },
+    [workPath],
+  );
+
+  const toggleFavoritePattern = useCallback(
+    (patternId: string) => {
+      const favorites = patternPrefs.favorites.includes(patternId)
+        ? patternPrefs.favorites.filter((id) => id !== patternId)
+        : [patternId, ...patternPrefs.favorites].slice(0, DIAGRAM_FAVORITE_PATTERNS_CAP);
+      void persistPatternPrefs({ ...patternPrefs, favorites });
+    },
+    [patternPrefs, persistPatternPrefs],
+  );
+
+  const recordRecentPattern = useCallback(
+    (patternId: string) => {
+      const recents = [
+        patternId,
+        ...patternPrefs.recents.filter((id) => id !== patternId),
+      ].slice(0, DIAGRAM_RECENT_PATTERNS_CAP);
+      void persistPatternPrefs({ ...patternPrefs, recents });
+    },
+    [patternPrefs, persistPatternPrefs],
+  );
+
+  // The conversion source: exactly one selected node linked to a live view.
+  const convertViewId = useMemo(
+    () => singleLinkedViewId(doc, selection.nodes),
+    [doc, selection.nodes],
+  );
+
+  // "Save as workspace preset" captures the selected view's pattern config.
+  const presetDraft = useMemo(() => {
+    if (!convertViewId) return null;
+    const view = (doc.views ?? []).find((v) => v.id === convertViewId);
+    if (!view) return null;
+    const member = view.nodeIds
+      .map((id) => doc.nodes.find((n) => n.id === id))
+      .find((n) => n !== undefined);
+    const style = member?.style
+      ? ({ ...member.style } as Record<string, string | number | boolean>)
+      : undefined;
+    return {
+      patternId: view.patternId,
+      ...(view.theme !== undefined ? { theme: view.theme } : {}),
+      ...(style !== undefined ? { style } : {}),
+    };
+  }, [doc, convertViewId]);
+
+  const openGallery = useCallback((mode: "apply" | "convert") => {
+    setGalleryMode(mode);
+    setGalleryOpen(true);
+  }, []);
+
+  const handleGalleryNewDocument = useCallback(
+    (sel: GallerySelection) => {
+      const patternId = sel.kind === "pattern" ? sel.patternId : sel.preset.patternId;
+      const opts = sel.kind === "preset" ? presetApplyOpts(sel.preset, t) : { t };
+      try {
+        const next = newDocumentFromPattern(patternId, {
+          ...opts,
+          docTitle:
+            sel.kind === "preset"
+              ? sel.preset.name
+              : t(getPattern(patternId)?.labelKey ?? ""),
+        });
+        store.setState(replaceDoc(next));
+        setActiveName(null);
+        setLastSavedBody(null);
+        void persistLastDocument(null);
+        recordRecentPattern(patternId);
+        setGalleryOpen(false);
+        reportError(null);
+      } catch (err) {
+        reportError(t("diagram.error.load", { message: (err as Error).message ?? "unknown" }));
+      }
+    },
+    [persistLastDocument, recordRecentPattern, reportError, setActiveName, setLastSavedBody, store, t],
+  );
+
+  const handleGalleryInsert = useCallback(
+    (sel: GallerySelection) => {
+      const patternId = sel.kind === "pattern" ? sel.patternId : sel.preset.patternId;
+      const opts = sel.kind === "preset" ? presetApplyOpts(sel.preset, t) : { t };
+      const at = lastPointerRef.current;
+      try {
+        // Pre-compute so unknown patterns throw before any state mutation.
+        insertPatternAt(store.getState().doc, patternId, at, opts);
+      } catch (err) {
+        reportError(t("diagram.error.load", { message: (err as Error).message ?? "unknown" }));
+        return;
+      }
+      store.setState(withSnapshot(insertPatternAtAction(patternId, at, opts), coalescer));
+      recordRecentPattern(patternId);
+      setGalleryOpen(false);
+      reportError(null);
+    },
+    [coalescer, recordRecentPattern, reportError, store, t],
+  );
+
+  const handleGalleryConvert = useCallback(
+    (patternId: string) => {
+      const state = store.getState();
+      const viewId = singleLinkedViewId(state.doc, state.ephemeral.selection.nodes);
+      if (!viewId) return;
+      const kind = classifyConversion(state.doc, viewId, patternId);
+      if (kind === "freeform") {
+        reportError(t("diagram.gallery.convertFreeform"));
+        return;
+      }
+      if (kind === "same-family") {
+        // One-command conversion: same dataset, new projection. No dialog.
+        store.setState(withSnapshot(switchViewPatternAction(viewId, patternId, { t }), coalescer));
+        recordRecentPattern(patternId);
+        setGalleryOpen(false);
+        reportError(null);
+        return;
+      }
+      setGalleryOpen(false);
+      setMappingPreview({ sourceViewId: viewId, targetPatternId: patternId });
+    },
+    [coalescer, recordRecentPattern, reportError, store, t],
+  );
+
+  const handleMappingConfirm = useCallback(
+    (result: CrossConversionResult) => {
+      store.setState(withSnapshot(replaceDoc(result.doc), coalescer));
+      if (mappingPreview) recordRecentPattern(mappingPreview.targetPatternId);
+      setMappingPreview(null);
+      reportError(result.warnings.length > 0 ? result.warnings.join(" / ") : null);
+    },
+    [coalescer, mappingPreview, recordRecentPattern, reportError, store],
+  );
 
   const refreshList = useCallback(async () => {
     if (!workPath) return;
@@ -822,6 +1032,20 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           const state = store.getState();
           const nodeIds = [...state.ephemeral.selection.nodes];
           const edgeIds = [...state.ephemeral.selection.edges];
+          // Detach prompt (Phase 2b): deleting a strict subset of a view's
+          // generated members asks to detach them from the projection first.
+          const analysis = analyzeViewDrag(state.doc, nodeIds);
+          if (analysis.subsets.length > 0) {
+            if (!window.confirm(t("diagram.detach.confirm"))) return;
+            for (const subset of analysis.subsets) {
+              store.setState(
+                withSnapshot(
+                  detachViewMembersSnippetAction(subset.viewId, subset.memberIds),
+                  coalescer,
+                ),
+              );
+            }
+          }
           if (nodeIds.length > 0) {
             store.setState(withSnapshot(removeNodes(nodeIds), coalescer));
           }
@@ -833,7 +1057,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [cellEdit, coalescer, findOpen, gestureCoalescers, handleSave, hasSelection, openCellEditor, openInlineEditor, store]);
+  }, [cellEdit, coalescer, findOpen, gestureCoalescers, handleSave, hasSelection, openCellEditor, openInlineEditor, store, t]);
 
   const statusLabel = saving
     ? t("diagram.status.saving")
@@ -994,7 +1218,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onOpen: () => setListOpen((o) => !o),
           onSave: handleSave,
           onExport: () => setExportOpen(true),
-          onTemplates: () => setTemplateOpen(true),
+          onTemplates: () => openGallery("apply"),
           onHistory: () => setHistoryOpen(true),
           onImportMermaid: () => setImportMermaidOpen(true),
           saving,
@@ -1003,6 +1227,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         insertProps={{
           onInsert: (kind) => insertAtCenter(kind),
           onImageFile: handleImage,
+          onInsertPattern: () => openGallery("apply"),
         }}
         viewProps={{
           zoomPercent: Math.round(viewport.zoom * 100),
@@ -1020,6 +1245,7 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           onHistory: () => setHistoryOpen(true),
           onSpecialChars: () => setSpecialOpen(true),
           onToggleFocus: () => store.setState(toggleFocusMode()),
+          onConvertView: () => openGallery("convert"),
         }}
       />
       <div className="maru-diagram-workspace">
@@ -1043,6 +1269,10 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
           <CanvasSurface
             onMemoOpen={(nodeId) => setMemoOpen(nodeId)}
             onNodeDoubleClick={openInlineEditor}
+            onBlankDoubleClick={() => openGallery("apply")}
+            onPointerCanvasMove={(point) => {
+              lastPointerRef.current = point;
+            }}
             onCellEditRequest={(nodeId, addr) => openCellEditor(nodeId, addr)}
           />
           {inlineEdit && inlineEditNode ? (
@@ -1133,26 +1363,33 @@ function DiagramShell({ workPath, onError }: DiagramModeProps) {
         onConfirm={handleConfirmSaveAs}
         onCancel={() => setSaveDialogOpen(false)}
       />
-      <TemplatePickerDialog
-        open={templateOpen}
+      <PatternGalleryDialog
+        open={galleryOpen}
         dirty={dirty}
-        onApply={(tpl: TemplateDefinition) => {
-          const fresh = createEmptyDoc(createDiagramId());
-          const bundle = tpl.build(400, 300, t);
-          const next: DiagramDoc = {
-            ...fresh,
-            nodes: bundle.nodes,
-            edges: bundle.edges,
-            docTitle: t(tpl.labelKey),
-          };
-          store.setState(replaceDoc(next));
-          setActiveName(null);
-          setLastSavedBody(null);
-          void persistLastDocument(null);
-          setTemplateOpen(false);
-        }}
-        onCancel={() => setTemplateOpen(false)}
+        workspace={workPath}
+        convertViewId={convertViewId}
+        initialMode={galleryMode}
+        presetDraft={presetDraft}
+        favorites={patternPrefs.favorites}
+        recents={patternPrefs.recents}
+        onToggleFavorite={toggleFavoritePattern}
+        onNewDocument={handleGalleryNewDocument}
+        onInsertAtPointer={handleGalleryInsert}
+        onConvert={handleGalleryConvert}
+        onNotice={(message) => reportError(message)}
+        onClose={() => setGalleryOpen(false)}
       />
+      {mappingPreview ? (
+        <MappingPreviewDialog
+          key={`${mappingPreview.sourceViewId}:${mappingPreview.targetPatternId}`}
+          open
+          doc={doc}
+          sourceViewId={mappingPreview.sourceViewId}
+          targetPatternId={mappingPreview.targetPatternId}
+          onConfirm={handleMappingConfirm}
+          onCancel={() => setMappingPreview(null)}
+        />
+      ) : null}
       <ExportDialog
         open={exportOpen}
         doc={store.getState().doc}

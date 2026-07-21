@@ -297,7 +297,14 @@ export interface AiSettings {
 
 export interface DiagramSettings {
   lastDocument: string | null;
+  /** Starred pattern ids in the pattern gallery (deduped, registry order kept by user). */
+  favoritePatterns: string[];
+  /** Most-recently-applied pattern ids, most recent first, capped. */
+  recentPatterns: string[];
 }
+
+export const DIAGRAM_RECENT_PATTERNS_CAP = 12;
+export const DIAGRAM_FAVORITE_PATTERNS_CAP = 24;
 
 export interface GraphSettings {
   source: "vault" | "workspace" | "all";
@@ -474,6 +481,8 @@ export const DEFAULT_MARU_SETTINGS: MaruSettings = {
   },
   diagram: {
     lastDocument: null,
+    favoritePatterns: [],
+    recentPatterns: [],
   },
   graph: {
     source: "vault",
@@ -922,6 +931,16 @@ function normalizeComposerSettings(value: unknown): ComposerSettings {
   return { lintDismissals };
 }
 
+function normalizePatternIdList(value: unknown, cap: number): string[] {
+  const out: string[] = [];
+  for (const id of parseStringArray(value)) {
+    if (!id.trim() || out.includes(id)) continue;
+    out.push(id);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
 function normalizeDiagramSettings(value: unknown): DiagramSettings {
   const diagram = isRecord(value) ? value : {};
   return {
@@ -929,6 +948,14 @@ function normalizeDiagramSettings(value: unknown): DiagramSettings {
       diagram,
       ["lastDocument", "last_document", "activeName", "active_name"],
       DEFAULT_MARU_SETTINGS.diagram.lastDocument,
+    ),
+    favoritePatterns: normalizePatternIdList(
+      diagram.favoritePatterns ?? diagram.favorite_patterns,
+      DIAGRAM_FAVORITE_PATTERNS_CAP,
+    ),
+    recentPatterns: normalizePatternIdList(
+      diagram.recentPatterns ?? diagram.recent_patterns,
+      DIAGRAM_RECENT_PATTERNS_CAP,
     ),
   };
 }

@@ -25,6 +25,11 @@ import {
   snap,
   type Rect,
 } from "../../../lib/diagram/geometry";
+import {
+  analyzeViewDrag,
+  detachViewMembersSnippetAction,
+  offsetViewBoundsAction,
+} from "../../../lib/diagram/patternStudio";
 import type { MatrixDataset } from "../../../lib/diagram/reportTypes";
 import {
   matrixForTableNode,
@@ -66,6 +71,8 @@ interface DragState {
   ids: NodeId[];
   /** Original positions of dragged nodes, keyed by id. */
   origins: Map<NodeId, { x: number; y: number; w: number; h: number }>;
+  /** Views whose ENTIRE membership is dragged — stay linked (bounds offset on drop). */
+  linkedViewIds: string[];
   coalescer: Coalescer;
 }
 
@@ -119,6 +126,10 @@ type Gesture = DragState | PanState | MarqueeState | ConnectState | CellRangeSta
 export interface CanvasSurfaceProps {
   onMemoOpen?: (nodeId: NodeId) => void;
   onNodeDoubleClick?: (nodeId: NodeId) => void;
+  /** Double-click on blank canvas (no node hit) — opens the pattern gallery. */
+  onBlankDoubleClick?: () => void;
+  /** Tracks the last canvas-space pointer position (insert-at-pointer target). */
+  onPointerCanvasMove?: (point: { x: number; y: number }) => void;
   /** Double-click / quick-entry request for a table cell. */
   onCellEditRequest?: (nodeId: NodeId, addr: TableCellAddress) => void;
 }
@@ -163,7 +174,7 @@ function findPortTarget(event: PointerEvent<SVGSVGElement>): {
   return null; // Body-drop without explicit port — skip for Phase 2.
 }
 
-export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest }: CanvasSurfaceProps = {}) {
+export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onBlankDoubleClick, onPointerCanvasMove, onCellEditRequest }: CanvasSurfaceProps = {}) {
   const { t } = useTranslation();
   const store = useDiagramStore();
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -268,6 +279,21 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
             return [nodeId];
           })();
       if (ids.length === 0) return;
+      // Detach prompt (Phase 2b): dragging a strict subset of a view's
+      // generated members breaks the projection link, so ask first. A
+      // whole-membership drag stays linked (bounds offset on drop).
+      const analysis = analyzeViewDrag(state.doc, ids);
+      if (analysis.subsets.length > 0) {
+        if (!window.confirm(t("diagram.detach.confirm"))) return;
+        for (const subset of analysis.subsets) {
+          store.setState(
+            withSnapshot(
+              detachViewMembersSnippetAction(subset.viewId, subset.memberIds),
+              defaultCoalescer(),
+            ),
+          );
+        }
+      }
       const origins = new Map<NodeId, { x: number; y: number; w: number; h: number }>();
       for (const id of ids) {
         const n = nodeById.get(id);
@@ -281,10 +307,11 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
         lastDy: 0,
         ids,
         origins,
+        linkedViewIds: analysis.full,
         coalescer: defaultCoalescer(),
       };
     },
-    [nodeById, store, viewport],
+    [nodeById, store, t, viewport],
   );
 
   const beginConnect = useCallback(
@@ -450,13 +477,18 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
 
   const onSurfacePointerMove = useCallback(
     (event: PointerEvent<SVGSVGElement>) => {
-      const gesture = gestureRef.current;
-      if (!gesture) return;
       const svg = svgRef.current;
       if (!svg) return;
       const rect = svg.getBoundingClientRect();
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
+      // Last-pointer tracking for the gallery's "insert at pointer" action.
+      if (onPointerCanvasMove) {
+        const point = screenToCanvas(screenX, screenY, viewport);
+        onPointerCanvasMove(point);
+      }
+      const gesture = gestureRef.current;
+      if (!gesture) return;
 
       if (gesture.kind === "pan") {
         updateViewport({
@@ -569,7 +601,7 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
         setGuides(smartGuideOut);
       }
     },
-    [nodes, snapOn, snapSize, smartGuideOn, store, updateViewport, viewport],
+    [nodes, onPointerCanvasMove, snapOn, snapSize, smartGuideOn, store, updateViewport, viewport],
   );
 
   const onSurfacePointerUp = useCallback(
@@ -595,6 +627,20 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
       }
       if (gesture.kind === "node") {
         setGuides([]);
+        // Whole-membership drags stay linked: offset the view bounds by the
+        // same delta so the projection hash follows the moved members.
+        if (
+          gesture.linkedViewIds.length > 0 &&
+          (gesture.lastDx !== 0 || gesture.lastDy !== 0)
+        ) {
+          store.setState(
+            withSnapshot(
+              offsetViewBoundsAction(gesture.linkedViewIds, gesture.lastDx, gesture.lastDy),
+              gesture.coalescer,
+              { coalesce: true },
+            ),
+          );
+        }
       }
       if (gesture.kind === "connect") {
         const target = findPortTarget(event);
@@ -651,6 +697,18 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
   const onNodeEnter = useCallback((nodeId: NodeId) => setHoverNodeId(nodeId), []);
   const onNodeLeave = useCallback(() => setHoverNodeId(null), []);
 
+  // Blank-canvas double-click (svg background or page frame, not a node).
+  const onSurfaceDoubleClick = useCallback(
+    (event: MouseEvent<SVGSVGElement>) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      if (target === svgRef.current || target.hasAttribute("data-page-frame")) {
+        onBlankDoubleClick?.();
+      }
+    },
+    [onBlankDoubleClick],
+  );
+
   return (
     <svg
       ref={svgRef}
@@ -661,6 +719,7 @@ export function CanvasSurface({ onMemoOpen, onNodeDoubleClick, onCellEditRequest
       onPointerMove={onSurfacePointerMove}
       onPointerUp={onSurfacePointerUp}
       onPointerCancel={onSurfacePointerUp}
+      onDoubleClick={onSurfaceDoubleClick}
       onWheel={onWheel}
     >
       <EdgeMarkers />

@@ -149,6 +149,9 @@ function NodeProps({ node }: { node: DiagramNode }) {
 
   return (
     <div className="maru-diagram-prop-sections">
+      {node.meta?.snippet === true ? (
+        <span className="maru-diagram-snippet-badge">{t("diagram.panel.snippet")}</span>
+      ) : null}
       <section>
         <h3>{t("diagram.panel.properties.text")}</h3>
         <TextField

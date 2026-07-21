@@ -279,6 +279,28 @@ export async function diagramPatternList(workspace: string): Promise<DiagramFile
   return invoke<DiagramFile[]>("diagram_pattern_list", { workspace });
 }
 
+/**
+ * Load a preset body. There is no dedicated Rust read command; presets are
+ * plain JSON text files inside the workspace, so the generic `read_document`
+ * command (vault-contained path resolution) reads them.
+ */
+export async function diagramPatternLoad(workspace: string, name: string): Promise<string> {
+  if (!isTauri()) {
+    const storage = mockStorage();
+    if (!storage) throw new Error("diagram_pattern_load_requires_tauri");
+    const raw = storage.getItem(mockPatternKey(workspace, name));
+    if (!raw) throw new Error(`Pattern preset not found: ${name}`);
+    const parsed = JSON.parse(raw) as { body?: unknown };
+    if (typeof parsed.body !== "string") throw new Error(`Pattern preset not found: ${name}`);
+    return parsed.body;
+  }
+  const payload = await invoke<{ content: string }>("read_document", {
+    vaultPath: workspace,
+    documentPath: `.maru/diagram-patterns/${name}.pattern.json`,
+  });
+  return payload.content;
+}
+
 export async function diagramPatternDelete(
   workspace: string,
   name: string,

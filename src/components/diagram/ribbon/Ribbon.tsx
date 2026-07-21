@@ -26,6 +26,8 @@ export interface RibbonToolsProps {
   onHistory: () => void;
   onSpecialChars: () => void;
   onToggleFocus: () => void;
+  /** Opens the pattern gallery in convert mode (Report Pattern Studio). */
+  onConvertView?: () => void;
 }
 
 const TABS: Array<{ id: RibbonTab; labelKey: string }> = [
