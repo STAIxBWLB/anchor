@@ -8,7 +8,7 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
-## Unreleased
+## v0.4.11 — 2026-07-23 — Terminal Hardening + Scheduled Jobs
 
 - **Scheduled jobs registry (launchd).** Jobs are declared as data in
   `<work>/.maru/jobs.json` and managed by Maru: per-workspace launchd labels
@@ -24,6 +24,28 @@ Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
   declared (launchd rejects 0), flag and URL arguments pass through without
   workspace-path mangling, and jobs.json now rejects duplicate ids and
   out-of-range schedules.
+- **cmux-class terminal interaction hardening.** The integrated terminal now
+  accepts the first macOS click, mounts before launch requests, restores actual
+  textarea focus across pane/app transitions, and queues early input without
+  dropping the first keystroke. PTY output moved from global events and React
+  frame state to ordered per-session Channels with generation/sequence guards,
+  two-frame credit, hidden-session suspension, compact palette frames, and
+  imperative canvas patches. Alacritty now owns scrollback-aware selection and
+  copy semantics for soft wraps and wide CJK cells; drag selection is
+  animation-frame coalesced, supports edge auto-scroll, and exposes a terminal
+  Copy/Paste/Select All/Find/Clear menu.
+- **Terminal streaming and lifecycle fixes from adversarial review.** The frame
+  emitter no longer loses a condvar wakeup, which could park an idle session
+  and leave the last chunk of output unrendered (or strand the pump thread on
+  shutdown); pending damage now drains past the credit window when a session
+  stops, so the tail of a command's output survives. Sessions unregister on
+  kill and on child exit without waiting for a PTY reader that a surviving
+  grandchild holds open. PTY and model resize are atomic against the parser,
+  bracketed-paste payloads can no longer smuggle their own terminator, the
+  input pump fails closed instead of delivering later batches past a dropped
+  one, buffered frames are acknowledged so backpressure cannot deadlock,
+  unapplied frames force a real resync, launch no longer steals focus from a
+  rename or search field, and clipboard copies respect soft wraps.
 
 ## v0.4.10 — 2026-07-22 — Unified Scratchpad
 
@@ -52,28 +74,6 @@ Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
   from the owning private workspace; routing fails closed when the workspace
   registry is unreadable and requires the active private workspace to be
   registered as private.
-- **cmux-class terminal interaction hardening.** The integrated terminal now
-  accepts the first macOS click, mounts before launch requests, restores actual
-  textarea focus across pane/app transitions, and queues early input without
-  dropping the first keystroke. PTY output moved from global events and React
-  frame state to ordered per-session Channels with generation/sequence guards,
-  two-frame credit, hidden-session suspension, compact palette frames, and
-  imperative canvas patches. Alacritty now owns scrollback-aware selection and
-  copy semantics for soft wraps and wide CJK cells; drag selection is
-  animation-frame coalesced, supports edge auto-scroll, and exposes a terminal
-  Copy/Paste/Select All/Find/Clear menu.
-- **Terminal streaming and lifecycle fixes from adversarial review.** The frame
-  emitter no longer loses a condvar wakeup, which could park an idle session
-  and leave the last chunk of output unrendered (or strand the pump thread on
-  shutdown); pending damage now drains past the credit window when a session
-  stops, so the tail of a command's output survives. Sessions unregister on
-  kill and on child exit without waiting for a PTY reader that a surviving
-  grandchild holds open. PTY and model resize are atomic against the parser,
-  bracketed-paste payloads can no longer smuggle their own terminator, the
-  input pump fails closed instead of delivering later batches past a dropped
-  one, buffered frames are acknowledged so backpressure cannot deadlock,
-  unapplied frames force a real resync, launch no longer steals focus from a
-  rename or search field, and clipboard copies respect soft wraps.
 - **Graph/catalog hygiene.** Ideation stays graph-visible while scratchpad
   memos and temp are excluded from the workspace catalog and graph scans,
   honoring relocated roots and renamed collections from
