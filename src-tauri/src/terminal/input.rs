@@ -1,7 +1,11 @@
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
 pub enum TerminalInputCommand {
     Text {
         text: String,
@@ -76,7 +80,11 @@ pub fn encode_terminal_input(
         }
         TerminalInputCommand::Paste { text } => {
             if bracketed_paste_active {
-                Some(format!("\x1b[200~{text}\x1b[201~"))
+                // Strip embedded paste markers: a clipboard payload containing
+                // `\e[201~` would otherwise close the bracket early and run its
+                // remainder as typed input.
+                let sanitized = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+                Some(format!("\x1b[200~{sanitized}\x1b[201~"))
             } else {
                 Some(text.clone())
             }
@@ -338,6 +346,25 @@ mod tests {
     }
 
     #[test]
+    fn key_modifiers_deserialize_from_ipc_shape() {
+        let command: TerminalInputCommand = serde_json::from_str(
+            r#"{"type":"key","key":"Enter","code":"Enter","shiftKey":true,"altKey":true,"ctrlKey":true,"metaKey":true}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            command,
+            TerminalInputCommand::Key {
+                key: "Enter".to_string(),
+                code: Some("Enter".to_string()),
+                shift_key: true,
+                alt_key: true,
+                ctrl_key: true,
+                meta_key: true,
+            }
+        );
+    }
+
+    #[test]
     fn line_break_ai_uses_bracketed_paste_when_active() {
         assert_eq!(
             encode_terminal_input("claude", &line_break(), false, true),
@@ -443,6 +470,23 @@ mod tests {
                 true
             ),
             Some("\x1b[200~hello\x1b[201~".to_string())
+        );
+    }
+
+    /// A clipboard payload carrying its own paste terminator must not be able
+    /// to close the bracket and have its remainder executed as typed input.
+    #[test]
+    fn paste_strips_embedded_bracket_markers() {
+        assert_eq!(
+            encode_terminal_input(
+                "shell",
+                &TerminalInputCommand::Paste {
+                    text: "ls\x1b[201~\nrm -rf /\n".to_string()
+                },
+                false,
+                true
+            ),
+            Some("\x1b[200~ls\nrm -rf /\n\x1b[201~".to_string())
         );
     }
 
