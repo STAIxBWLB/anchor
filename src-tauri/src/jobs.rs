@@ -188,6 +188,17 @@ fn resolve_job_path(work_path: &Path, value: &str) -> String {
     }
 }
 
+/// Resolve a program argument: `~` always expands, and values that look like
+/// paths (contain `/` or start with `.`) anchor at the workspace root. Bare
+/// tokens such as subcommand names (`run`) pass through unchanged.
+fn resolve_job_arg(work_path: &Path, value: &str) -> String {
+    if value.contains('/') || value.starts_with('.') {
+        resolve_job_path(work_path, value)
+    } else {
+        expand_tilde(value)
+    }
+}
+
 fn xml_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -205,7 +216,7 @@ pub fn plist_for(job: &JobRecord, work_path: &Path) -> Result<String, String> {
         .program
         .args
         .iter()
-        .map(|arg| resolve_job_path(work_path, arg))
+        .map(|arg| resolve_job_arg(work_path, arg))
         .collect();
     let logs_dir = resolve_job_path(work_path, &job.logs.dir);
     let stdout_path = format!("{logs_dir}/stdout.log");
@@ -710,6 +721,12 @@ mod tests {
             "<string>{}/_meta/scripts/daily_mail_digest.py</string>",
             work.to_string_lossy()
         )));
+        // Bare subcommand tokens pass through; they are not workspace-relative paths.
+        assert!(xml.contains("<string>run</string>"));
+        assert!(
+            !xml.contains(&format!("<string>{}/run</string>", work.to_string_lossy())),
+            "bare arg must not be path-resolved: {xml}"
+        );
         assert!(xml.contains(&format!(
             "<key>WorkingDirectory</key>\n  <string>{}</string>",
             work.to_string_lossy()
