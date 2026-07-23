@@ -300,6 +300,7 @@ import {
   type MaruAppMode,
   type DocumentBrowserMode,
   type DocumentViewDefinition,
+  type EditorPaneViewModes,
   type EditorViewModeSetting,
   type ExplorerPaneMode,
   type FavoriteItem,
@@ -778,6 +779,19 @@ function SettingsWindowRoot({
     return () => dispose?.();
   }, [workPath]);
 
+  useEffect(() => {
+    let dispose: (() => void) | null = null;
+    void listenForMenuCommand((id) => {
+      if (id !== "file.close_active" && id !== "window.close") return;
+      void import("@tauri-apps/api/window")
+        .then(({ getCurrentWindow }) => getCurrentWindow().close())
+        .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    }).then((off) => {
+      dispose = off;
+    });
+    return () => dispose?.();
+  }, []);
+
   const updateSettings = useCallback(
     (nextSettings: MaruSettings) => {
       const normalized = normalizeMaruSettings(nextSettings);
@@ -921,9 +935,10 @@ function MainApp() {
   const [addWorkspaceDefaultVisibility, setAddWorkspaceDefaultVisibility] =
     useState<WorkspaceVisibility>("private");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [editorViewMode, setEditorViewMode] = useState<EditorViewMode>(
-    DEFAULT_MARU_SETTINGS.ui.editorViewMode,
+  const [editorPaneViewModes, setEditorPaneViewModes] = useState<EditorPaneViewModes>(
+    DEFAULT_MARU_SETTINGS.ui.editorPaneViewModes,
   );
+  const editorViewMode = editorPaneViewModes[focusedEditorGroup];
   // HTML document tabs: per pane+tab view mode, never persisted. Keyed
   // `${group}:${tabId}` so the two split panes stay independent.
   const [htmlPaneModes, setHtmlPaneModes] = useState<
@@ -1659,7 +1674,7 @@ function MainApp() {
               ? "tasks"
               : settings.ui.activeAppMode,
           );
-          setEditorViewMode(settings.ui.editorViewMode);
+          setEditorPaneViewModes(settings.ui.editorPaneViewModes);
           setRightPaneTab(settings.ui.rightPaneTab);
           setSettingsLoaded(true);
         }
@@ -1685,14 +1700,14 @@ function MainApp() {
         const next = normalizeMaruSettings(payload.settings);
         setMaruSettings(next);
         if (!keepAutoOpenMode()) setAppMode(next.ui.activeAppMode);
-        setEditorViewMode(next.ui.editorViewMode);
+        setEditorPaneViewModes(next.ui.editorPaneViewModes);
         setRightPaneTab(next.ui.rightPaneTab);
       } else if (payload.globalChanged && settingsWorkPath) {
         void readMaruSettings(settingsWorkPath)
           .then((next) => {
             setMaruSettings(next);
             if (!keepAutoOpenMode()) setAppMode(next.ui.activeAppMode);
-            setEditorViewMode(next.ui.editorViewMode);
+            setEditorPaneViewModes(next.ui.editorPaneViewModes);
             setRightPaneTab(next.ui.rightPaneTab);
           })
           .catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -2120,17 +2135,22 @@ function MainApp() {
   }, [appMode, diagramEnabled, setPersistedAppMode]);
 
   const setPersistedEditorViewMode = useCallback(
-    (editorViewMode: EditorViewModeSetting) => {
-      setEditorViewMode(editorViewMode);
+    (editorViewMode: EditorViewModeSetting, group: EditorGroupId = focusedEditorGroup) => {
+      setEditorPaneViewModes((current) => ({ ...current, [group]: editorViewMode }));
       updateSettings((current) => ({
         ...current,
         ui: {
           ...current.ui,
-          editorViewMode,
+          editorViewMode:
+            group === "left" ? editorViewMode : current.ui.editorPaneViewModes.left,
+          editorPaneViewModes: {
+            ...current.ui.editorPaneViewModes,
+            [group]: editorViewMode,
+          },
         },
       }));
     },
-    [updateSettings],
+    [focusedEditorGroup, updateSettings],
   );
 
   const setPersistedRightPaneTab = useCallback(
@@ -4042,7 +4062,7 @@ function MainApp() {
             if (todayAutoOpenPathRef.current === null) {
               setAppMode(bootSettings.ui.activeAppMode);
             }
-            setEditorViewMode(bootSettings.ui.editorViewMode);
+            setEditorPaneViewModes(bootSettings.ui.editorPaneViewModes);
             setRightPaneTab(bootSettings.ui.rightPaneTab);
           } catch {
             bootSettings = null;
@@ -6108,7 +6128,11 @@ function MainApp() {
       setBinaryTabs((prev) => prev.filter((tab) => tab.id !== tabId));
       setTabOrder((prev) => prev.filter((id) => id !== tabId));
       if (leftResolvedTabId === tabId) setLeftActiveTabId(fallbackId);
-      if (rightResolvedTabId === tabId) setRightActiveTabId(null);
+      if (rightResolvedTabId === tabId) {
+        setRightActiveTabId(null);
+        setFocusedEditorGroup("left");
+        updateLayoutSettings({ editorSplitOpen: false });
+      }
       if (resolvedActiveTabId === tabId) setActiveTabId(fallbackId);
     },
     [
@@ -6118,6 +6142,7 @@ function MainApp() {
       resolvedActiveTabId,
       rightResolvedTabId,
       tabs,
+      updateLayoutSettings,
     ],
   );
 
@@ -6462,6 +6487,33 @@ function MainApp() {
     if (leftResolvedTabId) setActiveTabId(leftResolvedTabId);
     updateLayoutSettings({ editorSplitOpen: false });
   }, [leftResolvedTabId, updateLayoutSettings]);
+
+  const closeActiveSurface = useCallback(() => {
+    const terminalPanel = terminalPanelRef.current;
+    if (terminalPanel?.hasFocus()) {
+      terminalPanel.closeFocusedTab();
+      return;
+    }
+    if (appMode !== "pkm") return;
+    if (focusedEditorGroup === "right" && rightResolvedTabId) {
+      closeRightEditorPane();
+      return;
+    }
+    if (leftResolvedTabId) closeTab(leftResolvedTabId);
+  }, [
+    appMode,
+    closeRightEditorPane,
+    closeTab,
+    focusedEditorGroup,
+    leftResolvedTabId,
+    rightResolvedTabId,
+  ]);
+
+  const requestWindowClose = useCallback(() => {
+    void import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => getCurrentWindow().close())
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
 
   const closeAllCleanTabs = useCallback(() => {
     const dirtyTabs = orderedAnyTabs.filter(
@@ -6865,7 +6917,7 @@ function MainApp() {
       "mod+7": () => selectTabByIndex(6),
       "mod+8": () => selectTabByIndex(7),
       "mod+w": () => {
-        if (resolvedActiveTabId) closeTab(resolvedActiveTabId);
+        closeActiveSurface();
       },
     },
     [
@@ -6885,9 +6937,8 @@ function MainApp() {
       openPreferences,
       openSkillCompose,
       splitActiveSurfaceRight,
-      closeTab,
+      closeActiveSurface,
       editorViewMode,
-      resolvedActiveTabId,
       setPersistedEditorViewMode,
       updateLayoutSettings,
       outlineOpen,
@@ -6929,6 +6980,9 @@ function MainApp() {
           break;
         case "file.snapshot":
           void snapshotCurrent();
+          break;
+        case "file.close_active":
+          closeActiveSurface();
           break;
         case "file.add_workspace":
           openAddWorkspaceDialog();
@@ -6996,10 +7050,14 @@ function MainApp() {
         case "workspace.commit":
           void openCommitDialogFromMenu();
           break;
+        case "window.close":
+          requestWindowClose();
+          break;
       }
     },
     [
       documentsPaneOpen,
+      closeActiveSurface,
       explorerWorkspacePath,
       navigateBack,
       navigateForward,
@@ -7009,6 +7067,7 @@ function MainApp() {
       openPreferences,
       outlineOpen,
       refreshActiveSurface,
+      requestWindowClose,
       revealTargetInFinder,
       saveCurrent,
       selectAdjacentTab,
@@ -7383,7 +7442,7 @@ function MainApp() {
         canSnapshot={caps.canCreate && !binaryTab}
         readOnlyReason={readOnlyReason}
         isManagedVaultNote={isManagedVaultNote}
-        viewMode={editorViewMode}
+        viewMode={editorPaneViewModes[group]}
         tabs={groupTabs}
         activeTabId={tabId}
         bodyOverride={binaryBody}
@@ -7411,7 +7470,7 @@ function MainApp() {
         onDeleteTab={(nextTabId) => void trashTabDocument(nextTabId)}
         onOpenTabPreview={(nextTabId) => {
           selectTab(nextTabId, group);
-          setPersistedEditorViewMode("preview");
+          setPersistedEditorViewMode("preview", group);
         }}
         onRevealTabInFinder={revealTabInFinder}
         onRevealTabInExplorer={(nextTabId) => revealTabInExplorer(nextTabId, group)}
@@ -7422,7 +7481,7 @@ function MainApp() {
           if (tabId) activateEditorTab(tabId, group);
         }}
         onToggleOutline={() => updateLayoutSettings({ outlineOpen: !outlineOpen })}
-        onViewModeChange={setPersistedEditorViewMode}
+        onViewModeChange={(mode) => setPersistedEditorViewMode(mode, group)}
         onWikilinkClick={handleWikilinkClick}
         textareaRef={group === "right" ? rightEditorTextareaRef : editorTextareaRef}
         vaultPath={docTab?.workspacePath ?? null}

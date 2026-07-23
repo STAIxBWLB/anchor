@@ -292,7 +292,12 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
 
   if (!bodyOverride && openingEntry && openingEntry.path !== document?.path) {
     return (
-      <main className="editor-pane editor-empty" ref={ref} onPointerDown={onFocusPane}>
+      <main
+        className="editor-pane editor-empty"
+        ref={ref}
+        onPointerDown={onFocusPane}
+        onFocusCapture={onFocusPane}
+      >
         <div className="empty-document-plate">
           <div className="icon-circle" title={openingEntry.title}>
             <FileText size={26} />
@@ -306,7 +311,12 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
 
   if (!document && !bodyOverride) {
     return (
-      <main className="editor-pane editor-empty" ref={ref} onPointerDown={onFocusPane}>
+      <main
+        className="editor-pane editor-empty"
+        ref={ref}
+        onPointerDown={onFocusPane}
+        onFocusCapture={onFocusPane}
+      >
         <div className="empty-document-plate">
           <div className="icon-circle" title={t("editor.empty.title")}>
             <FileText size={26} />
@@ -324,7 +334,12 @@ export const EditorPane = forwardRef<HTMLDivElement, EditorPaneProps>(function E
   const headerTitle = documentLabel ?? document?.title ?? "";
 
   return (
-    <main className="editor-pane" ref={ref} onPointerDown={onFocusPane}>
+    <main
+      className="editor-pane"
+      ref={ref}
+      onPointerDown={onFocusPane}
+      onFocusCapture={onFocusPane}
+    >
       <div className="document-tabs-row" aria-label={t("editor.tabs.label")}>
         {tabs.map((tab, index) => (
           <div

@@ -230,8 +230,23 @@ test("keeps close shortcut scoped to the focused terminal panel", async ({ page 
   await expect(page.locator(".terminal-panel")).not.toHaveClass(/collapsed/);
   await terminalTitle.focus();
 
-  const mod = process.platform === "darwin" ? "Meta" : "Control";
-  await page.keyboard.press(`${mod}+W`);
+  // Chromium reserves the physical Meta+W chord before the page receives it.
+  // Dispatch the DOM event delivered by the Tauri menu/accelerator path and
+  // verify the focused terminal consumes it even when it has no active tab.
+  const shortcutHandled = await terminalTitle.evaluate((element) => {
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+    const event = new KeyboardEvent("keydown", {
+      key: "w",
+      code: "KeyW",
+      metaKey: isMac,
+      ctrlKey: !isMac,
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(shortcutHandled).toBe(true);
 
   await expect(documentTabs).toHaveCount(tabCount);
   await expect(page.locator(".document-tab.active")).toBeVisible();
@@ -1019,7 +1034,7 @@ test("resizes document and right panes with drag handles", async ({ page }) => {
   expect(resizedOutlineBox.width).toBeGreaterThan(initialOutlineBox.width + 35);
 });
 
-test("keeps split source editors constrained to their pane widths", async ({ page }) => {
+test("keeps split editor modes independent and constrained to their pane widths", async ({ page }) => {
   await page.goto("/");
 
   await page.locator(".tab-trigger", { hasText: "원문" }).click();
@@ -1029,15 +1044,75 @@ test("keeps split source editors constrained to their pane widths", async ({ pag
   await expect(panes).toHaveCount(2);
   await expect(page.locator(".editor-split-shell.split textarea.source-editor")).toHaveCount(2);
 
+  await panes.nth(0).locator(".tab-trigger", { hasText: "미리보기" }).click();
+  await expect(panes.nth(0).locator(".preview-surface")).toBeVisible();
+  await expect(panes.nth(1).locator("textarea.source-editor")).toBeVisible();
+
   for (let i = 0; i < 2; i += 1) {
     const paneBox = await panes.nth(i).boundingBox();
-    const editorBox = await panes.nth(i).locator("textarea.source-editor").boundingBox();
+    const editorBox = await panes
+      .nth(i)
+      .locator(i === 0 ? ".preview-surface" : "textarea.source-editor")
+      .boundingBox();
     expect(paneBox).not.toBeNull();
     expect(editorBox).not.toBeNull();
     if (!paneBox || !editorBox) return;
     expect(editorBox.x).toBeGreaterThanOrEqual(paneBox.x - 1);
     expect(editorBox.x + editorBox.width).toBeLessThanOrEqual(paneBox.x + paneBox.width + 1);
   }
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Array.from({ length: window.localStorage.length }, (_, index) =>
+          window.localStorage.getItem(window.localStorage.key(index) ?? ""),
+        ).some((value) =>
+          value?.includes('"editorPaneViewModes":{"left":"preview","right":"source"}'),
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
+test("closes the focused right editor pane with Cmd/Ctrl+W", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("오른쪽으로 분할").first().click();
+
+  const panes = page.locator(".editor-split-shell.split .editor-pane");
+  await expect(panes).toHaveCount(2);
+  const rightSource = panes.nth(1).locator("textarea.source-editor");
+  await rightSource.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Array.from({ length: window.localStorage.length }, (_, index) =>
+          window.localStorage.getItem(window.localStorage.key(index) ?? ""),
+        ).some((value) => value?.includes('"focusedGroup":"right"')),
+      ),
+    )
+    .toBe(true);
+  await page.waitForTimeout(100);
+  // Chromium reserves the physical Meta+W chord before a web page receives
+  // it. Dispatch the same DOM event that the Tauri webview/native menu route
+  // delivers so this regression covers Maru's active-pane behavior.
+  const shortcutHandled = await rightSource.evaluate((element) => {
+    const isMac = navigator.platform.toLowerCase().includes("mac");
+    const event = new KeyboardEvent("keydown", {
+      key: "w",
+      code: "KeyW",
+      metaKey: isMac,
+      ctrlKey: !isMac,
+      bubbles: true,
+      cancelable: true,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(shortcutHandled).toBe(true);
+
+  await expect(page.locator(".editor-split-shell.split")).toHaveCount(0);
+  await expect(page.locator(".editor-pane")).toHaveCount(1);
+  await expect(page.locator(".document-tab.active")).toBeVisible();
 });
 
 test("keeps document list rows from overlapping in list mode", async ({ page }) => {

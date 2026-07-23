@@ -26,7 +26,7 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> 
 }
 
 fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::Result<()> {
-    remove_default_submenus(menu, &["File", "Edit", "View"])?;
+    remove_default_submenus(menu, &["File", "Edit", "View", "Window"])?;
     let insert_at = maru_menu_insert_position(menu)?;
 
     let file_new = command_item(
@@ -37,6 +37,12 @@ fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::
     )?;
     let file_save = command_item(app, "file.save", "Save", Some("CmdOrCtrl+S"))?;
     let file_snapshot = command_item(app, "file.snapshot", "Snapshot", Some("CmdOrCtrl+Shift+S"))?;
+    let file_close_active = command_item(
+        app,
+        "file.close_active",
+        "Close Active",
+        Some("CmdOrCtrl+W"),
+    )?;
     let file_add_workspace = command_item(app, "file.add_workspace", "Add Workspace...", None)?;
     let file_preferences = command_item(
         app,
@@ -52,6 +58,7 @@ fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::
             &file_new,
             &file_save,
             &file_snapshot,
+            &file_close_active,
             &PredefinedMenuItem::separator(app)?,
             &file_add_workspace,
             &file_preferences,
@@ -165,6 +172,28 @@ fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::
         true,
         &[&workspace_refresh, &workspace_reveal, &workspace_commit],
     )?;
+    let window_close = command_item(
+        app,
+        "window.close",
+        "Close Window",
+        Some("CmdOrCtrl+Shift+W"),
+    )?;
+    let window_minimize = PredefinedMenuItem::minimize(app, None)?;
+    let window_maximize = PredefinedMenuItem::maximize(app, None)?;
+    let window_fullscreen = PredefinedMenuItem::fullscreen(app, None)?;
+    let window_separator = PredefinedMenuItem::separator(app)?;
+    let window_menu = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &window_minimize,
+            &window_maximize,
+            &window_fullscreen,
+            &window_separator,
+            &window_close,
+        ],
+    )?;
     menu.insert_items(
         &[
             &file_menu,
@@ -173,6 +202,7 @@ fn install_maru_menus<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::
             &go_menu,
             &terminal_menu,
             &workspace_menu,
+            &window_menu,
         ],
         insert_at,
     )?;
