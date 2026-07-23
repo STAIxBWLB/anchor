@@ -169,6 +169,27 @@ export function shouldFocusTerminalInput(state: TerminalFocusState): boolean {
   return state.open && !state.searchOpen && state.renamingTaskId === null;
 }
 
+/** Decides the window-activation focus repair. `ownsFocus` (the activating
+ *  click already DOM-focused this terminal's textarea) must repair even with
+ *  no seeded tab: on first-ever first-mouse activation the textarea is
+ *  DOM-focused but key-dead, and treating it as "someone else has focus"
+ *  is exactly the bug. Without ownership, keep the strict no-steal rules. */
+export function terminalActivationFocusAction(args: {
+  seededTabId: string | null;
+  focusedTabId: string | null;
+  ownsFocus: boolean;
+  activeElementIsBody: boolean;
+  focusState: TerminalFocusState;
+}): "reattach" | "none" {
+  if (!args.focusedTabId) return "none";
+  if (!shouldFocusTerminalInput(args.focusState)) return "none";
+  if (!args.ownsFocus) {
+    if (args.seededTabId !== args.focusedTabId) return "none";
+    if (!args.activeElementIsBody) return "none";
+  }
+  return "reattach";
+}
+
 export function cancelTerminalLayoutRefresh(
   rafRef: React.MutableRefObject<number | null>,
   cancelAnimationFrameFn: (handle: number) => void = window.cancelAnimationFrame,
@@ -1015,7 +1036,11 @@ export const TerminalPanel = memo(
         const visible = visibleTabs.has(tab.id);
         if (visibilityBySessionRef.current.get(sessionId) === visible) continue;
         visibilityBySessionRef.current.set(sessionId, visible);
-        void terminalSetVisibility(sessionId, generation, visible).catch(() => {});
+        // Drop the cached value on failure so the next pass resends; caching a
+        // failed send would suppress the corrective update forever.
+        void terminalSetVisibility(sessionId, generation, visible).catch(() => {
+          visibilityBySessionRef.current.delete(sessionId);
+        });
       }
     }, [
       open,
@@ -1131,22 +1156,45 @@ export const TerminalPanel = memo(
           return;
         }
         const target = event.target;
-        if (target instanceof HTMLElement && target.closest(".native-terminal-view")) return;
+        // Let the whole instance through (host padding included), not just the
+        // grid: the instance holds no controls, and swallowing a chrome click
+        // here would leave the terminal unfocused with no repair path.
+        if (target instanceof HTMLElement && target.closest(".terminal-instance")) return;
         event.preventDefault();
         event.stopImmediatePropagation();
       };
       document.addEventListener("pointerdown", onActivationPointerDown, true);
+      // The activation grace ends with the activating gesture; the 150ms cap
+      // only covers orderings where activation lands after the pointerup. A
+      // fast second click (double-click in htop) must not be eaten.
+      const onActivationPointerUp = () => {
+        if (appActiveRef.current) suppressTerminalMouseUntilRef.current = 0;
+      };
+      document.addEventListener("pointerup", onActivationPointerUp, true);
 
       const restore = () => {
         appActiveRef.current = true;
         suppressTerminalMouseUntilRef.current = performance.now() + 150;
-        const tabId = restoreFocusTabRef.current;
+        const seededTab = restoreFocusTabRef.current;
         restoreFocusTabRef.current = null;
-        if (!tabId || tabId !== focusedTabIdRef.current) return;
-        if (!shouldFocusTerminalInput(terminalFocusStateRef.current)) return;
-        const activeElement = document.activeElement;
-        if (activeElement && activeElement !== document.body) return;
-        window.requestAnimationFrame(() => handlesRef.current.get(tabId)?.focus());
+        // Decide inside the rAF: on first-mouse activation the activating
+        // pointerdown (which DOM-focuses the textarea) has already run by
+        // then, and that DOM-focused-but-key-dead textarea must be repaired
+        // rather than treated as "another element holds focus".
+        window.requestAnimationFrame(() => {
+          const tabId = focusedTabIdRef.current;
+          const handle = tabId ? handlesRef.current.get(tabId) : undefined;
+          if (!tabId || !handle) return;
+          const el = document.activeElement;
+          const action = terminalActivationFocusAction({
+            seededTabId: seededTab,
+            focusedTabId: tabId,
+            ownsFocus: handle.ownsFocus(),
+            activeElementIsBody: !el || el === document.body,
+            focusState: terminalFocusStateRef.current,
+          });
+          if (action === "reattach") handle.focus({ reattach: true });
+        });
       };
       const deactivate = () => {
         appActiveRef.current = false;
@@ -1182,6 +1230,7 @@ export const TerminalPanel = memo(
         offNative?.();
         document.removeEventListener("focusin", onFocusIn, true);
         document.removeEventListener("pointerdown", onActivationPointerDown, true);
+        document.removeEventListener("pointerup", onActivationPointerUp, true);
         window.removeEventListener("blur", onWindowBlur);
         window.removeEventListener("focus", onWindowFocus);
       };

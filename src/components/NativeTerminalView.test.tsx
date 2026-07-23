@@ -1135,6 +1135,102 @@ describe("NativeTerminalView window focus restore", () => {
   });
 });
 
+// jsdom cannot reproduce WKWebView's detached first responder; these assert
+// the repair behavior itself — the blur->focus cycle and its guards.
+describe("NativeTerminalView first-mouse focus reattach", () => {
+  function renderForReattach(
+    props: Partial<React.ComponentProps<typeof NativeTerminalView>> = {},
+  ) {
+    const rendered = renderNativeTerminalView({ focused: true, ...props });
+    act(() => {
+      flushRaf();
+    });
+    const view = rendered.container.querySelector(".native-terminal-view");
+    if (!view) throw new Error("terminal view not rendered");
+    const textarea = rendered.container.querySelector(
+      ".native-terminal-input",
+    ) as HTMLTextAreaElement;
+    const events: string[] = [];
+    textarea.addEventListener("focusout", () => events.push("focusout"));
+    textarea.addEventListener("focusin", () => events.push("focusin"));
+    return { ...rendered, view, textarea, events };
+  }
+
+  it("cycles blur->focus when the textarea already holds DOM focus", () => {
+    const { ref, textarea, events } = renderForReattach();
+    expect(document.activeElement).toBe(textarea);
+
+    act(() => ref.current!.focus({ reattach: true }));
+    expect(events).toEqual(["focusout", "focusin"]);
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("plain-focuses when the textarea does not hold DOM focus", () => {
+    const { ref, textarea, events } = renderForReattach();
+    act(() => textarea.blur());
+    events.length = 0;
+
+    act(() => ref.current!.focus({ reattach: true }));
+    expect(events).toEqual(["focusin"]);
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("reattaches on window focus while the textarea kept DOM focus", () => {
+    const { textarea, events } = renderForReattach();
+    // App switch that keeps DOM focus: window blurs, textarea does not.
+    act(() => window.dispatchEvent(new Event("blur")));
+    events.length = 0;
+
+    act(() => window.dispatchEvent(new Event("focus")));
+    expect(events).toEqual(["focusout", "focusin"]);
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("defers the cycle during a pointer gesture and runs it on pointerup", () => {
+    const { ref, view, events } = renderForReattach({
+      frame: frame([rowOf("hello world")]),
+    });
+    firePointer(view, "pointerdown", { row: 0, col: 0 });
+    events.length = 0;
+
+    act(() => ref.current!.focus({ reattach: true }));
+    expect(events).toEqual([]);
+
+    firePointer(view, "pointerup", { row: 0, col: 0 });
+    expect(events).toEqual(["focusout", "focusin"]);
+  });
+
+  it("does not cycle during IME composition", () => {
+    const { ref, textarea, events } = renderForReattach();
+    act(() => {
+      textarea.dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true }),
+      );
+    });
+    events.length = 0;
+
+    act(() => ref.current!.focus({ reattach: true }));
+    expect(events).toEqual([]);
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("drops a pending reattach when an external blur takes focus away", () => {
+    const { ref, view } = renderForReattach({
+      frame: frame([rowOf("hello world")]),
+    });
+    const other = document.createElement("input");
+    document.body.appendChild(other);
+
+    firePointer(view, "pointerdown", { row: 0, col: 0 });
+    act(() => ref.current!.focus({ reattach: true }));
+    act(() => other.focus());
+    firePointer(view, "pointerup", { row: 0, col: 0 });
+
+    expect(document.activeElement).toBe(other);
+    other.remove();
+  });
+});
+
 describe("NativeTerminalView input recovery", () => {
   // jsdom lacks TextEvent, so React's polyfilled onBeforeInput cannot be
   // driven by dispatching native beforeinput — committed text is driven
