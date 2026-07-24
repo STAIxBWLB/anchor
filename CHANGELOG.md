@@ -8,6 +8,37 @@ because releases cut frequently during active development. Versions before
 Dates are the release-tag dates. Only `feat`/`fix`-level changes are listed;
 `chore(release)` version bumps and merge commits are omitted.
 
+## v0.4.17 — 2026-07-24 — Standalone Files Workspace
+
+- **Files becomes a standalone app mode.** Files splits out of the combined
+  Documents/Files explorer pane into its own activity-rail entry with a
+  Finder/Explorer-style three-pane workspace: folder tree with favorites, a
+  direct-child list with breadcrumbs and back/forward/up navigation, and a
+  resizable preview pane. Markdown, HTML, image, PDF/Office, and binary
+  previews reuse the existing preview stack; double-clicking a document opens
+  it in the editor while other files open in their OS default app. Legacy
+  Files-pane settings migrate to the standalone mode, and the surface is
+  lazy-loaded to keep the initial bundle within budget.
+- **Full file management with safety rails.** Multi-selection with keyboard
+  navigation, drag and drop onto folders or the tree, internal cut/copy/paste,
+  duplicate, rename, new folder, and OS-Trash deletion — all capability-gated
+  (managed workspaces stay read-only in both UI and backend), with dirty open
+  documents blocked from Trash, collision-safe targets, and a crash-safe
+  rename journal recovered on the next scan. Open editor tabs follow moved or
+  renamed files, and tabs of trashed files close automatically.
+- **Filesystem-faithful scanning.** The workspace scanner now reports
+  directories, empty directories, and symlinks (with their target kind) as
+  first-class entries, so the Files tree mirrors the real filesystem instead
+  of only files.
+- **Adversarial-review fixes for the Files workspace.** The new-folder input
+  no longer leaks Enter/Cmd+A/Delete into list shortcuts, the restored folder
+  location survives the first scan, the context menu closes on outside
+  click/Escape with viewport clamping and keyboard navigation, case-only
+  renames work on case-insensitive filesystems, broken symlinks stay visible
+  so they can be trashed, unique-name generation no longer overwrites broken
+  symlinks, and the rename journal moved under the per-workspace `.maru`
+  directory.
+
 ## v0.4.16 — 2026-07-24 — Graph Tool Panel & Terminal Themes
 
 - **Graph moves into the right tool panel; terminal themes.** The embedded
